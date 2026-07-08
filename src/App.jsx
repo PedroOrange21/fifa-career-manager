@@ -4,6 +4,7 @@ import {
   Users,
   LayoutDashboard,
   Trash2,
+  Edit,
   RefreshCcw,
   X,
   Check,
@@ -30,6 +31,7 @@ import {
   onSnapshot,
   deleteDoc,
   getDoc,
+  updateDoc,
 } from 'firebase/firestore';
 import {
   getAuth,
@@ -43,7 +45,6 @@ import {
   signInWithCustomToken,
 } from 'firebase/auth';
 
-// --- CONFIGURACIÓN DE FIREBASE ---
 const firebaseConfig = {
   apiKey: 'AIzaSyCXNwNdKeE_Yr97iaFV_Ezw5GabBYasdnY',
   authDomain: 'fifa-manger.firebaseapp.com',
@@ -59,53 +60,76 @@ const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 const appId = 'fifa-manager-main';
 
-// Formaciones Tácticas Disponibles con coordenadas % en el campo
 const FORMATIONS = {
   '4-3-3': [
-    { pos: 'POR', x: 50, y: 88 },
-    { pos: 'LD', x: 82, y: 68 },
-    { pos: 'DFC', x: 64, y: 72 },
-    { pos: 'DFC', x: 36, y: 72 },
-    { pos: 'LI', x: 18, y: 68 },
-    { pos: 'MC', x: 50, y: 52 },
-    { pos: 'MC', x: 24, y: 46 },
-    { pos: 'MC', x: 76, y: 46 },
-    { pos: 'ED', x: 78, y: 22 },
-    { pos: 'EI', x: 22, y: 22 },
-    { pos: 'DC', x: 50, y: 14 },
+    { pos: 'POR', x: 50, y: 88 }, { pos: 'LD', x: 82, y: 68 }, { pos: 'DFC', x: 64, y: 72 }, { pos: 'DFC', x: 36, y: 72 }, { pos: 'LI', x: 18, y: 68 },
+    { pos: 'MC', x: 50, y: 52 }, { pos: 'MC', x: 24, y: 46 }, { pos: 'MC', x: 76, y: 46 },
+    { pos: 'ED', x: 78, y: 22 }, { pos: 'EI', x: 22, y: 22 }, { pos: 'DC', x: 50, y: 14 },
   ],
   '4-4-2': [
-    { pos: 'POR', x: 50, y: 88 },
-    { pos: 'LD', x: 82, y: 68 },
-    { pos: 'DFC', x: 64, y: 72 },
-    { pos: 'DFC', x: 36, y: 72 },
-    { pos: 'LI', x: 18, y: 68 },
-    { pos: 'MD', x: 82, y: 45 },
-    { pos: 'MC', x: 60, y: 48 },
-    { pos: 'MC', x: 40, y: 48 },
-    { pos: 'MI', x: 18, y: 45 },
-    { pos: 'DC', x: 60, y: 18 },
-    { pos: 'DC', x: 40, y: 18 },
+    { pos: 'POR', x: 50, y: 88 }, { pos: 'LD', x: 82, y: 68 }, { pos: 'DFC', x: 64, y: 72 }, { pos: 'DFC', x: 36, y: 72 }, { pos: 'LI', x: 18, y: 68 },
+    { pos: 'MD', x: 82, y: 45 }, { pos: 'MC', x: 60, y: 48 }, { pos: 'MC', x: 40, y: 48 }, { pos: 'MI', x: 18, y: 45 },
+    { pos: 'DC', x: 60, y: 18 }, { pos: 'DC', x: 40, y: 18 },
   ],
   '3-5-2': [
-    { pos: 'POR', x: 50, y: 88 },
-    { pos: 'DFC', x: 50, y: 72 },
-    { pos: 'DFC', x: 72, y: 70 },
-    { pos: 'DFC', x: 28, y: 70 },
-    { pos: 'MCD', x: 50, y: 54 },
-    { pos: 'MC', x: 66, y: 46 },
-    { pos: 'MC', x: 34, y: 46 },
-    { pos: 'MD', x: 84, y: 38 },
-    { pos: 'MI', x: 16, y: 38 },
-    { pos: 'DC', x: 60, y: 18 },
-    { pos: 'DC', x: 40, y: 18 },
+    { pos: 'POR', x: 50, y: 88 }, { pos: 'DFC', x: 50, y: 72 }, { pos: 'DFC', x: 72, y: 70 }, { pos: 'DFC', x: 28, y: 70 },
+    { pos: 'MCD', x: 50, y: 54 }, { pos: 'MC', x: 66, y: 46 }, { pos: 'MC', x: 34, y: 46 }, { pos: 'MD', x: 84, y: 38 }, { pos: 'MI', x: 16, y: 38 },
+    { pos: 'DC', x: 60, y: 18 }, { pos: 'DC', x: 40, y: 18 },
   ],
+  '4-2-3-1': [
+    { pos: 'POR', x: 50, y: 88 }, { pos: 'LD', x: 82, y: 68 }, { pos: 'DFC', x: 64, y: 72 }, { pos: 'DFC', x: 36, y: 72 }, { pos: 'LI', x: 18, y: 68 },
+    { pos: 'MCD', x: 60, y: 56 }, { pos: 'MCD', x: 40, y: 56 },
+    { pos: 'MD', x: 82, y: 35 }, { pos: 'MCO', x: 50, y: 35 }, { pos: 'MI', x: 18, y: 35 },
+    { pos: 'DC', x: 50, y: 15 }
+  ],
+  '4-1-2-1-2': [
+    { pos: 'POR', x: 50, y: 88 }, { pos: 'LD', x: 82, y: 68 }, { pos: 'DFC', x: 64, y: 72 }, { pos: 'DFC', x: 36, y: 72 }, { pos: 'LI', x: 18, y: 68 },
+    { pos: 'MCD', x: 50, y: 58 },
+    { pos: 'MD', x: 75, y: 46 }, { pos: 'MI', x: 25, y: 46 },
+    { pos: 'MCO', x: 50, y: 35 },
+    { pos: 'DC', x: 60, y: 18 }, { pos: 'DC', x: 40, y: 18 }
+  ],
+  '4-3-1-2': [
+    { pos: 'POR', x: 50, y: 88 }, { pos: 'LD', x: 82, y: 68 }, { pos: 'DFC', x: 64, y: 72 }, { pos: 'DFC', x: 36, y: 72 }, { pos: 'LI', x: 18, y: 68 },
+    { pos: 'MC', x: 70, y: 50 }, { pos: 'MC', x: 50, y: 54 }, { pos: 'MC', x: 30, y: 50 },
+    { pos: 'MCO', x: 50, y: 35 },
+    { pos: 'DC', x: 60, y: 18 }, { pos: 'DC', x: 40, y: 18 }
+  ],
+  '5-3-2': [
+    { pos: 'POR', x: 50, y: 88 }, { pos: 'CAD', x: 85, y: 62 }, { pos: 'DFC', x: 68, y: 72 }, { pos: 'DFC', x: 50, y: 74 }, { pos: 'DFC', x: 32, y: 72 }, { pos: 'CAI', x: 15, y: 62 },
+    { pos: 'MC', x: 70, y: 48 }, { pos: 'MC', x: 50, y: 48 }, { pos: 'MC', x: 30, y: 48 },
+    { pos: 'DC', x: 60, y: 18 }, { pos: 'DC', x: 40, y: 18 }
+  ],
+  '5-2-3': [
+    { pos: 'POR', x: 50, y: 88 }, { pos: 'CAD', x: 85, y: 62 }, { pos: 'DFC', x: 68, y: 72 }, { pos: 'DFC', x: 50, y: 74 }, { pos: 'DFC', x: 32, y: 72 }, { pos: 'CAI', x: 15, y: 62 },
+    { pos: 'MC', x: 65, y: 48 }, { pos: 'MC', x: 35, y: 48 },
+    { pos: 'ED', x: 78, y: 22 }, { pos: 'EI', x: 22, y: 22 },
+    { pos: 'DC', x: 50, y: 15 }
+  ],
+  '3-4-3': [
+    { pos: 'POR', x: 50, y: 88 }, { pos: 'DFC', x: 72, y: 72 }, { pos: 'DFC', x: 50, y: 74 }, { pos: 'DFC', x: 28, y: 72 },
+    { pos: 'MD', x: 85, y: 48 }, { pos: 'MC', x: 60, y: 50 }, { pos: 'MC', x: 40, y: 50 }, { pos: 'MI', x: 15, y: 48 },
+    { pos: 'ED', x: 78, y: 22 }, { pos: 'EI', x: 22, y: 22 },
+    { pos: 'DC', x: 50, y: 15 }
+  ],
+  '4-5-1': [
+    { pos: 'POR', x: 50, y: 88 }, { pos: 'LD', x: 82, y: 68 }, { pos: 'DFC', x: 64, y: 72 }, { pos: 'DFC', x: 36, y: 72 }, { pos: 'LI', x: 18, y: 68 },
+    { pos: 'MC', x: 50, y: 52 },
+    { pos: 'MD', x: 82, y: 38 }, { pos: 'MCO', x: 65, y: 35 }, { pos: 'MCO', x: 35, y: 35 }, { pos: 'MI', x: 18, y: 38 },
+    { pos: 'DC', x: 50, y: 15 }
+  ],
+  '4-3-2-1': [
+    { pos: 'POR', x: 50, y: 88 }, { pos: 'LD', x: 82, y: 68 }, { pos: 'DFC', x: 64, y: 72 }, { pos: 'DFC', x: 36, y: 72 }, { pos: 'LI', x: 18, y: 68 },
+    { pos: 'MC', x: 75, y: 50 }, { pos: 'MC', x: 50, y: 52 }, { pos: 'MC', x: 25, y: 50 },
+    { pos: 'SD', x: 65, y: 28 }, { pos: 'SD', x: 35, y: 28 },
+    { pos: 'DC', x: 50, y: 12 }
+  ]
 };
 
 const getRatingStyle = (rating) => {
-  if (rating >= 75) return 'bg-[#FACC15] text-black'; // Oro
-  if (rating >= 65) return 'bg-[#CBD5E1] text-black'; // Plata
-  return 'bg-[#CD7F32] text-white'; // Bronce
+  if (rating >= 75) return 'bg-[#FACC15] text-black'; 
+  if (rating >= 65) return 'bg-[#CBD5E1] text-black'; 
+  return 'bg-[#CD7F32] text-white'; 
 };
 
 export default function App() {
@@ -117,16 +141,18 @@ export default function App() {
   const [formation, setFormation] = useState('4-3-3');
   const [lineup, setLineup] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('rating-desc'); // NUEVO: Estado para el filtro
+  const [sortBy, setSortBy] = useState('rating-desc'); 
 
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [newPlayer, setNewPlayer] = useState({
     name: '',
     rating: 75,
     pos: 'MC',
     age: 23,
     type: 'Comprado',
-    value: ''
+    value: '',
+    role: 'Titular'
   });
 
   const [authMode, setAuthMode] = useState('login');
@@ -208,20 +234,49 @@ export default function App() {
     if (!user || !newPlayer.name) return;
 
     try {
-      const playerRef = doc(db, 'artifacts', appId, 'users', user.uid, 'players', crypto.randomUUID());
-      await setDoc(playerRef, {
-        name: newPlayer.name,
-        rating: parseInt(newPlayer.rating) || 75,
-        pos: newPlayer.pos,
-        age: parseInt(newPlayer.age) || 23,
-        type: newPlayer.type,
-        value: newPlayer.value ? parseInt(String(newPlayer.value).replace(/\./g, '')) : 0
-      });
+      if (editingId) {
+        const playerRef = doc(db, 'artifacts', appId, 'users', user.uid, 'players', editingId);
+        await updateDoc(playerRef, {
+          name: newPlayer.name,
+          rating: parseInt(newPlayer.rating) || 75,
+          pos: newPlayer.pos,
+          age: parseInt(newPlayer.age) || 23,
+          type: newPlayer.type,
+          value: newPlayer.value ? parseInt(String(newPlayer.value).replace(/\./g, '')) : 0,
+          role: newPlayer.role || 'Titular'
+        });
+      } else {
+        const playerRef = doc(db, 'artifacts', appId, 'users', user.uid, 'players', crypto.randomUUID());
+        await setDoc(playerRef, {
+          name: newPlayer.name,
+          rating: parseInt(newPlayer.rating) || 75,
+          pos: newPlayer.pos,
+          age: parseInt(newPlayer.age) || 23,
+          type: newPlayer.type,
+          value: newPlayer.value ? parseInt(String(newPlayer.value).replace(/\./g, '')) : 0,
+          role: newPlayer.role || 'Titular'
+        });
+      }
       setShowForm(false);
-      setNewPlayer({ name: '', rating: 75, pos: 'MC', age: 23, type: 'Comprado', value: '' });
+      setEditingId(null);
+      setNewPlayer({ name: '', rating: 75, pos: 'MC', age: 23, type: 'Comprado', value: '', role: 'Titular' });
     } catch (err) {
       setAuthError('Error al guardar jugador.');
     }
+  };
+
+  const handleEditClick = (p) => {
+    setNewPlayer({
+      name: p.name,
+      rating: p.rating,
+      pos: p.pos,
+      age: p.age,
+      type: p.type || 'Comprado',
+      value: p.value ? Number(p.value).toLocaleString('es-ES') : '',
+      role: p.role || 'Titular'
+    });
+    setEditingId(p.id);
+    setShowForm(true);
   };
 
   const deletePlayer = async (id) => {
@@ -272,7 +327,6 @@ export default function App() {
 
   const filteredPlayers = players.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // NUEVO: Lógica de ordenamiento para todos los filtros
   let sortedPlayers = [...filteredPlayers];
   switch (sortBy) {
     case 'rating-desc': sortedPlayers.sort((a, b) => b.rating - a.rating); break;
@@ -366,10 +420,6 @@ export default function App() {
             </button>
           </div>
         </div>
-
-        <div className="mt-8 text-white/20 text-[10px] font-black flex items-center gap-1.5 uppercase">
-          <ShieldCheck size={14} className="text-green-500" /> Servidor seguro en la nube gratuito
-        </div>
       </div>
     );
   }
@@ -394,38 +444,24 @@ export default function App() {
       </header>
 
       <main className="p-4 max-w-lg mx-auto pb-24">
+        {}
         {activeTab === 'squad' && (
           <div className="space-y-4">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
-                <input type="text" placeholder="Buscar jugador..." className="w-full bg-[#111114] p-4 pl-12 rounded-2xl border border-white/5 outline-none focus:border-green-500 text-xs font-bold text-white" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-              </div>
-              <div className="relative min-w-[140px]">
-                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="w-full h-full bg-[#111114] p-4 pr-10 rounded-2xl border border-white/5 outline-none focus:border-green-500 text-xs font-bold text-white/60 appearance-none cursor-pointer">
-                  <option value="rating-desc">Mayor Media</option>
-                  <option value="rating-asc">Menor Media</option>
-                  <option value="value-desc">Mayor Valor</option>
-                  <option value="value-asc">Menor Valor</option>
-                  <option value="age-desc">Mayor Edad</option>
-                  <option value="age-asc">Menor Edad</option>
-                  <option value="pos">Posición (A-Z)</option>
-                  <option value="type">Tipo Fichaje</option>
-                  <option value="name-asc">Nombre (A-Z)</option>
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none" size={16} />
-              </div>
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
+              <input type="text" placeholder="Buscar jugador..." className="w-full bg-[#111114] p-4 pl-12 rounded-2xl border border-white/5 outline-none focus:border-green-500 text-xs font-bold text-white" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
 
-            <button onClick={() => setShowForm(true)} className="w-full bg-green-500 text-black p-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+            <button onClick={() => { setEditingId(null); setNewPlayer({ name: '', rating: 75, pos: 'MC', age: 23, type: 'Comprado', value: '', role: 'Titular' }); setShowForm(true); }} className="w-full bg-green-500 text-black p-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2">
               <Plus size={16} /> Fichar Nuevo Jugador
             </button>
 
+            {}
             {showForm && (
               <form onSubmit={addPlayer} className="bg-[#18181b] p-5 rounded-[32px] border border-green-500/30 space-y-4 animate-in slide-in-from-top-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-black italic text-green-500 text-sm uppercase">Nuevo Jugador</h3>
-                  <button type="button" onClick={() => setShowForm(false)} className="p-1 text-white/20"><X size={18} /></button>
+                  <h3 className="font-black italic text-green-500 text-sm uppercase">{editingId ? 'Editar Jugador' : 'Nuevo Jugador'}</h3>
+                  <button type="button" onClick={() => { setShowForm(false); setEditingId(null); setNewPlayer({ name: '', rating: 75, pos: 'MC', age: 23, type: 'Comprado', value: '', role: 'Titular' }); }} className="p-1 text-white/20"><X size={18} /></button>
                 </div>
 
                 <div className="space-y-1">
@@ -464,7 +500,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* NUEVO: Botones para seleccionar el tipo de adquisición */}
                 <div className="space-y-1">
                   <label className="text-[9px] font-black text-white/30 ml-1">Tipo de Adquisición</label>
                   <div className="flex gap-2">
@@ -488,12 +523,29 @@ export default function App() {
                   />
                 </div>
 
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-white/30 ml-1">Rol en el Equipo</label>
+                  <div className="relative">
+                    <select className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 text-xs font-black text-white appearance-none cursor-pointer hover:bg-white/10 focus:border-green-500 transition-colors uppercase" value={newPlayer.role || 'Titular'} onChange={(e) => setNewPlayer({ ...newPlayer, role: e.target.value })}>
+                      <option value="Estrella" className="bg-[#18181b]">Estrella</option>
+                      <option value="Titular Indiscutible" className="bg-[#18181b]">Titular Indiscutible</option>
+                      <option value="Titular" className="bg-[#18181b]">Titular</option>
+                      <option value="Rotación" className="bg-[#18181b]">Rotación</option>
+                      <option value="Promesa" className="bg-[#18181b]">Promesa</option>
+                      <option value="Para Ceder" className="bg-[#18181b]">Para Ceder</option>
+                      <option value="Transferible" className="bg-[#18181b]">Transferible</option>
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" size={16} />
+                  </div>
+                </div>
+
                 <button type="submit" className="w-full bg-green-500 text-black shadow-lg shadow-green-500/20 p-4 rounded-xl font-black uppercase text-xs tracking-wider mt-4 active:scale-[0.98] transition-all">
-                  Añadir a la Plantilla
+                  {editingId ? 'Guardar Cambios' : 'Añadir a la Plantilla'}
                 </button>
               </form>
             )}
 
+            {}
             <div className="bg-[#111114] rounded-[32px] border border-white/10 overflow-hidden divide-y divide-white/5 shadow-2xl">
               {sortedPlayers.length === 0 && (
                 <div className="p-16 text-center text-white/10 font-black italic uppercase tracking-widest text-xs">
@@ -518,7 +570,6 @@ export default function App() {
                             {Number(p.value).toLocaleString('es-ES')} €
                           </span>
                         )}
-                        {/* NUEVO: Etiqueta visual de tipo de fichaje */}
                         <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider ${
                           p.type === 'Cantera' ? 'bg-green-600/20 text-green-400' : 
                           p.type === 'Cedido' ? 'bg-yellow-500/20 text-yellow-400' : 
@@ -526,18 +577,27 @@ export default function App() {
                         }`}>
                           {p.type || 'Comprado'}
                         </span>
+                        <span className="text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider bg-white/10 text-white/60">
+                          {p.role || 'Titular'}
+                        </span>
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => deletePlayer(p.id)} className="p-2 text-white/10 hover:text-red-500 transition-colors">
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => handleEditClick(p)} className="p-2 text-white/10 hover:text-blue-500 transition-colors">
+                      <Edit size={18} />
+                    </button>
+                    <button onClick={() => deletePlayer(p.id)} className="p-2 text-white/10 hover:text-red-500 transition-colors">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         )}
 
+        {}
         {activeTab === 'tactics' && (
           <div className="space-y-4 animate-in fade-in">
             <div className="flex justify-between items-center bg-[#111114] p-4 rounded-[24px] border border-white/5">
@@ -579,6 +639,7 @@ export default function App() {
         )}
       </main>
 
+      {}
       {pickingSlot !== null && (
         <div className="fixed inset-0 bg-black/95 z-[100] p-6 flex flex-col animate-in fade-in duration-200">
           <div className="flex justify-between items-center mb-6">
