@@ -18,6 +18,7 @@ import {
   Info,
   Search,
   ShieldCheck,
+  ChevronDown,
 } from 'lucide-react';
 import { initializeApp, getApps } from 'firebase/app';
 import {
@@ -101,6 +102,12 @@ const FORMATIONS = {
   ],
 };
 
+const getRatingStyle = (rating) => {
+  if (rating >= 75) return 'bg-[#FACC15] text-black'; // Oro
+  if (rating >= 65) return 'bg-[#CBD5E1] text-black'; // Plata
+  return 'bg-[#CD7F32] text-white'; // Bronce
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -110,6 +117,7 @@ export default function App() {
   const [formation, setFormation] = useState('4-3-3');
   const [lineup, setLineup] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('rating-desc'); // NUEVO: Estado para el filtro
 
   const [showForm, setShowForm] = useState(false);
   const [newPlayer, setNewPlayer] = useState({
@@ -117,7 +125,8 @@ export default function App() {
     rating: 75,
     pos: 'MC',
     age: 23,
-    type: 'Comprado' // NUEVO: Tipo de adquisición por defecto
+    type: 'Comprado',
+    value: ''
   });
 
   const [authMode, setAuthMode] = useState('login');
@@ -205,10 +214,11 @@ export default function App() {
         rating: parseInt(newPlayer.rating) || 75,
         pos: newPlayer.pos,
         age: parseInt(newPlayer.age) || 23,
-        type: newPlayer.type // NUEVO: Guardamos el tipo
+        type: newPlayer.type,
+        value: newPlayer.value ? parseInt(String(newPlayer.value).replace(/\./g, '')) : 0
       });
       setShowForm(false);
-      setNewPlayer({ name: '', rating: 75, pos: 'MC', age: 23, type: 'Comprado' });
+      setNewPlayer({ name: '', rating: 75, pos: 'MC', age: 23, type: 'Comprado', value: '' });
     } catch (err) {
       setAuthError('Error al guardar jugador.');
     }
@@ -261,6 +271,21 @@ export default function App() {
   };
 
   const filteredPlayers = players.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  // NUEVO: Lógica de ordenamiento para todos los filtros
+  let sortedPlayers = [...filteredPlayers];
+  switch (sortBy) {
+    case 'rating-desc': sortedPlayers.sort((a, b) => b.rating - a.rating); break;
+    case 'rating-asc': sortedPlayers.sort((a, b) => a.rating - b.rating); break;
+    case 'value-desc': sortedPlayers.sort((a, b) => (b.value || 0) - (a.value || 0)); break;
+    case 'value-asc': sortedPlayers.sort((a, b) => (a.value || 0) - (b.value || 0)); break;
+    case 'age-desc': sortedPlayers.sort((a, b) => b.age - a.age); break;
+    case 'age-asc': sortedPlayers.sort((a, b) => a.age - b.age); break;
+    case 'name-asc': sortedPlayers.sort((a, b) => a.name.localeCompare(b.name)); break;
+    case 'pos': sortedPlayers.sort((a, b) => (a.pos || '').localeCompare(b.pos || '')); break;
+    case 'type': sortedPlayers.sort((a, b) => (a.type || '').localeCompare(b.type || '')); break;
+    default: sortedPlayers.sort((a, b) => b.rating - a.rating);
+  }
 
   if (loading) {
     return (
@@ -371,9 +396,25 @@ export default function App() {
       <main className="p-4 max-w-lg mx-auto pb-24">
         {activeTab === 'squad' && (
           <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
-              <input type="text" placeholder="Buscar jugador..." className="w-full bg-[#111114] p-4 pl-12 rounded-2xl border border-white/5 outline-none focus:border-green-500 text-xs font-bold text-white" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
+                <input type="text" placeholder="Buscar jugador..." className="w-full bg-[#111114] p-4 pl-12 rounded-2xl border border-white/5 outline-none focus:border-green-500 text-xs font-bold text-white" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+              </div>
+              <div className="relative min-w-[140px]">
+                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="w-full h-full bg-[#111114] p-4 pr-10 rounded-2xl border border-white/5 outline-none focus:border-green-500 text-xs font-bold text-white/60 appearance-none cursor-pointer">
+                  <option value="rating-desc">Mayor Media</option>
+                  <option value="rating-asc">Menor Media</option>
+                  <option value="value-desc">Mayor Valor</option>
+                  <option value="value-asc">Menor Valor</option>
+                  <option value="age-desc">Mayor Edad</option>
+                  <option value="age-asc">Menor Edad</option>
+                  <option value="pos">Posición (A-Z)</option>
+                  <option value="type">Tipo Fichaje</option>
+                  <option value="name-asc">Nombre (A-Z)</option>
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none" size={16} />
+              </div>
             </div>
 
             <button onClick={() => setShowForm(true)} className="w-full bg-green-500 text-black p-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2">
@@ -389,31 +430,37 @@ export default function App() {
 
                 <div className="space-y-1">
                   <label className="text-[9px] font-black text-white/30 ml-1">Nombre</label>
-                  <input type="text" placeholder="Ej: Erling Haaland" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold" value={newPlayer.name} onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })} />
+                  <input type="text" placeholder="Ej: Erling Haaland" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold placeholder:text-white/10" value={newPlayer.name} onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })} />
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <label className="text-[9px] font-black text-white/30 ml-1">Media</label>
-                    <input type="number" placeholder="90" min="1" max="99" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 text-center font-black text-xl text-white" value={newPlayer.rating} onChange={(e) => setNewPlayer({ ...newPlayer, rating: e.target.value })} />
+                    <input type="number" placeholder="90" min="1" max="99" className="w-full h-[56px] bg-white/5 rounded-xl outline-none border border-white/5 text-center font-black text-xl text-white placeholder:text-white/10 focus:border-green-500 transition-colors" value={newPlayer.rating} onChange={(e) => setNewPlayer({ ...newPlayer, rating: e.target.value })} />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[9px] font-black text-white/30 ml-1">Posición</label>
-                    <select className="w-full bg-[#18181b] p-4 rounded-xl outline-none border border-white/5 text-center font-black text-xs text-white" value={newPlayer.pos} onChange={(e) => setNewPlayer({ ...newPlayer, pos: e.target.value })}>
-                      <option value="POR">POR</option>
-                      <option value="DFC">DFC</option>
-                      <option value="LD">LD</option>
-                      <option value="LI">LI</option>
-                      <option value="MC">MC</option>
-                      <option value="MCO">MCO</option>
-                      <option value="ED">ED</option>
-                      <option value="EI">EI</option>
-                      <option value="DC">DC</option>
-                    </select>
+                    <div className="relative">
+                      <select className="w-full h-[56px] bg-white/5 rounded-xl outline-none border border-white/5 text-center font-black text-xl text-white appearance-none cursor-pointer hover:bg-white/10 focus:border-green-500 transition-colors" value={newPlayer.pos} onChange={(e) => setNewPlayer({ ...newPlayer, pos: e.target.value })}>
+                        <option value="POR" className="bg-[#18181b] text-white text-base font-bold">POR</option>
+                        <option value="DFC" className="bg-[#18181b] text-white text-base font-bold">DFC</option>
+                        <option value="LD" className="bg-[#18181b] text-white text-base font-bold">LD</option>
+                        <option value="LI" className="bg-[#18181b] text-white text-base font-bold">LI</option>
+                        <option value="MCD" className="bg-[#18181b] text-white text-base font-bold">MCD</option>
+                        <option value="MC" className="bg-[#18181b] text-white text-base font-bold">MC</option>
+                        <option value="MCO" className="bg-[#18181b] text-white text-base font-bold">MCO</option>
+                        <option value="MD" className="bg-[#18181b] text-white text-base font-bold">MD</option>
+                        <option value="MI" className="bg-[#18181b] text-white text-base font-bold">MI</option>
+                        <option value="ED" className="bg-[#18181b] text-white text-base font-bold">ED</option>
+                        <option value="EI" className="bg-[#18181b] text-white text-base font-bold">EI</option>
+                        <option value="DC" className="bg-[#18181b] text-white text-base font-bold">DC</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" size={18} />
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[9px] font-black text-white/30 ml-1">Edad</label>
-                    <input type="number" placeholder="23" min="15" max="50" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 text-center font-black text-xl text-white" value={newPlayer.age} onChange={(e) => setNewPlayer({ ...newPlayer, age: e.target.value })} />
+                    <input type="number" placeholder="23" min="15" max="50" className="w-full h-[56px] bg-white/5 rounded-xl outline-none border border-white/5 text-center font-black text-xl text-white placeholder:text-white/10 focus:border-green-500 transition-colors" value={newPlayer.age} onChange={(e) => setNewPlayer({ ...newPlayer, age: e.target.value })} />
                   </div>
                 </div>
 
@@ -427,23 +474,37 @@ export default function App() {
                   </div>
                 </div>
 
-                <button type="submit" className="w-full bg-white text-black p-4 rounded-xl font-black uppercase text-xs tracking-wider mt-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-white/30 ml-1">Valor del Jugador (€)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ej: 50.000.000" 
+                    className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold placeholder:text-white/10" 
+                    value={newPlayer.value} 
+                    onChange={(e) => { 
+                      const val = e.target.value.replace(/\D/g, ''); 
+                      setNewPlayer({ ...newPlayer, value: val ? Number(val).toLocaleString('es-ES') : '' }); 
+                    }} 
+                  />
+                </div>
+
+                <button type="submit" className="w-full bg-green-500 text-black shadow-lg shadow-green-500/20 p-4 rounded-xl font-black uppercase text-xs tracking-wider mt-4 active:scale-[0.98] transition-all">
                   Añadir a la Plantilla
                 </button>
               </form>
             )}
 
             <div className="bg-[#111114] rounded-[32px] border border-white/10 overflow-hidden divide-y divide-white/5 shadow-2xl">
-              {filteredPlayers.length === 0 && (
+              {sortedPlayers.length === 0 && (
                 <div className="p-16 text-center text-white/10 font-black italic uppercase tracking-widest text-xs">
                   {searchQuery ? 'No se encontraron jugadores' : 'Plantilla Vacía'}
                 </div>
               )}
-              {filteredPlayers.sort((a, b) => b.rating - a.rating).map((p) => (
+              {sortedPlayers.map((p) => (
                 <div key={p.id} className="p-5 flex items-center justify-between group hover:bg-white/[0.01] transition-all">
                   <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-black font-black leading-none ${p.rating >= 85 ? 'bg-yellow-400' : 'bg-slate-300'}`}>
-                      <span className="text-[8px] opacity-60 font-bold mb-0.5">{p.pos || 'MC'}</span>
+                    <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black leading-none shadow-lg ${getRatingStyle(p.rating)}`}>
+                      <span className="text-[8px] opacity-70 font-bold mb-0.5">{p.pos || 'MC'}</span>
                       <span className="text-xl">{p.rating}</span>
                     </div>
                     <div>
@@ -452,6 +513,11 @@ export default function App() {
                       </div>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-[9px] text-white/20 font-black uppercase tracking-widest">{p.age} Años</span>
+                        {p.value > 0 && (
+                          <span className="text-[9px] text-green-400/80 font-black uppercase tracking-widest">
+                            {Number(p.value).toLocaleString('es-ES')} €
+                          </span>
+                        )}
                         {/* NUEVO: Etiqueta visual de tipo de fichaje */}
                         <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider ${
                           p.type === 'Cantera' ? 'bg-green-600/20 text-green-400' : 
@@ -530,8 +596,8 @@ export default function App() {
 
             {players.sort((a, b) => b.rating - a.rating).map((p) => (
               <button key={p.id} onClick={() => assignPlayerToSlot(pickingSlot, p.id)} className={`w-full p-4 rounded-2xl bg-white/5 flex items-center gap-4 hover:bg-white/10 transition-all border border-transparent ${lineup[pickingSlot] === p.id ? 'border-green-500 bg-green-500/10' : ''}`}>
-                <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center text-black font-black leading-none ${p.rating >= 85 ? 'bg-yellow-400' : 'bg-slate-300'}`}>
-                  <span className="text-[8px] opacity-60 mb-0.5">{p.pos}</span>
+                <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shadow-md ${getRatingStyle(p.rating)}`}>
+                  <span className="text-[8px] opacity-70 mb-0.5">{p.pos}</span>
                   <span className="text-lg">{p.rating}</span>
                 </div>
                 <div className="text-left flex-1 min-w-0">
