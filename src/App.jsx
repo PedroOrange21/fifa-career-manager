@@ -43,7 +43,6 @@ import {
 } from 'firebase/auth';
 
 // --- CONFIGURACIÓN DE FIREBASE ---
-// Usamos tus credenciales reales. Firebase Spark Plan es 100% gratuito.
 const firebaseConfig = {
   apiKey: 'AIzaSyCXNwNdKeE_Yr97iaFV_Ezw5GabBYasdnY',
   authDomain: 'fifa-manger.firebaseapp.com',
@@ -53,8 +52,7 @@ const firebaseConfig = {
   appId: '1:945035024406:web:0e2d4e42c81f910f223d37',
 };
 
-const app =
-  getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
@@ -107,31 +105,28 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Estados de datos
   const [players, setPlayers] = useState([]);
   const [activeTab, setActiveTab] = useState('squad');
   const [formation, setFormation] = useState('4-3-3');
   const [lineup, setLineup] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Estados para añadir jugadores
   const [showForm, setShowForm] = useState(false);
   const [newPlayer, setNewPlayer] = useState({
     name: '',
     rating: 75,
     pos: 'MC',
     age: 23,
+    type: 'Comprado' // NUEVO: Tipo de adquisición por defecto
   });
 
-  // Estados de autenticación manual
-  const [authMode, setAuthMode] = useState('login'); // 'login' | 'signup'
+  const [authMode, setAuthMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [authError, setAuthError] = useState('');
   const [pickingSlot, setPickingSlot] = useState(null);
 
-  // Intentar auto-login de sesión activa
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -140,39 +135,15 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Cargar datos de la base de datos de forma segura cuando el usuario se loguea
   useEffect(() => {
     if (!user) return;
 
-    // Escuchar jugadores
-    const playersRef = collection(
-      db,
-      'artifacts',
-      appId,
-      'users',
-      user.uid,
-      'players'
-    );
-    const unsubPlayers = onSnapshot(
-      playersRef,
-      (snap) => {
-        setPlayers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      },
-      (err) => {
-        console.error('Error al leer plantilla:', err);
-      }
-    );
+    const playersRef = collection(db, 'artifacts', appId, 'users', user.uid, 'players');
+    const unsubPlayers = onSnapshot(playersRef, (snap) => {
+      setPlayers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }, (err) => console.error('Error al leer plantilla:', err));
 
-    // Escuchar alineación y formación guardada
-    const tacticsRef = doc(
-      db,
-      'artifacts',
-      appId,
-      'users',
-      user.uid,
-      'settings',
-      'tactics'
-    );
+    const tacticsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'tactics');
     const unsubTactics = onSnapshot(tacticsRef, (snap) => {
       if (snap.exists()) {
         const data = snap.data();
@@ -187,14 +158,10 @@ export default function App() {
     };
   }, [user]);
 
-  // --- MÉTODOS DE AUTENTICACIÓN ---
   const handleGoogleLogin = async () => {
     setAuthError('');
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (err) {
-      setAuthError('No se pudo iniciar sesión con Google. Revisa la consola.');
-    }
+    try { await signInWithPopup(auth, googleProvider); } 
+    catch (err) { setAuthError('No se pudo iniciar sesión con Google. Revisa la consola.'); }
   };
 
   const handleEmailAuth = async (e) => {
@@ -213,52 +180,35 @@ export default function App() {
           setAuthError('Escribe un nombre de Míster para tu perfil.');
           return;
         }
-        const userCredential = await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password
-        );
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(userCredential.user, { displayName });
         setUser({ ...userCredential.user, displayName });
       }
     } catch (err) {
-      if (err.code === 'auth/weak-password') {
-        setAuthError('La contraseña debe tener al menos 6 caracteres.');
-      } else if (err.code === 'auth/email-already-in-use') {
-        setAuthError('Este correo electrónico ya está registrado.');
-      } else if (err.code === 'auth/invalid-credential') {
-        setAuthError('Correo o contraseña incorrectos.');
-      } else {
-        setAuthError('Error: ' + err.message);
-      }
+      if (err.code === 'auth/weak-password') setAuthError('La contraseña debe tener al menos 6 caracteres.');
+      else if (err.code === 'auth/email-already-in-use') setAuthError('Este correo electrónico ya está registrado.');
+      else if (err.code === 'auth/invalid-credential') setAuthError('Correo o contraseña incorrectos.');
+      else setAuthError('Error: ' + err.message);
     }
   };
 
   const handleLogout = () => signOut(auth);
 
-  // --- MÉTODOS DE PLANTILLA Y TÁCTICA ---
   const addPlayer = async (e) => {
     e.preventDefault();
     if (!user || !newPlayer.name) return;
 
     try {
-      const playerRef = doc(
-        db,
-        'artifacts',
-        appId,
-        'users',
-        user.uid,
-        'players',
-        crypto.randomUUID()
-      );
+      const playerRef = doc(db, 'artifacts', appId, 'users', user.uid, 'players', crypto.randomUUID());
       await setDoc(playerRef, {
         name: newPlayer.name,
         rating: parseInt(newPlayer.rating) || 75,
         pos: newPlayer.pos,
         age: parseInt(newPlayer.age) || 23,
+        type: newPlayer.type // NUEVO: Guardamos el tipo
       });
       setShowForm(false);
-      setNewPlayer({ name: '', rating: 75, pos: 'MC', age: 23 });
+      setNewPlayer({ name: '', rating: 75, pos: 'MC', age: 23, type: 'Comprado' });
     } catch (err) {
       setAuthError('Error al guardar jugador.');
     }
@@ -267,12 +217,7 @@ export default function App() {
   const deletePlayer = async (id) => {
     if (!user) return;
     try {
-      // Eliminar de plantilla
-      await deleteDoc(
-        doc(db, 'artifacts', appId, 'users', user.uid, 'players', id)
-      );
-
-      // Eliminar de alineación si estaba puesto en el campo
+      await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'players', id));
       const newLineup = { ...lineup };
       let changed = false;
       Object.keys(newLineup).forEach((slot) => {
@@ -293,15 +238,7 @@ export default function App() {
   const saveTactics = async (newForm, newLineup) => {
     if (!user) return;
     try {
-      const tacticsRef = doc(
-        db,
-        'artifacts',
-        appId,
-        'users',
-        user.uid,
-        'settings',
-        'tactics'
-      );
+      const tacticsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'tactics');
       await setDoc(tacticsRef, { formation: newForm, lineup: newLineup });
     } catch (err) {
       console.error('Error al guardar táctica:', err);
@@ -313,7 +250,6 @@ export default function App() {
     if (playerId === null) {
       delete newLineup[slotIndex];
     } else {
-      // Evitar duplicados en el campo
       Object.keys(newLineup).forEach((key) => {
         if (newLineup[key] === playerId) delete newLineup[key];
       });
@@ -324,37 +260,26 @@ export default function App() {
     setPickingSlot(null);
   };
 
-  // Filtrado de jugadores para el buscador
-  const filteredPlayers = players.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredPlayers = players.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   if (loading) {
     return (
       <div className="h-screen bg-[#0a0a0b] flex flex-col items-center justify-center">
         <RefreshCcw className="animate-spin text-green-500 mb-4" size={40} />
-        <span className="text-white/40 text-xs font-bold uppercase tracking-widest">
-          Cargando base de datos...
-        </span>
+        <span className="text-white/40 text-xs font-bold uppercase tracking-widest">Cargando base de datos...</span>
       </div>
     );
   }
 
-  // --- PANTALLA DE ACCESO (SI NO ESTÁ LOGUEADO) ---
   if (!user) {
     return (
       <div className="min-h-screen bg-[#0a0a0b] text-white flex flex-col items-center justify-center p-4">
         <div className="mb-8 text-center">
-          <span className="text-green-500 font-black text-5xl italic tracking-tighter">
-            soccerclothes.
-          </span>
-          <h1 className="text-white/30 font-bold tracking-[0.3em] text-xs uppercase mt-2">
-            Plataforma de Control
-          </h1>
+          <span className="text-green-500 font-black text-5xl italic tracking-tighter">soccerclothes.</span>
+          <h1 className="text-white/30 font-bold tracking-[0.3em] text-xs uppercase mt-2">Plataforma de Control</h1>
         </div>
 
         <div className="bg-[#111114] border border-white/10 p-6 md:p-8 rounded-[40px] shadow-2xl w-full max-w-md">
-          {/* Alertas personalizadas */}
           {authError && (
             <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl mb-6 flex gap-3 text-red-400 text-xs font-bold items-start animate-pulse">
               <ShieldAlert className="flex-shrink-0" size={18} />
@@ -362,142 +287,73 @@ export default function App() {
             </div>
           )}
 
-          {/* Formulario Manual */}
           <form onSubmit={handleEmailAuth} className="space-y-4">
             {authMode === 'signup' && (
               <div>
-                <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1 mb-1 block">
-                  Tu Nombre de Míster
-                </label>
+                <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1 mb-1 block">Tu Nombre de Míster</label>
                 <div className="relative">
-                  <User
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20"
-                    size={18}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Ej: Míster Guardiola"
-                    className="w-full bg-white/5 p-4 pl-12 rounded-2xl border border-white/10 outline-none focus:border-green-500 text-sm font-bold text-white"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                  />
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
+                  <input type="text" placeholder="Ej: Míster Guardiola" className="w-full bg-white/5 p-4 pl-12 rounded-2xl border border-white/10 outline-none focus:border-green-500 text-sm font-bold text-white" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
                 </div>
               </div>
             )}
 
             <div>
-              <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1 mb-1 block">
-                Correo Electrónico
-              </label>
+              <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1 mb-1 block">Correo Electrónico</label>
               <div className="relative">
-                <Mail
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20"
-                  size={18}
-                />
-                <input
-                  type="email"
-                  placeholder="ejemplo@correo.com"
-                  className="w-full bg-white/5 p-4 pl-12 rounded-2xl border border-white/10 outline-none focus:border-green-500 text-sm font-bold text-white"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
+                <input type="email" placeholder="ejemplo@correo.com" className="w-full bg-white/5 p-4 pl-12 rounded-2xl border border-white/10 outline-none focus:border-green-500 text-sm font-bold text-white" value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
             </div>
 
             <div>
-              <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1 mb-1 block">
-                Contraseña
-              </label>
+              <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1 mb-1 block">Contraseña</label>
               <div className="relative">
-                <Lock
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20"
-                  size={18}
-                />
-                <input
-                  type="password"
-                  placeholder="Mínimo 6 caracteres"
-                  className="w-full bg-white/5 p-4 pl-12 rounded-2xl border border-white/10 outline-none focus:border-green-500 text-sm font-bold text-white"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
+                <input type="password" placeholder="Mínimo 6 caracteres" className="w-full bg-white/5 p-4 pl-12 rounded-2xl border border-white/10 outline-none focus:border-green-500 text-sm font-bold text-white" value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
             </div>
 
-            <button
-              type="submit"
-              className="w-full bg-green-500 text-black font-black py-4 rounded-2xl text-xs uppercase tracking-wider shadow-lg shadow-green-500/20 active:scale-95 transition-all mt-6"
-            >
+            <button type="submit" className="w-full bg-green-500 text-black font-black py-4 rounded-2xl text-xs uppercase tracking-wider shadow-lg shadow-green-500/20 active:scale-95 transition-all mt-6">
               {authMode === 'login' ? 'INICIAR SESIÓN' : 'REGISTRARME GRATIS'}
             </button>
           </form>
 
-          {/* Separador */}
           <div className="flex items-center my-6">
             <div className="flex-1 h-px bg-white/10"></div>
-            <span className="px-3 text-[10px] font-black text-white/20 uppercase tracking-widest">
-              O
-            </span>
+            <span className="px-3 text-[10px] font-black text-white/20 uppercase tracking-widest">O</span>
             <div className="flex-1 h-px bg-white/10"></div>
           </div>
 
-          {/* Botón de Google */}
-          <button
-            onClick={handleGoogleLogin}
-            className="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 font-black py-4 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all text-xs uppercase tracking-wider mb-6"
-          >
+          <button onClick={handleGoogleLogin} className="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 font-black py-4 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all text-xs uppercase tracking-wider mb-6">
             <svg className="w-4 h-4" viewBox="0 0 24 24">
-              <path
-                fill="currentColor"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.77c-.98.66-2.23 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="currentColor"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
+              <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+              <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.77c-.98.66-2.23 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+              <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+              <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
             </svg>
             Entrar con Google
           </button>
 
-          {/* Selector de Modo */}
           <div className="text-center">
-            <button
-              onClick={() =>
-                setAuthMode(authMode === 'login' ? 'signup' : 'login')
-              }
-              className="text-xs text-green-500 hover:underline font-bold"
-            >
-              {authMode === 'login'
-                ? '¿No tienes cuenta? Regístrate aquí'
-                : '¿Ya tienes cuenta? Inicia sesión'}
+            <button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-xs text-green-500 hover:underline font-bold">
+              {authMode === 'login' ? '¿No tienes cuenta? Regístrate aquí' : '¿Ya tienes cuenta? Inicia sesión'}
             </button>
           </div>
         </div>
 
         <div className="mt-8 text-white/20 text-[10px] font-black flex items-center gap-1.5 uppercase">
-          <ShieldCheck size={14} className="text-green-500" /> Servidor seguro
-          en la nube gratuito
+          <ShieldCheck size={14} className="text-green-500" /> Servidor seguro en la nube gratuito
         </div>
       </div>
     );
   }
 
-  // --- PANTALLA PRINCIPAL (LOGUEADO) ---
   return (
     <div className="min-h-screen bg-[#0a0a0b] text-white">
-      {/* Cabecera Responsiva */}
       <header className="p-4 border-b border-white/10 flex justify-between items-center sticky top-0 bg-[#111114]/90 backdrop-blur-md z-40">
         <div className="flex items-center gap-3">
-          <h1 className="text-green-500 font-black italic tracking-tighter text-xl">
-            soccerclothes.
-          </h1>
+          <h1 className="text-green-500 font-black italic tracking-tighter text-xl">soccerclothes.</h1>
           <div className="hidden sm:block h-4 w-px bg-white/10"></div>
           <span className="hidden sm:block text-[10px] text-white/40 font-black uppercase tracking-widest">
             Míster: {user.displayName || user.email.split('@')[0]}
@@ -505,125 +361,45 @@ export default function App() {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex bg-white/5 p-1 rounded-xl">
-            <button
-              onClick={() => setActiveTab('squad')}
-              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${
-                activeTab === 'squad'
-                  ? 'bg-green-500 text-black shadow-lg shadow-green-500/20'
-                  : 'text-white/40'
-              }`}
-            >
-              Plantilla
-            </button>
-            <button
-              onClick={() => setActiveTab('tactics')}
-              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${
-                activeTab === 'tactics'
-                  ? 'bg-green-500 text-black shadow-lg shadow-green-500/20'
-                  : 'text-white/40'
-              }`}
-            >
-              Táctica
-            </button>
+            <button onClick={() => setActiveTab('squad')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === 'squad' ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'text-white/40'}`}>Plantilla</button>
+            <button onClick={() => setActiveTab('tactics')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === 'tactics' ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'text-white/40'}`}>Táctica</button>
           </div>
-          <button
-            onClick={handleLogout}
-            className="p-2.5 bg-white/5 hover:bg-red-500/10 text-white/40 hover:text-red-500 rounded-xl transition-all"
-            title="Cerrar sesión"
-          >
-            <LogOut size={16} />
-          </button>
+          <button onClick={handleLogout} className="p-2.5 bg-white/5 hover:bg-red-500/10 text-white/40 hover:text-red-500 rounded-xl transition-all" title="Cerrar sesión"><LogOut size={16} /></button>
         </div>
       </header>
 
-      {/* Contenido Principal */}
       <main className="p-4 max-w-lg mx-auto pb-24">
-        {/* TABA 1: SQUAD (PLANTILLA) */}
         {activeTab === 'squad' && (
           <div className="space-y-4">
-            {/* Buscador de Jugadores */}
             <div className="relative">
-              <Search
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20"
-                size={16}
-              />
-              <input
-                type="text"
-                placeholder="Buscar jugador..."
-                className="w-full bg-[#111114] p-4 pl-12 rounded-2xl border border-white/5 outline-none focus:border-green-500 text-xs font-bold text-white"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
+              <input type="text" placeholder="Buscar jugador..." className="w-full bg-[#111114] p-4 pl-12 rounded-2xl border border-white/5 outline-none focus:border-green-500 text-xs font-bold text-white" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
 
-            <button
-              onClick={() => setShowForm(true)}
-              className="w-full bg-green-500 text-black p-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-            >
+            <button onClick={() => setShowForm(true)} className="w-full bg-green-500 text-black p-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2">
               <Plus size={16} /> Fichar Nuevo Jugador
             </button>
 
             {showForm && (
-              <form
-                onSubmit={addPlayer}
-                className="bg-[#18181b] p-5 rounded-[32px] border border-green-500/30 space-y-4 animate-in slide-in-from-top-4"
-              >
+              <form onSubmit={addPlayer} className="bg-[#18181b] p-5 rounded-[32px] border border-green-500/30 space-y-4 animate-in slide-in-from-top-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-black italic text-green-500 text-sm uppercase">
-                    Nuevo Jugador
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setShowForm(false)}
-                    className="p-1 text-white/20"
-                  >
-                    <X size={18} />
-                  </button>
+                  <h3 className="font-black italic text-green-500 text-sm uppercase">Nuevo Jugador</h3>
+                  <button type="button" onClick={() => setShowForm(false)} className="p-1 text-white/20"><X size={18} /></button>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[9px] font-black text-white/30 ml-1">
-                    Nombre
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ej: Erling Haaland"
-                    className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold"
-                    value={newPlayer.name}
-                    onChange={(e) =>
-                      setNewPlayer({ ...newPlayer, name: e.target.value })
-                    }
-                  />
+                  <label className="text-[9px] font-black text-white/30 ml-1">Nombre</label>
+                  <input type="text" placeholder="Ej: Erling Haaland" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold" value={newPlayer.name} onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })} />
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black text-white/30 ml-1">
-                      Media
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="90"
-                      min="1"
-                      max="99"
-                      className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 text-center font-black text-xl text-white"
-                      value={newPlayer.rating}
-                      onChange={(e) =>
-                        setNewPlayer({ ...newPlayer, rating: e.target.value })
-                      }
-                    />
+                    <label className="text-[9px] font-black text-white/30 ml-1">Media</label>
+                    <input type="number" placeholder="90" min="1" max="99" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 text-center font-black text-xl text-white" value={newPlayer.rating} onChange={(e) => setNewPlayer({ ...newPlayer, rating: e.target.value })} />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black text-white/30 ml-1">
-                      Posición
-                    </label>
-                    <select
-                      className="w-full bg-[#18181b] p-4 rounded-xl outline-none border border-white/5 text-center font-black text-xs text-white"
-                      value={newPlayer.pos}
-                      onChange={(e) =>
-                        setNewPlayer({ ...newPlayer, pos: e.target.value })
-                      }
-                    >
+                    <label className="text-[9px] font-black text-white/30 ml-1">Posición</label>
+                    <select className="w-full bg-[#18181b] p-4 rounded-xl outline-none border border-white/5 text-center font-black text-xs text-white" value={newPlayer.pos} onChange={(e) => setNewPlayer({ ...newPlayer, pos: e.target.value })}>
                       <option value="POR">POR</option>
                       <option value="DFC">DFC</option>
                       <option value="LD">LD</option>
@@ -636,107 +412,76 @@ export default function App() {
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black text-white/30 ml-1">
-                      Edad
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="23"
-                      min="15"
-                      max="50"
-                      className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 text-center font-black text-xl text-white"
-                      value={newPlayer.age}
-                      onChange={(e) =>
-                        setNewPlayer({ ...newPlayer, age: e.target.value })
-                      }
-                    />
+                    <label className="text-[9px] font-black text-white/30 ml-1">Edad</label>
+                    <input type="number" placeholder="23" min="15" max="50" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 text-center font-black text-xl text-white" value={newPlayer.age} onChange={(e) => setNewPlayer({ ...newPlayer, age: e.target.value })} />
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full bg-white text-black p-4 rounded-xl font-black uppercase text-xs tracking-wider"
-                >
+                {/* NUEVO: Botones para seleccionar el tipo de adquisición */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-white/30 ml-1">Tipo de Adquisición</label>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setNewPlayer({...newPlayer, type: 'Cantera'})} className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${newPlayer.type === 'Cantera' ? 'bg-green-600 text-white shadow-lg shadow-green-600/30' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}>Cantera</button>
+                    <button type="button" onClick={() => setNewPlayer({...newPlayer, type: 'Cedido'})} className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${newPlayer.type === 'Cedido' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/30' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}>Cedido</button>
+                    <button type="button" onClick={() => setNewPlayer({...newPlayer, type: 'Comprado'})} className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${newPlayer.type === 'Comprado' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}>Comprado</button>
+                  </div>
+                </div>
+
+                <button type="submit" className="w-full bg-white text-black p-4 rounded-xl font-black uppercase text-xs tracking-wider mt-4">
                   Añadir a la Plantilla
                 </button>
               </form>
             )}
 
-            {/* Listado de plantilla */}
             <div className="bg-[#111114] rounded-[32px] border border-white/10 overflow-hidden divide-y divide-white/5 shadow-2xl">
               {filteredPlayers.length === 0 && (
                 <div className="p-16 text-center text-white/10 font-black italic uppercase tracking-widest text-xs">
-                  {searchQuery
-                    ? 'No se encontraron jugadores'
-                    : 'Plantilla Vacía'}
+                  {searchQuery ? 'No se encontraron jugadores' : 'Plantilla Vacía'}
                 </div>
               )}
-              {filteredPlayers
-                .sort((a, b) => b.rating - a.rating)
-                .map((p) => (
-                  <div
-                    key={p.id}
-                    className="p-5 flex items-center justify-between group hover:bg-white/[0.01] transition-all"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-black font-black leading-none ${
-                          p.rating >= 85 ? 'bg-yellow-400' : 'bg-slate-300'
-                        }`}
-                      >
-                        <span className="text-[8px] opacity-60 font-bold mb-0.5">
-                          {p.pos || 'MC'}
-                        </span>
-                        <span className="text-xl">{p.rating}</span>
+              {filteredPlayers.sort((a, b) => b.rating - a.rating).map((p) => (
+                <div key={p.id} className="p-5 flex items-center justify-between group hover:bg-white/[0.01] transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center text-black font-black leading-none ${p.rating >= 85 ? 'bg-yellow-400' : 'bg-slate-300'}`}>
+                      <span className="text-[8px] opacity-60 font-bold mb-0.5">{p.pos || 'MC'}</span>
+                      <span className="text-xl">{p.rating}</span>
+                    </div>
+                    <div>
+                      <div className="font-black uppercase italic text-lg truncate tracking-tighter leading-tight flex items-center gap-2">
+                        {p.name}
                       </div>
-                      <div>
-                        <div className="font-black uppercase italic text-lg truncate tracking-tighter leading-tight">
-                          {p.name}
-                        </div>
-                        <div className="text-[9px] text-white/20 font-black uppercase tracking-widest">
-                          {p.age} Años
-                        </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[9px] text-white/20 font-black uppercase tracking-widest">{p.age} Años</span>
+                        {/* NUEVO: Etiqueta visual de tipo de fichaje */}
+                        <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider ${
+                          p.type === 'Cantera' ? 'bg-green-600/20 text-green-400' : 
+                          p.type === 'Cedido' ? 'bg-yellow-500/20 text-yellow-400' : 
+                          'bg-blue-600/20 text-blue-400'
+                        }`}>
+                          {p.type || 'Comprado'}
+                        </span>
                       </div>
                     </div>
-                    <button
-                      onClick={() => deletePlayer(p.id)}
-                      className="p-2 text-white/10 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 size={18} />
-                    </button>
                   </div>
-                ))}
+                  <button onClick={() => deletePlayer(p.id)} className="p-2 text-white/10 hover:text-red-500 transition-colors">
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
-        {/* TAB 2: TACTICS (PIZARRA TÁCTICA) */}
         {activeTab === 'tactics' && (
           <div className="space-y-4 animate-in fade-in">
-            {/* Selector de formación táctica */}
             <div className="flex justify-between items-center bg-[#111114] p-4 rounded-[24px] border border-white/5">
-              <span className="text-[10px] font-black uppercase tracking-widest text-white/40 italic">
-                Esquema Táctico
-              </span>
-              <select
-                value={formation}
-                onChange={(e) => {
-                  setFormation(e.target.value);
-                  saveTactics(e.target.value, lineup);
-                }}
-                className="bg-transparent text-green-500 font-black uppercase outline-none cursor-pointer text-xs"
-              >
-                {Object.keys(FORMATIONS).map((f) => (
-                  <option key={f} value={f} className="bg-[#111114]">
-                    {f}
-                  </option>
-                ))}
+              <span className="text-[10px] font-black uppercase tracking-widest text-white/40 italic">Esquema Táctico</span>
+              <select value={formation} onChange={(e) => { setFormation(e.target.value); saveTactics(e.target.value, lineup); }} className="bg-transparent text-green-500 font-black uppercase outline-none cursor-pointer text-xs">
+                {Object.keys(FORMATIONS).map((f) => <option key={f} value={f} className="bg-[#111114]">{f}</option>)}
               </select>
             </div>
 
-            {/* Representación visual de un campo de fútbol */}
             <div className="bg-green-950/20 border-4 border-green-500/20 rounded-[48px] p-6 relative min-h-[580px] overflow-hidden shadow-inner bg-[radial-gradient(#15803d_1px,transparent_1px)] [background-size:16px_16px]">
-              {/* Líneas del campo de juego */}
               <div className="absolute inset-4 border border-white/5 rounded-[36px] pointer-events-none"></div>
               <div className="absolute top-1/2 left-0 right-0 h-px bg-white/5 pointer-events-none"></div>
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-36 h-36 border border-white/5 rounded-full pointer-events-none"></div>
@@ -746,32 +491,14 @@ export default function App() {
               {FORMATIONS[formation].map((slot, idx) => {
                 const player = players.find((p) => p.id === lineup[idx]);
                 return (
-                  <div
-                    key={idx}
-                    style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1.5 z-10"
-                  >
-                    <button
-                      onClick={() => setPickingSlot(idx)}
-                      className={`w-14 h-14 rounded-full border-2 flex flex-col items-center justify-center font-black transition-all duration-300 shadow-2xl active:scale-90
-                      ${
-                        player
-                          ? 'bg-[#18181b] border-green-500 text-green-400 scale-105'
-                          : 'bg-black/80 border-white/10 border-dashed text-white/20 hover:border-white/40'
-                      }`}
-                    >
+                  <div key={idx} style={{ left: `${slot.x}%`, top: `${slot.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1.5 z-10">
+                    <button onClick={() => setPickingSlot(idx)} className={`w-14 h-14 rounded-full border-2 flex flex-col items-center justify-center font-black transition-all duration-300 shadow-2xl active:scale-90 ${player ? 'bg-[#18181b] border-green-500 text-green-400 scale-105' : 'bg-black/80 border-white/10 border-dashed text-white/20 hover:border-white/40'}`}>
                       {player ? (
                         <div className="flex flex-col items-center leading-none">
-                          <span className="text-[8px] text-white/30 font-bold mb-0.5 uppercase">
-                            {player.pos}
-                          </span>
+                          <span className="text-[8px] text-white/30 font-bold mb-0.5 uppercase">{player.pos}</span>
                           <span className="text-base">{player.rating}</span>
                         </div>
-                      ) : (
-                        <span className="text-[9px] uppercase tracking-tighter">
-                          {slot.pos}
-                        </span>
-                      )}
+                      ) : <span className="text-[9px] uppercase tracking-tighter">{slot.pos}</span>}
                     </button>
                     {player && (
                       <span className="text-[8px] font-black bg-black/85 text-white/90 px-2 py-0.5 rounded-md border border-white/10 shadow-lg whitespace-nowrap uppercase italic max-w-[65px] truncate">
@@ -786,70 +513,34 @@ export default function App() {
         )}
       </main>
 
-      {/* MODAL PARA COLOCAR JUGADORES EN EL CAMPO */}
       {pickingSlot !== null && (
         <div className="fixed inset-0 bg-black/95 z-[100] p-6 flex flex-col animate-in fade-in duration-200">
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h2 className="text-2xl font-black uppercase italic tracking-tighter">
-                Colocar Jugador
-              </h2>
-              <p className="text-[10px] text-white/30 font-black uppercase tracking-widest">
-                Alineación: {FORMATIONS[formation][pickingSlot]?.pos}
-              </p>
+              <h2 className="text-2xl font-black uppercase italic tracking-tighter">Colocar Jugador</h2>
+              <p className="text-[10px] text-white/30 font-black uppercase tracking-widest">Alineación: {FORMATIONS[formation][pickingSlot]?.pos}</p>
             </div>
-            <button
-              onClick={() => setPickingSlot(null)}
-              className="p-3 bg-white/5 rounded-full hover:bg-white/10 transition-all text-white/50 hover:text-white"
-            >
-              <X size={20} />
-            </button>
+            <button onClick={() => setPickingSlot(null)} className="p-3 bg-white/5 rounded-full hover:bg-white/10 transition-all text-white/50 hover:text-white"><X size={20} /></button>
           </div>
 
           <div className="flex-1 overflow-y-auto space-y-2 pb-8 no-scrollbar">
-            {/* Opción de vaciar la posición */}
-            <button
-              onClick={() => assignPlayerToSlot(pickingSlot, null)}
-              className="w-full p-5 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-500 font-black uppercase text-[10px] tracking-wider border border-red-500/20"
-            >
+            <button onClick={() => assignPlayerToSlot(pickingSlot, null)} className="w-full p-5 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-500 font-black uppercase text-[10px] tracking-wider border border-red-500/20">
               Quitar de la posición
             </button>
 
-            {players
-              .sort((a, b) => b.rating - a.rating)
-              .map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => assignPlayerToSlot(pickingSlot, p.id)}
-                  className={`w-full p-4 rounded-2xl bg-white/5 flex items-center gap-4 hover:bg-white/10 transition-all border border-transparent ${
-                    lineup[pickingSlot] === p.id
-                      ? 'border-green-500 bg-green-500/10'
-                      : ''
-                  }`}
-                >
-                  <div
-                    className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center text-black font-black leading-none ${
-                      p.rating >= 85 ? 'bg-yellow-400' : 'bg-slate-300'
-                    }`}
-                  >
-                    <span className="text-[8px] opacity-60 mb-0.5">
-                      {p.pos}
-                    </span>
-                    <span className="text-lg">{p.rating}</span>
-                  </div>
-                  <div className="text-left flex-1 min-w-0">
-                    <div className="font-black uppercase italic text-base truncate text-white">
-                      {p.name}
-                    </div>
-                    <div className="text-[9px] text-white/20 font-black uppercase">
-                      {p.age} Años
-                    </div>
-                  </div>
-                  {lineup[pickingSlot] === p.id && (
-                    <Check className="text-green-500" size={20} />
-                  )}
-                </button>
-              ))}
+            {players.sort((a, b) => b.rating - a.rating).map((p) => (
+              <button key={p.id} onClick={() => assignPlayerToSlot(pickingSlot, p.id)} className={`w-full p-4 rounded-2xl bg-white/5 flex items-center gap-4 hover:bg-white/10 transition-all border border-transparent ${lineup[pickingSlot] === p.id ? 'border-green-500 bg-green-500/10' : ''}`}>
+                <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center text-black font-black leading-none ${p.rating >= 85 ? 'bg-yellow-400' : 'bg-slate-300'}`}>
+                  <span className="text-[8px] opacity-60 mb-0.5">{p.pos}</span>
+                  <span className="text-lg">{p.rating}</span>
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <div className="font-black uppercase italic text-base truncate text-white">{p.name}</div>
+                  <div className="text-[9px] text-white/20 font-black uppercase">{p.age} Años</div>
+                </div>
+                {lineup[pickingSlot] === p.id && <Check className="text-green-500" size={20} />}
+              </button>
+            ))}
           </div>
         </div>
       )}
