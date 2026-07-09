@@ -14,7 +14,10 @@ import {
   Search,
   ShieldCheck,
   ShieldAlert,
-  Edit2
+  Edit2,
+  Shirt,
+  ArrowRightLeft,
+  Tag
 } from 'lucide-react';
 import { initializeApp, getApps } from 'firebase/app';
 import {
@@ -250,6 +253,13 @@ export default function App() {
     if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + ' Mill €';
     if (num >= 1000) return (num / 1000).toFixed(0) + ' Mil €';
     return val + ' €';
+  };
+
+  const formatLoanDuration = (duration) => {
+    if (duration === '1 Temporada') return '1T';
+    if (duration === '2 Temporadas') return '2T';
+    if (duration === '6 Meses') return '6M';
+    return duration;
   };
 
   const togglePosition = (pos) => {
@@ -774,9 +784,29 @@ export default function App() {
                         {p.marketValue && (
                           <span className="text-[8px] md:text-[9px] text-white/50 font-black uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded">{abbreviateValue(p.marketValue)}</span>
                         )}
+                        {Object.values(lineup).includes(p.id) && (
+                          <span className="text-[7px] md:text-[8px] flex items-center gap-1 bg-green-500/20 text-green-400 px-2 py-0.5 rounded uppercase font-black tracking-widest">
+                            <Shirt size={10} /> 11
+                          </span>
+                        )}
+                        {Object.values(bench).includes(p.id) && (
+                          <span className="text-[7px] md:text-[8px] flex items-center gap-1 bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded uppercase font-black tracking-widest">
+                            <Users size={10} /> Banq
+                          </span>
+                        )}
+                        {!Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && p.transferStatus === 'Cedible' && (
+                          <span className="text-[7px] md:text-[8px] flex items-center gap-1 bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded uppercase font-black tracking-widest">
+                            <ArrowRightLeft size={10} /> Cedible
+                          </span>
+                        )}
+                        {!Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && p.transferStatus === 'Transferible' && (
+                          <span className="text-[7px] md:text-[8px] flex items-center gap-1 bg-red-500/20 text-red-400 px-2 py-0.5 rounded uppercase font-black tracking-widest">
+                            <Tag size={10} /> Venta
+                          </span>
+                        )}
                         {p.type === 'Cedido' && (
                           <span className="text-[7px] md:text-[8px] text-yellow-500 font-black uppercase tracking-widest bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">
-                            Cedido: {p.originClub} ({p.loanDuration})
+                            Cedido: {p.originClub} ({formatLoanDuration(p.loanDuration)})
                           </span>
                         )}
                         {p.type && p.type !== 'Cedido' && (
@@ -848,8 +878,11 @@ export default function App() {
 
               {FORMATIONS[formation].map((slot, idx) => {
                 const player = players.find((p) => p.id === lineup[idx]);
-                const isDragOver = draggedPlayer && draggedSourceSlot !== idx;
-                const canDropHere = isDragOver && player && player.positions?.includes(slot.pos); 
+                const draggedPlayerObj = draggedPlayer ? players.find(p => p.id === draggedPlayer) : null;
+                const canDragPlayerPlayHere = draggedPlayerObj?.positions?.includes(slot.pos);
+                
+                const isEmptySlotHighlight = draggedPlayer && !player && canDragPlayerPlayHere;
+                const isOccupiedSlotHighlight = draggedPlayer && player && draggedPlayer !== player.id && canDragPlayerPlayHere;
 
                 return (
                   <div key={idx} style={{ left: `${slot.x}%`, top: `${slot.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-10">
@@ -868,7 +901,7 @@ export default function App() {
                       onTouchStart={(e) => handleTouchStartLocal(e, player?.id, idx)}
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, idx)}
-                      className={`w-12 h-12 md:w-14 md:h-14 rounded-full border-2 flex flex-col items-center justify-center font-black transition-all duration-300 shadow-2xl active:scale-90 touch-none ${player ? `bg-[#18181b] ${getCardStyle(player.rating, true)} scale-105` : 'bg-black/80 border-white/10 border-dashed text-white/20 hover:border-white/40'} ${draggedPlayer && !player && FORMATIONS[formation][idx] ? (players.find(p => p.id === draggedPlayer)?.positions?.includes(slot.pos) ? 'border-green-400 bg-green-500/20' : '') : ''}`}
+                      className={`w-12 h-12 md:w-14 md:h-14 rounded-full border-2 flex flex-col items-center justify-center font-black transition-all duration-300 shadow-2xl active:scale-90 touch-none ${player ? `bg-[#18181b] ${getCardStyle(player.rating, true)} scale-105` : 'bg-black/80 border-white/10 border-dashed text-white/20 hover:border-white/40'} ${isEmptySlotHighlight ? 'border-green-400 bg-green-500/20' : ''} ${isOccupiedSlotHighlight ? 'ring-4 ring-green-500/50 border-green-400' : ''}`}
                     >
                       {player ? (
                         <div className="flex flex-col items-center leading-none">
@@ -1128,7 +1161,7 @@ export default function App() {
                       
                       {selectedPlayerInfo.type === 'Cedido' && (
                         <span className="text-[8px] text-yellow-500 font-black uppercase tracking-widest bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">
-                          Cedido: {selectedPlayerInfo.originClub} ({selectedPlayerInfo.loanDuration})
+                          Cedido: {selectedPlayerInfo.originClub} ({formatLoanDuration(selectedPlayerInfo.loanDuration)})
                         </span>
                       )}
                       {selectedPlayerInfo.type && selectedPlayerInfo.type !== 'Cedido' && (
