@@ -23,7 +23,8 @@ import {
   doc,
   setDoc,
   onSnapshot,
-  deleteDoc
+  deleteDoc,
+  updateDoc
 } from 'firebase/firestore';
 import {
   getAuth,
@@ -97,8 +98,11 @@ export default function App() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [filterType, setFilterType] = useState('rating-desc');
+  
+  // Drag and Drop State (Desktop & Mobile)
   const [draggedPlayer, setDraggedPlayer] = useState(null);
   const [draggedSourceSlot, setDraggedSourceSlot] = useState(null);
+  const [floatingDrag, setFloatingDrag] = useState(null); // Para visualizar el arrastre en móviles
 
   const [newPlayer, setNewPlayer] = useState({
     name: '',
@@ -150,6 +154,49 @@ export default function App() {
     };
   }, [user]);
 
+  // Manejador global para el drag en móviles
+  useEffect(() => {
+    if (!floatingDrag) return;
+    const handleGlobalTouchMove = (e) => {
+      e.preventDefault(); 
+      const touch = e.touches[0];
+      setFloatingDrag(prev => prev ? { ...prev, x: touch.clientX, y: touch.clientY } : null);
+    };
+    const handleGlobalTouchEnd = (e) => {
+      const touch = e.changedTouches[0];
+      const dropTarget = document.elementFromPoint(touch.clientX, touch.clientY);
+      const slotElement = dropTarget?.closest('[data-slot]');
+      
+      if (slotElement) {
+        let targetSlot = slotElement.getAttribute('data-slot');
+        if (targetSlot !== 'uncalled' && !targetSlot.startsWith('bench-')) {
+          targetSlot = parseInt(targetSlot, 10);
+        }
+        executeMove(floatingDrag.player.id, floatingDrag.sourceSlot, targetSlot);
+      }
+      
+      setDraggedPlayer(null);
+      setDraggedSourceSlot(null);
+      setFloatingDrag(null);
+    };
+
+    window.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
+    window.addEventListener('touchend', handleGlobalTouchEnd);
+
+    return () => {
+      window.removeEventListener('touchmove', handleGlobalTouchMove);
+      window.removeEventListener('touchend', handleGlobalTouchEnd);
+    };
+  }, [floatingDrag]);
+
+  // --- Funciones de Lógica y UI ---
+
+  const getCardStyle = (rating, isTactics = false) => {
+    if (rating <= 64) return isTactics ? 'border-[#CD7F32] text-[#CD7F32]' : 'bg-[#CD7F32] text-black'; // Bronce
+    if (rating >= 65 && rating <= 74) return isTactics ? 'border-[#C0C0C0] text-[#C0C0C0]' : 'bg-[#C0C0C0] text-black'; // Plata
+    return isTactics ? 'border-[#FFD700] text-[#FFD700]' : 'bg-[#FFD700] text-black'; // Oro
+  };
+
   const handleGoogleLogin = async () => {
     setAuthError('');
     try { await signInWithPopup(auth, googleProvider); } 
@@ -176,7 +223,6 @@ export default function App() {
 
   const handleLogout = () => signOut(auth);
 
-  // Funciones de formato de valor
   const formatValueInput = (val) => {
     const num = val.replace(/\./g, '').replace(/\D/g, '');
     if (!num) return '';
@@ -254,10 +300,32 @@ export default function App() {
     if (!user) return;
     try {
       const tacticsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'tactics');
-      await setDoc(tacticsRef, { formation: newForm, lineup: newLineup, bench: newBench || bench }, { merge: true });
+      try {
+        // Usamos updateDoc para REEMPLAZAR el objeto completo y evitar
+        // que Firebase fusione (merge) las posiciones antiguas provocando duplicados.
+        await updateDoc(tacticsRef, { 
+          formation: newForm, 
+          lineup: newLineup, 
+          bench: newBench || bench 
+        });
+      } catch (error) {
+        // Si el documento es nuevo, updateDoc falla, así que usamos setDoc
+        await setDoc(tacticsRef, { 
+          formation: newForm, 
+          lineup: newLineup, 
+          bench: newBench || bench,
+          savedFormations: savedFormations 
+        });
+      }
     } catch (err) {
       console.error('Error al guardar táctica:', err);
     }
+  };
+
+  const clearTactics = () => {
+    setLineup({});
+    setBench({});
+    saveTactics(formation, {}, {});
   };
 
   const confirmDeletePlayer = async () => {
@@ -290,97 +358,121 @@ export default function App() {
     setPlayerToDelete(null);
   };
 
-  const assignPlayerToSlot = (slotIndex, playerId) => {
-    const isBench = String(slotIndex).startsWith('bench-');
+  // --- Sistema Unificado de Movimientos (Drag & Drop para PC y Móvil) ---
+  const executeMove = (playerId, source, target) => {
+    if (!playerId || String(source) === String(target)) return;
+
+    const player = players.find(p => p.id === playerId);
+    if (!player) return;
+
+    // Validar si puede jugar en la posición del 11 inicial
+    if (target !== 'uncalled' && !String(target).startsWith('bench-')) {
+      const slotData = FORMATIONS[formation][target];
+      if (slotData && !player.positions.includes(slotData.pos)) return;
+    }
+
     const newLineup = { ...lineup };
     const newBench = { ...bench };
 
-    if (playerId === null) {
-      if (isBench) {
-        const bIdx = slotIndex.split('-')[1];
-        delete newBench[bIdx];
+    // 1. Identificar si hay alguien en el destino
+    let displacedPlayerId = null;
+    if (target !== 'uncalled') {
+      if (String(target).startsWith('bench-')) {
+        displacedPlayerId = newBench[String(target).split('-')[1]];
       } else {
-        delete newLineup[slotIndex];
-      }
-    } else {
-      Object.keys(newLineup).forEach((key) => {
-        if (newLineup[key] === playerId) delete newLineup[key];
-      });
-      Object.keys(newBench).forEach((key) => {
-        if (newBench[key] === playerId) delete newBench[key];
-      });
-
-      if (isBench) {
-        const bIdx = slotIndex.split('-')[1];
-        newBench[bIdx] = playerId;
-      } else {
-        newLineup[slotIndex] = playerId;
+        displacedPlayerId = newLineup[target];
       }
     }
+
+    // --- LIMPIEZA ABSOLUTA ANTIDUPLICADOS ---
+    // Aseguramos que el jugador principal sea removido de cualquier posición previa en toda la plantilla
+    Object.keys(newLineup).forEach(k => { if (newLineup[k] === playerId) delete newLineup[k]; });
+    Object.keys(newBench).forEach(k => { if (newBench[k] === playerId) delete newBench[k]; });
+
+    // 2. Colocar el jugador arrastrado en el destino
+    if (target !== 'uncalled') {
+      if (String(target).startsWith('bench-')) {
+        newBench[String(target).split('-')[1]] = playerId;
+      } else {
+        newLineup[target] = playerId;
+      }
+    }
+
+    // 3. Mover el jugador desplazado al hueco original (si es válido) o mandarlo a no convocados
+    if (displacedPlayerId && source !== 'uncalled') {
+      // Limpieza preventiva para el jugador que ha sido empujado
+      Object.keys(newLineup).forEach(k => { if (newLineup[k] === displacedPlayerId) delete newLineup[k]; });
+      Object.keys(newBench).forEach(k => { if (newBench[k] === displacedPlayerId) delete newBench[k]; });
+
+      let canSwap = true;
+      if (!String(source).startsWith('bench-')) {
+        const displacedPlayer = players.find(p => p.id === displacedPlayerId);
+        const sourceSlotData = FORMATIONS[formation][source];
+        if (displacedPlayer && sourceSlotData && !displacedPlayer.positions.includes(sourceSlotData.pos)) {
+          canSwap = false;
+        }
+      }
+      if (canSwap) {
+        if (String(source).startsWith('bench-')) {
+          newBench[String(source).split('-')[1]] = displacedPlayerId;
+        } else {
+          newLineup[source] = displacedPlayerId;
+        }
+      }
+    }
+
     setLineup(newLineup);
     setBench(newBench);
     saveTactics(formation, newLineup, newBench);
-    setPickingSlot(null);
   };
 
+  // Eventos Drag & Drop PC
   const handleDragStart = (e, playerId, slotIndex) => {
     setDraggedPlayer(playerId);
     setDraggedSourceSlot(slotIndex);
     e.dataTransfer.effectAllowed = 'move';
   };
-
-  const handleDragOver = (e, targetSlotIndex) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
+  const handleDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
   const handleDrop = (e, targetSlotIndex) => {
     e.preventDefault();
-    if (!draggedPlayer) return;
-
-    const player = players.find(p => p.id === draggedPlayer);
-    if (!player) return;
-
-    const isTargetBench = String(targetSlotIndex).startsWith('bench-');
-    const targetData = isTargetBench ? null : FORMATIONS[formation][targetSlotIndex];
-
-    const canPlayTarget = isTargetBench || (player.positions && targetData && player.positions.includes(targetData.pos));
-
-    if (canPlayTarget) {
-      const newLineup = { ...lineup };
-      const newBench = { ...bench };
-      
-      const isSourceBench = String(draggedSourceSlot).startsWith('bench-');
-      
-      if (isSourceBench) {
-        delete newBench[draggedSourceSlot.split('-')[1]];
-      } else {
-        delete newLineup[draggedSourceSlot];
-      }
-
-      const existingPlayerInTarget = isTargetBench ? newBench[targetSlotIndex.split('-')[1]] : newLineup[targetSlotIndex];
-      
-      if (isTargetBench) {
-        newBench[targetSlotIndex.split('-')[1]] = draggedPlayer;
-      } else {
-        newLineup[targetSlotIndex] = draggedPlayer;
-      }
-
-      if (existingPlayerInTarget) {
-        if (isSourceBench) {
-          newBench[draggedSourceSlot.split('-')[1]] = existingPlayerInTarget;
-        } else {
-          newLineup[draggedSourceSlot] = existingPlayerInTarget;
-        }
-      }
-
-      setLineup(newLineup);
-      setBench(newBench);
-      saveTactics(formation, newLineup, newBench);
-    }
-    
+    executeMove(draggedPlayer, draggedSourceSlot, targetSlotIndex);
     setDraggedPlayer(null);
     setDraggedSourceSlot(null);
+  };
+
+  // Eventos Drag & Drop Móvil
+  const handleTouchStartLocal = (e, playerId, slotIndex) => {
+    const touch = e.touches[0];
+    const player = players.find(p => p.id === playerId);
+    if (!player) return;
+    setDraggedPlayer(playerId);
+    setDraggedSourceSlot(slotIndex);
+    setFloatingDrag({
+      player,
+      sourceSlot: slotIndex,
+      x: touch.clientX,
+      y: touch.clientY
+    });
+  };
+
+  const assignPlayerToSlot = (slotIndex, playerId) => {
+    if (!playerId) {
+      // Si enviamos a no convocados, vaciamos la posición
+      const playerToClear = String(slotIndex).startsWith('bench-') 
+        ? bench[String(slotIndex).split('-')[1]] 
+        : lineup[slotIndex];
+      if (playerToClear) {
+        executeMove(playerToClear, slotIndex, 'uncalled');
+      }
+    } else {
+      // Buscar el origen real del jugador en el 11 o banquillo antes de asignarlo
+      let realSource = 'uncalled';
+      Object.keys(lineup).forEach(k => { if (lineup[k] === playerId) realSource = k; });
+      Object.keys(bench).forEach(k => { if (bench[k] === playerId) realSource = `bench-${k}`; });
+      
+      executeMove(playerId, realSource, slotIndex);
+    }
+    setPickingSlot(null);
   };
 
   const saveCurrentFormation = async () => {
@@ -390,7 +482,11 @@ export default function App() {
     setNewFormationName('');
     try {
       const tacticsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'tactics');
-      await setDoc(tacticsRef, { savedFormations: newSaved }, { merge: true });
+      try {
+        await updateDoc(tacticsRef, { savedFormations: newSaved });
+      } catch (error) {
+        await setDoc(tacticsRef, { formation, lineup, bench, savedFormations: newSaved });
+      }
     } catch (err) {
       console.error(err);
     }
@@ -402,7 +498,11 @@ export default function App() {
     setSavedFormations(newSaved);
     try {
       const tacticsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'tactics');
-      await setDoc(tacticsRef, { savedFormations: newSaved }, { merge: true });
+      try {
+        await updateDoc(tacticsRef, { savedFormations: newSaved });
+      } catch (error) {
+        await setDoc(tacticsRef, { formation, lineup, bench, savedFormations: newSaved });
+      }
     } catch (err) {
       console.error(err);
     }
@@ -519,7 +619,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="p-4 max-w-lg mx-auto pb-24">
+      <main className="p-2 md:p-4 max-w-lg mx-auto pb-24">
         {activeTab === 'squad' && (
           <div className="space-y-4">
             <div className="flex gap-2">
@@ -542,7 +642,7 @@ export default function App() {
               <span className="text-[10px] text-white/30 font-black uppercase tracking-widest">{players.length} Jugadores en Plantilla</span>
             </div>
 
-            <button onClick={() => { setEditingId(null); setNewPlayer({ name: '', rating: 75, positions: ['MC'], age: 23, value: '', type: 'Comprado', role: 'Titular' }); setShowForm(true); }} className="w-full bg-green-500 text-black p-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 hover:bg-green-400">
+            <button onClick={() => { setEditingId(null); setNewPlayer({ name: '', rating: 75, positions: ['MC'], age: 23, value: '', type: 'Comprado', role: 'Titular' }); setShowForm(true); }} className="w-full bg-green-500 text-black p-4 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 hover:bg-green-400">
               <Plus size={16} /> Fichar Nuevo Jugador
             </button>
 
@@ -616,39 +716,41 @@ export default function App() {
               </form>
             )}
 
-            <div className="bg-[#111114] rounded-[32px] border border-white/10 overflow-hidden divide-y divide-white/5 shadow-2xl">
+            <div className="bg-[#111114] rounded-[24px] md:rounded-[32px] border border-white/10 overflow-hidden divide-y divide-white/5 shadow-2xl">
               {filteredPlayers.length === 0 && (
                 <div className="p-16 text-center text-white/10 font-black italic uppercase tracking-widest text-xs">
                   {searchQuery ? 'No se encontraron jugadores' : 'Plantilla Vacía'}
                 </div>
               )}
               {filteredPlayers.map((p) => (
-                <div key={p.id} className="p-5 flex items-center justify-between group hover:bg-white/[0.01] transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center text-black font-black leading-none ${p.rating <= 64 ? 'bg-[#CD7F32]' : p.rating >= 85 ? 'bg-yellow-400' : 'bg-slate-300'}`}>
-                      <span className="text-[8px] opacity-60 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span>
-                      <span className="text-xl">{p.rating}</span>
+                <div key={p.id} className="p-3 md:p-4 flex items-center justify-between group hover:bg-white/[0.01] transition-all">
+                  <div className="flex items-center gap-3 md:gap-4">
+                    <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none ${getCardStyle(p.rating)}`}>
+                      <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span>
+                      <span className="text-lg md:text-xl">{p.rating}</span>
                     </div>
                     <div>
-                      <div className="font-black uppercase italic text-lg truncate tracking-tighter leading-tight flex items-center gap-2 text-white">
+                      <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight flex items-center gap-2 text-white">
                         {p.name}
                       </div>
-                      <div className="text-[9px] text-green-500/80 font-black uppercase tracking-widest mb-1">
+                      <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest mb-1">
                         {p.positions?.join(' · ') || p.pos}
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                        <span className="text-[9px] text-white/20 font-black uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded">{p.age} Años</span>
-                        <span className="text-[9px] text-white/40 font-black uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded">{abbreviateValue(p.value)}</span>
-                        <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider ${p.type === 'Cantera' ? 'bg-emerald-600/20 text-emerald-400' : p.type === 'Cedido' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-600/20 text-blue-400'}`}>
-                          {p.type || 'Comprado'}
-                        </span>
-                        {p.role && <span className="text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider bg-white/10 text-white/60">{p.role}</span>}
+                        <span className="text-[8px] md:text-[9px] text-white/30 font-black uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded">{p.age} Años</span>
+                        <span className="text-[8px] md:text-[9px] text-white/50 font-black uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded">{abbreviateValue(p.value)}</span>
+                        {p.type && (
+                          <span className={`text-[7px] md:text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider ${p.type === 'Cantera' ? 'bg-emerald-600/20 text-emerald-400' : p.type === 'Cedido' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-600/20 text-blue-400'}`}>
+                            {p.type}
+                          </span>
+                        )}
+                        {p.role && <span className="text-[7px] md:text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider bg-white/10 text-white/60 hidden sm:inline-block">{p.role}</span>}
                       </div>
                     </div>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <button onClick={() => editPlayer(p)} className="p-2 text-white/20 hover:text-green-500 transition-colors bg-white/5 rounded-xl"><Edit2 size={16} /></button>
-                    <button onClick={() => setPlayerToDelete(p.id)} className="p-2 text-white/20 hover:text-red-500 transition-colors bg-white/5 rounded-xl"><Trash2 size={16} /></button>
+                    <button onClick={() => editPlayer(p)} className="p-1.5 md:p-2 text-white/20 hover:text-green-500 transition-colors bg-white/5 rounded-xl"><Edit2 size={14} /></button>
+                    <button onClick={() => setPlayerToDelete(p.id)} className="p-1.5 md:p-2 text-white/20 hover:text-red-500 transition-colors bg-white/5 rounded-xl"><Trash2 size={14} /></button>
                   </div>
                 </div>
               ))}
@@ -658,24 +760,27 @@ export default function App() {
 
         {activeTab === 'tactics' && (
           <div className="space-y-4 animate-in fade-in">
-            <div className="flex flex-col gap-4 mb-2">
-              <div className="flex justify-between items-center bg-[#111114] p-4 rounded-[24px] border border-white/5 shadow-2xl">
+            <div className="flex flex-col gap-3 md:gap-4 mb-2">
+              <div className="flex justify-between items-center bg-[#111114] p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-white/5 shadow-2xl">
                 <span className="text-[10px] font-black uppercase tracking-widest text-white/40 italic">Esquema Táctico</span>
                 <select value={formation} onChange={(e) => { setFormation(e.target.value); saveTactics(e.target.value, lineup, bench); }} className="bg-transparent text-green-500 font-black uppercase outline-none cursor-pointer text-xs">
                   {Object.keys(FORMATIONS).map((f) => <option key={f} value={f} className="bg-[#111114]">{f}</option>)}
                 </select>
               </div>
 
-              <div className="bg-[#111114] p-4 rounded-[24px] border border-white/5 shadow-2xl flex items-center gap-2">
+              <div className="bg-[#111114] p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-white/5 shadow-2xl flex items-center gap-2">
                 <input
                   type="text"
-                  placeholder="Nombre de la táctica (Ej: Final Champions)"
+                  placeholder="Nombre de la táctica..."
                   className="flex-1 bg-white/5 p-3 rounded-xl outline-none border border-white/5 focus:border-green-500 text-xs font-bold text-white placeholder:text-white/20"
                   value={newFormationName}
                   onChange={(e) => setNewFormationName(e.target.value)}
                 />
                 <button onClick={saveCurrentFormation} className="bg-green-500 text-black px-4 py-3 rounded-xl font-black uppercase text-[10px] shadow-lg shadow-green-500/20 active:scale-95 transition-all">
                   Guardar
+                </button>
+                <button onClick={clearTactics} className="bg-red-500/10 text-red-500 p-3 rounded-xl font-black hover:bg-red-500/20 transition-all border border-red-500/20" title="Vaciar todo">
+                  <Trash2 size={16} />
                 </button>
               </div>
 
@@ -695,12 +800,12 @@ export default function App() {
               )}
             </div>
 
-            <div className="bg-green-950/20 border-4 border-green-500/20 rounded-[48px] p-6 relative min-h-[580px] overflow-hidden shadow-inner">
-              <div className="absolute inset-4 border border-white/20 rounded-[36px] pointer-events-none"></div>
-              <div className="absolute top-1/2 left-0 right-0 h-px bg-white/20 pointer-events-none"></div>
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-36 h-36 border border-white/20 rounded-full pointer-events-none"></div>
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 w-48 h-20 border-b border-x border-white/20 pointer-events-none"></div>
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-48 h-20 border-t border-x border-white/20 pointer-events-none"></div>
+            <div className="bg-[#1a2e1d] border-4 border-green-500/20 rounded-[32px] md:rounded-[48px] p-6 relative min-h-[500px] md:min-h-[580px] overflow-hidden shadow-inner">
+              <div className="absolute inset-4 border-2 border-white/30 rounded-[28px] pointer-events-none"></div>
+              <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-white/30 pointer-events-none"></div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 md:w-36 md:h-36 border-2 border-white/30 rounded-full pointer-events-none"></div>
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 w-40 md:w-48 h-16 md:h-20 border-b-2 border-x-2 border-white/30 pointer-events-none"></div>
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-40 md:w-48 h-16 md:h-20 border-t-2 border-x-2 border-white/30 pointer-events-none"></div>
 
               {FORMATIONS[formation].map((slot, idx) => {
                 const player = players.find((p) => p.id === lineup[idx]);
@@ -708,24 +813,26 @@ export default function App() {
                 const canDropHere = isDragOver && player && player.positions?.includes(slot.pos); 
 
                 return (
-                  <div key={idx} style={{ left: `${slot.x}%`, top: `${slot.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1.5 z-10">
+                  <div key={idx} style={{ left: `${slot.x}%`, top: `${slot.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-10">
                     <button 
+                      data-slot={idx}
                       onClick={() => setPickingSlot(idx)} 
                       draggable={!!player}
                       onDragStart={(e) => handleDragStart(e, player?.id, idx)}
-                      onDragOver={(e) => handleDragOver(e, idx)}
+                      onTouchStart={(e) => handleTouchStartLocal(e, player?.id, idx)}
+                      onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, idx)}
-                      className={`w-14 h-14 rounded-full border-2 flex flex-col items-center justify-center font-black transition-all duration-300 shadow-2xl active:scale-90 ${player ? `bg-[#18181b] ${player.rating <= 64 ? 'border-[#CD7F32] text-[#CD7F32]' : 'border-green-500 text-green-400'} scale-105` : 'bg-black/80 border-white/10 border-dashed text-white/20 hover:border-white/40'} ${draggedPlayer && !player && FORMATIONS[formation][idx] ? (players.find(p => p.id === draggedPlayer)?.positions?.includes(slot.pos) ? 'border-green-400 bg-green-500/20' : '') : ''}`}
+                      className={`w-12 h-12 md:w-14 md:h-14 rounded-full border-2 flex flex-col items-center justify-center font-black transition-all duration-300 shadow-2xl active:scale-90 touch-none ${player ? `bg-[#18181b] ${getCardStyle(player.rating, true)} scale-105` : 'bg-black/80 border-white/10 border-dashed text-white/20 hover:border-white/40'} ${draggedPlayer && !player && FORMATIONS[formation][idx] ? (players.find(p => p.id === draggedPlayer)?.positions?.includes(slot.pos) ? 'border-green-400 bg-green-500/20' : '') : ''}`}
                     >
                       {player ? (
                         <div className="flex flex-col items-center leading-none">
-                          <span className="text-[8px] text-white/50 font-bold mb-0.5 uppercase">{slot.pos}</span>
-                          <span className="text-base">{player.rating}</span>
+                          <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5 uppercase">{slot.pos}</span>
+                          <span className="text-sm md:text-base">{player.rating}</span>
                         </div>
-                      ) : <span className="text-[9px] uppercase tracking-tighter">{slot.pos}</span>}
+                      ) : <span className="text-[8px] md:text-[9px] uppercase tracking-tighter">{slot.pos}</span>}
                     </button>
                     {player && (
-                      <span className="text-[8px] font-black bg-black/85 text-white/90 px-2 py-0.5 rounded-md border border-white/10 shadow-lg whitespace-nowrap uppercase italic max-w-[80px] truncate mt-1">
+                      <span className="text-[7px] md:text-[8px] font-black bg-black/90 text-white/90 px-1.5 md:px-2 py-0.5 rounded-md border border-white/10 shadow-lg whitespace-nowrap uppercase italic max-w-[70px] md:max-w-[80px] truncate">
                         {player.name}
                       </span>
                     )}
@@ -734,49 +841,68 @@ export default function App() {
               })}
             </div>
 
-            <div className="mt-4 bg-[#111114] p-5 rounded-[32px] border border-white/5 shadow-2xl">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 italic mb-4">Banquillo</h3>
-              <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+            <div className="mt-4 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 italic mb-3 md:mb-4">Banquillo</h3>
+              <div className="flex gap-2 md:gap-3 overflow-x-auto pb-2 no-scrollbar">
                 {[0, 1, 2, 3, 4, 5, 6].map((idx) => {
                   const playerId = bench[idx];
                   const player = playerId ? players.find((p) => p.id === playerId) : null;
                   return (
-                    <button 
-                      key={`bench-${idx}`} 
-                      onClick={() => setPickingSlot(`bench-${idx}`)} 
-                      draggable={!!player}
-                      onDragStart={(e) => handleDragStart(e, player?.id, `bench-${idx}`)}
-                      onDragOver={(e) => handleDragOver(e, `bench-${idx}`)}
-                      onDrop={(e) => handleDrop(e, `bench-${idx}`)}
-                      className={`flex-shrink-0 w-14 h-14 rounded-2xl border-2 flex flex-col items-center justify-center font-black transition-all duration-300 shadow-xl active:scale-90 ${player ? `bg-[#18181b] ${player.rating <= 64 ? 'border-[#CD7F32] text-[#CD7F32]' : 'border-green-500 text-green-400'}` : 'bg-black/80 border-white/10 border-dashed text-white/20 hover:border-white/40'} ${draggedPlayer && !player ? 'border-green-400 bg-green-500/20' : ''}`}
-                    >
-                      {player ? (
-                        <div className="flex flex-col items-center leading-none">
-                          <span className="text-[8px] text-white/30 font-bold mb-0.5 uppercase">{player.positions?.[0]}</span>
-                          <span className="text-base">{player.rating}</span>
-                        </div>
-                      ) : (
-                        <span className="text-xl opacity-50">+</span>
+                    <div key={`bench-wrapper-${idx}`} className="flex flex-col items-center gap-1">
+                      <button 
+                        data-slot={`bench-${idx}`}
+                        onClick={() => setPickingSlot(`bench-${idx}`)} 
+                        draggable={!!player}
+                        onDragStart={(e) => handleDragStart(e, player?.id, `bench-${idx}`)}
+                        onTouchStart={(e) => handleTouchStartLocal(e, player?.id, `bench-${idx}`)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, `bench-${idx}`)}
+                        className={`flex-shrink-0 w-12 h-12 md:w-14 md:h-14 rounded-2xl border-2 flex flex-col items-center justify-center font-black transition-all duration-300 shadow-xl active:scale-90 touch-none ${player ? `bg-[#18181b] ${getCardStyle(player.rating, true)}` : 'bg-black/80 border-white/10 border-dashed text-white/20 hover:border-white/40'} ${draggedPlayer && !player ? 'border-green-400 bg-green-500/20' : ''}`}
+                      >
+                        {player ? (
+                          <div className="flex flex-col items-center leading-none">
+                            <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5 uppercase">{player.positions?.[0]}</span>
+                            <span className="text-sm md:text-base">{player.rating}</span>
+                          </div>
+                        ) : (
+                          <span className="text-lg md:text-xl opacity-50">+</span>
+                        )}
+                      </button>
+                      {player && (
+                        <span className="text-[7px] md:text-[8px] font-black text-white/60 max-w-[50px] md:max-w-[60px] truncate uppercase">
+                          {player.name.split(' ').pop()}
+                        </span>
                       )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
             </div>
 
-            <div className="mt-4 bg-[#111114] p-5 rounded-[32px] border border-white/5 shadow-2xl">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 italic mb-4">No Convocados</h3>
+            <div 
+              data-slot="uncalled"
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, 'uncalled')}
+              className={`mt-4 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl min-h-[100px] transition-colors ${draggedPlayer ? 'border-dashed border-white/20 bg-white/[0.02]' : ''}`}
+            >
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 italic mb-3">No Convocados (Arrastra aquí)</h3>
               <div className="flex flex-wrap gap-2">
                 {players.filter(p => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id)).sort((a, b) => b.rating - a.rating).map(p => (
-                  <div key={p.id} className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-xl border border-white/5">
-                    <div className={`w-6 h-6 rounded flex items-center justify-center text-black font-black text-[9px] ${p.rating <= 64 ? 'bg-[#CD7F32]' : p.rating >= 85 ? 'bg-yellow-400' : 'bg-slate-300'}`}>
+                  <div 
+                    key={p.id} 
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, p.id, 'uncalled')}
+                    onTouchStart={(e) => handleTouchStartLocal(e, p.id, 'uncalled')}
+                    className="flex items-center gap-2 bg-white/5 px-2 md:px-3 py-1.5 md:py-2 rounded-xl border border-white/5 cursor-grab active:cursor-grabbing touch-none hover:bg-white/10"
+                  >
+                    <div className={`w-5 h-5 md:w-6 md:h-6 rounded flex items-center justify-center font-black text-[8px] md:text-[9px] ${getCardStyle(p.rating)}`}>
                       {p.rating}
                     </div>
-                    <span className="text-xs font-bold uppercase italic text-white/80">{p.name.split(' ').pop()}</span>
+                    <span className="text-[10px] md:text-xs font-bold uppercase italic text-white/80">{p.name.split(' ').pop()}</span>
                   </div>
                 ))}
                 {players.filter(p => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id)).length === 0 && (
-                  <span className="text-[10px] text-white/20 uppercase font-black italic">No hay jugadores disponibles</span>
+                  <span className="text-[9px] text-white/20 uppercase font-black italic mt-2">No hay jugadores disponibles</span>
                 )}
               </div>
             </div>
@@ -784,12 +910,24 @@ export default function App() {
         )}
       </main>
 
+      {/* Floating Drag Avatar for Touch Devices */}
+      {floatingDrag && (
+        <div 
+          style={{ left: floatingDrag.x, top: floatingDrag.y }}
+          className={`fixed pointer-events-none z-[9999] -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-2xl border-2 flex flex-col items-center justify-center font-black shadow-2xl bg-[#18181b] ${getCardStyle(floatingDrag.player.rating, true)}`}
+        >
+          <span className="text-[8px] opacity-70 font-bold mb-0.5 uppercase">{floatingDrag.player.positions?.[0]}</span>
+          <span className="text-base">{floatingDrag.player.rating}</span>
+        </div>
+      )}
+
+      {/* Modal de Selección */}
       {pickingSlot !== null && (
-        <div className="fixed inset-0 bg-black/95 z-[100] p-6 flex flex-col animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/95 z-[100] p-4 md:p-6 flex flex-col animate-in fade-in duration-200">
           <div className="flex justify-between items-center mb-6 mt-4">
             <div>
-              <h2 className="text-2xl font-black uppercase italic tracking-tighter text-white">Colocar Jugador</h2>
-              <p className="text-[10px] text-green-500 font-black uppercase tracking-widest">
+              <h2 className="text-xl md:text-2xl font-black uppercase italic tracking-tighter text-white">Colocar Jugador</h2>
+              <p className="text-[9px] md:text-[10px] text-green-500 font-black uppercase tracking-widest">
                 Alineación: {String(pickingSlot).startsWith('bench-') ? 'Banquillo' : FORMATIONS[formation][pickingSlot]?.pos}
               </p>
             </div>
@@ -797,8 +935,8 @@ export default function App() {
           </div>
 
           <div className="flex-1 overflow-y-auto space-y-2 pb-8 no-scrollbar">
-            <button onClick={() => assignPlayerToSlot(pickingSlot, null)} className="w-full p-5 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-500 font-black uppercase text-[10px] tracking-wider border border-red-500/20">
-              Quitar de la posición
+            <button onClick={() => assignPlayerToSlot(pickingSlot, null)} className="w-full p-4 md:p-5 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-500 font-black uppercase text-[10px] tracking-wider border border-red-500/20">
+              Mandar a No Convocados
             </button>
 
             {players.sort((a, b) => b.rating - a.rating).map((p) => {
@@ -813,23 +951,23 @@ export default function App() {
               const isCurrentSlot = isBenchSlot ? bench[pickingSlot.split('-')[1]] === p.id : lineup[pickingSlot] === p.id;
               
               return (
-                <button key={p.id} onClick={() => assignPlayerToSlot(pickingSlot, p.id)} className={`w-full p-4 rounded-2xl flex items-center gap-4 transition-all border ${isCurrentSlot ? 'border-green-500 bg-green-500/10' : 'bg-white/5 border-transparent hover:bg-white/10'}`}>
-                  <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center text-black font-black leading-none ${p.rating <= 64 ? 'bg-[#CD7F32]' : p.rating >= 85 ? 'bg-yellow-400' : 'bg-slate-300'}`}>
-                    <span className="text-[8px] opacity-60 mb-0.5">{p.positions?.[0]}</span>
-                    <span className="text-lg">{p.rating}</span>
+                <button key={p.id} onClick={() => assignPlayerToSlot(pickingSlot, p.id)} className={`w-full p-3 md:p-4 rounded-2xl flex items-center gap-3 md:gap-4 transition-all border ${isCurrentSlot ? 'border-green-500 bg-green-500/10' : 'bg-white/5 border-transparent hover:bg-white/10'}`}>
+                  <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none ${getCardStyle(p.rating)}`}>
+                    <span className="text-[7px] md:text-[8px] opacity-70 mb-0.5">{p.positions?.[0]}</span>
+                    <span className="text-base md:text-lg">{p.rating}</span>
                   </div>
                   <div className="text-left flex-1 min-w-0">
-                    <div className="font-black uppercase italic text-base truncate text-white">{p.name}</div>
-                    <div className="flex items-center gap-2 mt-1">
-                       <span className="text-[9px] text-white/20 font-black uppercase">{p.age} Años</span>
+                    <div className="font-black uppercase italic text-sm md:text-base truncate text-white">{p.name}</div>
+                    <div className="flex items-center gap-2 mt-0.5 md:mt-1">
+                       <span className="text-[8px] md:text-[9px] text-white/30 font-black uppercase">{p.age} Años</span>
                        {(!isCurrentSlot && (isAlreadyIn11 || isAlreadyInBench)) && (
-                         <span className="text-[8px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded uppercase font-black tracking-widest">
-                            {isAlreadyIn11 ? 'En el 11' : 'En Banquillo'}
+                         <span className="text-[7px] md:text-[8px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded uppercase font-black tracking-widest">
+                            {isAlreadyIn11 ? 'En el 11' : 'Banquillo'}
                          </span>
                        )}
                     </div>
                   </div>
-                  {isCurrentSlot && <Check className="text-green-500" size={20} />}
+                  {isCurrentSlot && <Check className="text-green-500" size={18} />}
                 </button>
               );
             })}
@@ -837,6 +975,7 @@ export default function App() {
         </div>
       )}
 
+      {/* Modales de Confirmación */}
       {playerToDelete && (
         <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#111114] border border-white/10 p-6 rounded-[32px] w-full max-w-sm text-center shadow-2xl">
