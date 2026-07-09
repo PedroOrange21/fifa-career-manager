@@ -110,7 +110,7 @@ export default function App() {
   const [newPlayer, setNewPlayer] = useState({
     name: '',
     rating: '',
-    positions: ['MC'],
+    positions: [],
     age: '',
     preferredFoot: 'Diestro',
     marketValue: '',
@@ -263,7 +263,6 @@ export default function App() {
       } else {
         current.push(pos);
       }
-      if (current.length === 0) current = ['MC'];
     }
     setNewPlayer({ ...newPlayer, positions: current });
   };
@@ -289,7 +288,7 @@ export default function App() {
       }, { merge: true });
       setShowForm(false);
       setEditingId(null);
-      setNewPlayer({ name: '', rating: '', positions: ['MC'], age: '', preferredFoot: 'Diestro', marketValue: '', type: 'Comprado', value: '', loanDuration: '1 Temporada', originClub: '' });
+      setNewPlayer({ name: '', rating: '', positions: [], age: '', preferredFoot: 'Diestro', marketValue: '', type: 'Comprado', value: '', loanDuration: '1 Temporada', originClub: '' });
     } catch (err) {
       setAuthError('Error al guardar jugador.');
     }
@@ -300,7 +299,7 @@ export default function App() {
     setNewPlayer({
       name: p.name,
       rating: p.rating || '',
-      positions: p.positions || [p.pos] || ['MC'],
+      positions: p.positions || (p.pos ? [p.pos] : []),
       age: p.age || '',
       preferredFoot: p.preferredFoot || 'Diestro',
       marketValue: formatValueInput(String(p.marketValue || p.value || '')),
@@ -656,7 +655,7 @@ export default function App() {
               <span className="text-[10px] text-white/30 font-black uppercase tracking-widest">{players.length} Jugadores en Plantilla</span>
             </div>
 
-            <button onClick={() => { setEditingId(null); setNewPlayer({ name: '', rating: '', positions: ['MC'], age: '', preferredFoot: 'Diestro', marketValue: '', type: 'Comprado', value: '', loanDuration: '1 Temporada', originClub: '' }); setShowForm(true); }} className="w-full bg-green-500 text-black p-4 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 hover:bg-green-400">
+            <button onClick={() => { setEditingId(null); setNewPlayer({ name: '', rating: '', positions: [], age: '', preferredFoot: 'Diestro', marketValue: '', type: 'Comprado', value: '', loanDuration: '1 Temporada', originClub: '' }); setShowForm(true); }} className="w-full bg-green-500 text-black p-4 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 hover:bg-green-400">
               <Plus size={16} /> Fichar Nuevo Jugador
             </button>
 
@@ -897,7 +896,7 @@ export default function App() {
 
             <div className="mt-4 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 italic mb-3">Banquillo</h3>
-              <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((idx) => {
                   const playerId = bench[idx];
                   const player = playerId ? players.find((p) => p.id === playerId) : null;
@@ -918,19 +917,21 @@ export default function App() {
                       onTouchStart={(e) => handleTouchStartLocal(e, player?.id, `bench-${idx}`)}
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, `bench-${idx}`)}
-                      className={`w-full aspect-square flex flex-col items-center justify-center p-2 rounded-xl border cursor-pointer active:cursor-grabbing touch-none transition-all duration-200 ${player ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-black/40 border-white/10 border-dashed hover:border-white/40'} ${draggedPlayer && !player ? 'border-green-400 bg-green-500/10' : ''}`}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl border cursor-pointer active:cursor-grabbing touch-none transition-all duration-200 min-h-[48px] ${player ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-black/40 border-white/10 border-dashed hover:border-white/40 justify-center'} ${draggedPlayer && !player ? 'border-green-400 bg-green-500/10' : ''}`}
                     >
                       {player ? (
                         <>
-                          <div className={`w-8 h-8 md:w-10 md:h-10 rounded-lg flex flex-shrink-0 items-center justify-center font-black text-[10px] md:text-xs mb-1 ${getCardStyle(player.rating)}`}>
+                          <div className={`w-8 h-8 rounded-lg flex flex-shrink-0 items-center justify-center font-black text-[10px] ${getCardStyle(player.rating)}`}>
                             {player.rating}
                           </div>
-                          <span className="text-[9px] md:text-[10px] font-bold uppercase italic text-white/90 w-full text-center truncate pointer-events-none">{player.name.split(' ').pop()}</span>
-                          <span className="text-[7px] text-green-400 font-black uppercase tracking-widest w-full text-center truncate pointer-events-none">{player.positions?.join('·')}</span>
+                          <div className="flex flex-col flex-1 min-w-0 pointer-events-none text-left">
+                            <span className="text-[10px] md:text-xs font-bold uppercase italic text-white/90 truncate">{player.name}</span>
+                            <span className="text-[8px] text-green-400 font-black uppercase tracking-widest truncate">{player.positions?.join(' · ')}</span>
+                          </div>
                         </>
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center opacity-30 pointer-events-none">
-                          <span className="text-xl font-black">+</span>
+                        <div className="flex items-center justify-center opacity-30 pointer-events-none">
+                          <span className="text-xl font-black leading-none">+</span>
                         </div>
                       )}
                     </div>
