@@ -1000,7 +1000,7 @@ export default function App() {
             </div>
 
             {}
-            <div className="flex flex-col md:flex-row gap-4 mt-4">
+            <div className="flex flex-col gap-4 mt-4">
               {/* No Convocados */}
               <div 
                 data-slot="uncalled"
@@ -1009,7 +1009,7 @@ export default function App() {
                 className={`flex-1 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl min-h-[120px] transition-colors ${draggedPlayer ? 'border-dashed border-white/20 bg-white/[0.02]' : ''}`}
               >
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 italic mb-3">No Convocados</h3>
-                <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {players.filter(p => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && (p.transferStatus || 'Activo') === 'Activo').sort((a, b) => b.rating - a.rating).map(p => (
                     <div 
                       key={p.id} 
@@ -1039,7 +1039,7 @@ export default function App() {
                 className={`flex-1 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-yellow-500/10 shadow-2xl min-h-[120px] transition-colors ${draggedPlayer ? 'border-dashed border-yellow-500/30 bg-yellow-500/[0.02]' : ''}`}
               >
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-yellow-500/60 italic mb-3">Para Ceder</h3>
-                <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {players.filter(p => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && p.transferStatus === 'Cedible').sort((a, b) => b.rating - a.rating).map(p => (
                     <div 
                       key={p.id} 
@@ -1069,7 +1069,7 @@ export default function App() {
                 className={`flex-1 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-red-500/10 shadow-2xl min-h-[120px] transition-colors ${draggedPlayer ? 'border-dashed border-red-500/30 bg-red-500/[0.02]' : ''}`}
               >
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-red-500/60 italic mb-3">Para Vender</h3>
-                <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {players.filter(p => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && p.transferStatus === 'Transferible').sort((a, b) => b.rating - a.rating).map(p => (
                     <div 
                       key={p.id} 
@@ -1094,6 +1094,13 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* Footer PedroOrange */}
+      <footer className="w-full text-center pb-8 pt-4">
+        <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-white/30">
+          Creada y desarrollada por <span className="text-green-500/70">PedroOrange</span>
+        </p>
+      </footer>
 
       {/* Floating Drag Avatar for Touch Devices */}
       {floatingDrag && (
