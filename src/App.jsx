@@ -345,9 +345,46 @@ export default function App() {
   };
 
   const clearTactics = () => {
+    if (!user) return;
+    
+    // Mandar a todos los del 11 y banquillo a "No Convocados" (Activo)
+    const playersToUpdate = [...Object.values(lineup), ...Object.values(bench)];
+    playersToUpdate.forEach(playerId => {
+      const playerRef = doc(db, 'artifacts', appId, 'users', user.uid, 'players', playerId);
+      updateDoc(playerRef, { transferStatus: 'Activo' });
+    });
+
     setLineup({});
     setBench({});
     saveTactics(formation, {}, {});
+  };
+
+  const handleFormationChange = (newForm) => {
+    const newLineup = { ...lineup };
+    const playersToUpdate = [];
+
+    // Validar si los jugadores del 11 encajan en la nueva formación
+    Object.keys(newLineup).forEach(idx => {
+      const player = players.find(p => p.id === newLineup[idx]);
+      const newSlotData = FORMATIONS[newForm][idx];
+      
+      // Si el hueco ya no existe o la nueva posición no está entre las del jugador
+      if (!player || !newSlotData || !player.positions.includes(newSlotData.pos)) {
+        if (player) playersToUpdate.push(player.id);
+        delete newLineup[idx]; // Quitarlo del 11
+      }
+    });
+
+    // Mandar a los jugadores que no encajan a "No Convocados" (Activo)
+    playersToUpdate.forEach(playerId => {
+      if (!user) return;
+      const playerRef = doc(db, 'artifacts', appId, 'users', user.uid, 'players', playerId);
+      updateDoc(playerRef, { transferStatus: 'Activo' });
+    });
+
+    setFormation(newForm); 
+    setLineup(newLineup);
+    saveTactics(newForm, newLineup, bench); 
   };
 
   const confirmDeletePlayer = async () => {
@@ -766,13 +803,13 @@ export default function App() {
                 </div>
               )}
               {filteredPlayers.map((p) => (
-                <div key={p.id} className="p-3 md:p-4 flex items-center justify-between group hover:bg-white/[0.01] transition-all">
-                  <div className="flex items-center gap-3 md:gap-4">
-                    <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none ${getCardStyle(p.rating)}`}>
+                <div key={p.id} className="p-3 md:p-4 flex items-center justify-between group hover:bg-white/[0.01] transition-all gap-4">
+                  <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+                    <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}>
                       <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span>
                       <span className="text-lg md:text-xl">{p.rating}</span>
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight flex items-center gap-2 text-white">
                         {p.name}
                       </div>
@@ -784,29 +821,9 @@ export default function App() {
                         {p.marketValue && (
                           <span className="text-[8px] md:text-[9px] text-white/50 font-black uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded">{abbreviateValue(p.marketValue)}</span>
                         )}
-                        {Object.values(lineup).includes(p.id) && (
-                          <span className="text-[7px] md:text-[8px] flex items-center gap-1 bg-green-500/20 text-green-400 px-2 py-0.5 rounded uppercase font-black tracking-widest">
-                            <Shirt size={10} /> 11
-                          </span>
-                        )}
-                        {Object.values(bench).includes(p.id) && (
-                          <span className="text-[7px] md:text-[8px] flex items-center gap-1 bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded uppercase font-black tracking-widest">
-                            <Users size={10} /> Banq
-                          </span>
-                        )}
-                        {!Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && p.transferStatus === 'Cedible' && (
-                          <span className="text-[7px] md:text-[8px] flex items-center gap-1 bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded uppercase font-black tracking-widest">
-                            <ArrowRightLeft size={10} /> Cedible
-                          </span>
-                        )}
-                        {!Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && p.transferStatus === 'Transferible' && (
-                          <span className="text-[7px] md:text-[8px] flex items-center gap-1 bg-red-500/20 text-red-400 px-2 py-0.5 rounded uppercase font-black tracking-widest">
-                            <Tag size={10} /> Venta
-                          </span>
-                        )}
                         {p.type === 'Cedido' && (
                           <span className="text-[7px] md:text-[8px] text-yellow-500 font-black uppercase tracking-widest bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">
-                            Cedido: {p.originClub} ({formatLoanDuration(p.loanDuration)})
+                            Cedido ({formatLoanDuration(p.loanDuration)})
                           </span>
                         )}
                         {p.type && p.type !== 'Cedido' && (
@@ -817,9 +834,28 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <button onClick={() => editPlayer(p)} className="p-1.5 md:p-2 text-white/20 hover:text-green-500 transition-colors bg-white/5 rounded-xl"><Edit2 size={14} /></button>
-                    <button onClick={() => setPlayerToDelete(p.id)} className="p-1.5 md:p-2 text-white/20 hover:text-red-500 transition-colors bg-white/5 rounded-xl"><Trash2 size={14} /></button>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    {Object.values(lineup).includes(p.id) ? (
+                      <span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-green-500/20 text-green-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-green-500/20">
+                        <Shirt size={12} /> <span className="hidden sm:inline">Titular</span><span className="sm:hidden">11</span>
+                      </span>
+                    ) : Object.values(bench).includes(p.id) ? (
+                      <span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-blue-500/20 text-blue-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-blue-500/20">
+                        <Users size={12} /> <span className="hidden sm:inline">Banquillo</span><span className="sm:hidden">Banq</span>
+                      </span>
+                    ) : p.transferStatus === 'Cedible' ? (
+                      <span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20">
+                        <ArrowRightLeft size={12} /> Cedible
+                      </span>
+                    ) : p.transferStatus === 'Transferible' ? (
+                      <span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-red-500/20 text-red-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-red-500/20">
+                        <Tag size={12} /> Venta
+                      </span>
+                    ) : null}
+                    <div className="flex gap-1 mt-1">
+                      <button onClick={() => editPlayer(p)} className="p-1.5 md:p-2 text-white/20 hover:text-green-500 transition-colors bg-white/5 rounded-xl"><Edit2 size={14} /></button>
+                      <button onClick={() => setPlayerToDelete(p.id)} className="p-1.5 md:p-2 text-white/20 hover:text-red-500 transition-colors bg-white/5 rounded-xl"><Trash2 size={14} /></button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -832,7 +868,7 @@ export default function App() {
             <div className="flex flex-col gap-3 md:gap-4 mb-2">
               <div className="flex justify-between items-center bg-[#111114] p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-white/5 shadow-2xl">
                 <span className="text-[10px] font-black uppercase tracking-widest text-white/40 italic">Esquema Táctico</span>
-                <select value={formation} onChange={(e) => { setFormation(e.target.value); saveTactics(e.target.value, lineup, bench); }} className="bg-transparent text-green-500 font-black uppercase outline-none cursor-pointer text-xs">
+                <select value={formation} onChange={(e) => handleFormationChange(e.target.value)} className="bg-transparent text-green-500 font-black uppercase outline-none cursor-pointer text-xs">
                   {Object.keys(FORMATIONS).map((f) => <option key={f} value={f} className="bg-[#111114]">{f}</option>)}
                 </select>
               </div>
@@ -982,7 +1018,7 @@ export default function App() {
                 className={`flex-1 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl min-h-[120px] transition-colors ${draggedPlayer ? 'border-dashed border-white/20 bg-white/[0.02]' : ''}`}
               >
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 italic mb-3">No Convocados</h3>
-                <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {players.filter(p => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && (p.transferStatus || 'Activo') === 'Activo').sort((a, b) => b.rating - a.rating).map(p => (
                     <div 
                       key={p.id} 
@@ -1012,7 +1048,7 @@ export default function App() {
                 className={`flex-1 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-yellow-500/10 shadow-2xl min-h-[120px] transition-colors ${draggedPlayer ? 'border-dashed border-yellow-500/30 bg-yellow-500/[0.02]' : ''}`}
               >
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-yellow-500/60 italic mb-3">Para Ceder</h3>
-                <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {players.filter(p => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && p.transferStatus === 'Cedible').sort((a, b) => b.rating - a.rating).map(p => (
                     <div 
                       key={p.id} 
@@ -1042,7 +1078,7 @@ export default function App() {
                 className={`flex-1 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-red-500/10 shadow-2xl min-h-[120px] transition-colors ${draggedPlayer ? 'border-dashed border-red-500/30 bg-red-500/[0.02]' : ''}`}
               >
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-red-500/60 italic mb-3">Para Vender</h3>
-                <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {players.filter(p => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && p.transferStatus === 'Transferible').sort((a, b) => b.rating - a.rating).map(p => (
                     <div 
                       key={p.id} 
@@ -1161,7 +1197,7 @@ export default function App() {
                       
                       {selectedPlayerInfo.type === 'Cedido' && (
                         <span className="text-[8px] text-yellow-500 font-black uppercase tracking-widest bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">
-                          Cedido: {selectedPlayerInfo.originClub} ({formatLoanDuration(selectedPlayerInfo.loanDuration)})
+                          Cedido ({formatLoanDuration(selectedPlayerInfo.loanDuration)})
                         </span>
                       )}
                       {selectedPlayerInfo.type && selectedPlayerInfo.type !== 'Cedido' && (
