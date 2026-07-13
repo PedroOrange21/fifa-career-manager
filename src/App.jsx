@@ -776,6 +776,15 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0b] text-white flex flex-col overscroll-none" style={{ overscrollBehaviorY: 'none' }}>
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
       <header className="p-4 border-b border-white/10 flex justify-between items-center sticky top-0 bg-[#111114]/90 backdrop-blur-md z-40">
         <div className="flex items-center gap-2 md:gap-3">
           <h1 className="text-green-500 font-black italic tracking-tighter text-lg md:text-xl ml-1">soccerclothes.</h1>
@@ -1012,20 +1021,22 @@ export default function App() {
                 </select>
               </div>
 
-              <div className="bg-[#111114] p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-white/5 shadow-2xl flex items-center gap-2">
+              <div className="bg-[#111114] p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-white/5 shadow-2xl flex flex-col sm:flex-row items-center gap-2">
                 <input
                   type="text"
                   placeholder="Nombre de la táctica..."
-                  className="flex-1 bg-white/5 p-3 rounded-xl outline-none border border-white/5 focus:border-green-500 text-base md:text-xs font-bold text-white placeholder:text-white/20"
+                  className="w-full sm:flex-1 bg-white/5 p-3 rounded-xl outline-none border border-white/5 focus:border-green-500 text-base md:text-xs font-bold text-white placeholder:text-white/20"
                   value={newFormationName}
                   onChange={(e) => setNewFormationName(e.target.value)}
                 />
-                <button onClick={saveCurrentFormation} className="bg-green-500 text-black px-4 py-3 rounded-xl font-black uppercase text-[10px] shadow-lg shadow-green-500/20 active:scale-95 transition-all">
-                  Guardar
-                </button>
-                <button onClick={clearTactics} className="bg-red-500/10 text-red-500 px-4 py-3 rounded-xl font-black uppercase text-[10px] hover:bg-red-500/20 transition-all border border-red-500/20 flex items-center gap-2" title="Mandar todos a no convocados">
-                  <Trash2 size={16} /> <span className="hidden md:inline">Vaciar Todo</span>
-                </button>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <button onClick={saveCurrentFormation} className="flex-1 sm:flex-none bg-green-500 text-black px-4 py-3 rounded-xl font-black uppercase text-[10px] shadow-lg shadow-green-500/20 active:scale-95 transition-all">
+                    Guardar
+                  </button>
+                  <button onClick={clearTactics} className="flex-1 sm:flex-none bg-red-500/10 text-red-500 px-4 py-3 rounded-xl font-black uppercase text-[10px] hover:bg-red-500/20 transition-all border border-red-500/20 flex items-center justify-center gap-2" title="Mandar todos a no convocados">
+                    <Trash2 size={16} /> <span className="hidden md:inline">Vaciar Todo</span>
+                  </button>
+                </div>
               </div>
 
               {savedFormations.length > 0 && (
@@ -1281,17 +1292,17 @@ export default function App() {
               <div className="space-y-6">
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1">Nombre de Entrenador</label>
-                    <div className="flex gap-2">
-                      <input type="text" value={profileName} onChange={e => setProfileName(e.target.value)} className="flex-1 bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold text-white text-base md:text-sm" />
-                      <button onClick={handleUpdateName} className="bg-green-500 text-black px-4 md:px-6 rounded-xl font-black uppercase text-[10px] md:text-xs hover:bg-green-400 transition-all shadow-lg shadow-green-500/20 active:scale-95">Guardar</button>
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                      <input type="text" value={profileName} onChange={e => setProfileName(e.target.value)} className="w-full sm:flex-1 bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold text-white text-base md:text-sm" />
+                      <button onClick={handleUpdateName} className="w-full sm:w-auto bg-green-500 text-black p-4 rounded-xl font-black uppercase text-[10px] md:text-xs hover:bg-green-400 transition-all shadow-lg shadow-green-500/20 active:scale-95">Guardar</button>
                     </div>
                  </div>
 
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1">Cambiar Contraseña</label>
-                    <div className="flex gap-2">
-                      <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" className="flex-1 bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold text-white placeholder:text-white/20 text-base md:text-sm" />
-                      <button onClick={handleUpdatePassword} className="bg-white/10 text-white px-4 md:px-6 rounded-xl font-black uppercase text-[10px] md:text-xs hover:bg-white/20 transition-all border border-white/10 active:scale-95">Actualizar</button>
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                      <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" className="w-full sm:flex-1 bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold text-white placeholder:text-white/20 text-base md:text-sm" />
+                      <button onClick={handleUpdatePassword} className="w-full sm:w-auto bg-white/10 text-white p-4 rounded-xl font-black uppercase text-[10px] md:text-xs hover:bg-white/20 transition-all border border-white/10 active:scale-95">Actualizar</button>
                     </div>
                  </div>
               </div>
