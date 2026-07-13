@@ -1213,7 +1213,7 @@ export default function App() {
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1">Nombre de Entrenador</label>
                     <div className="flex gap-2">
-                      <input type="text" value={profileName} onChange={e => setProfileName(e.target.value)} className="flex-1 bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold text-white text-sm" />
+                      <input type="text" value={profileName} onChange={e => setProfileName(e.target.value)} className="flex-1 bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold text-white text-base md:text-sm" />
                       <button onClick={handleUpdateName} className="bg-green-500 text-black px-4 md:px-6 rounded-xl font-black uppercase text-[10px] md:text-xs hover:bg-green-400 transition-all shadow-lg shadow-green-500/20 active:scale-95">Guardar</button>
                     </div>
                  </div>
@@ -1221,7 +1221,7 @@ export default function App() {
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1">Cambiar Contraseña</label>
                     <div className="flex gap-2">
-                      <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" className="flex-1 bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold text-white text-sm placeholder:text-white/20" />
+                      <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" className="flex-1 bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold text-white placeholder:text-white/20 text-base md:text-sm" />
                       <button onClick={handleUpdatePassword} className="bg-white/10 text-white px-4 md:px-6 rounded-xl font-black uppercase text-[10px] md:text-xs hover:bg-white/20 transition-all border border-white/10 active:scale-95">Actualizar</button>
                     </div>
                  </div>
