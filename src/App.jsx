@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Plus,
   Users,
@@ -17,7 +17,8 @@ import {
   Edit2,
   Shirt,
   ArrowRightLeft,
-  Tag
+  Tag,
+  Camera
 } from 'lucide-react';
 import { initializeApp, getApps } from 'firebase/app';
 import {
@@ -37,7 +38,8 @@ import {
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  updateProfile
+  updateProfile,
+  updatePassword
 } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -128,11 +130,18 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [pickingSlot, setPickingSlot] = useState(null);
 
+  const [profileName, setProfileName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [profileMessage, setProfileMessage] = useState({ type: '', text: '' });
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const fileInputRef = useRef(null);
+
   const isUncalledZone = (slot) => ['uncalled', 'forLoan', 'forSale'].includes(String(slot));
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      if (u) setProfileName(u.displayName || u.email.split('@')[0]);
       setLoading(false);
     });
     return () => unsubscribe();
@@ -198,9 +207,9 @@ export default function App() {
   }, [floatingDrag]);
 
   const getCardStyle = (rating, isTactics = false) => {
-    if (rating <= 64) return isTactics ? 'border-[#CD7F32] text-[#CD7F32]' : 'bg-[#CD7F32] text-black'; // Bronce
-    if (rating >= 65 && rating <= 74) return isTactics ? 'border-[#C0C0C0] text-[#C0C0C0]' : 'bg-[#C0C0C0] text-black'; // Plata
-    return isTactics ? 'border-[#FFD700] text-[#FFD700]' : 'bg-[#FFD700] text-black'; // Oro
+    if (rating <= 64) return isTactics ? 'border-[#CD7F32] text-[#CD7F32]' : 'bg-[#CD7F32] text-black'; 
+    if (rating >= 65 && rating <= 74) return isTactics ? 'border-[#C0C0C0] text-[#C0C0C0]' : 'bg-[#C0C0C0] text-black'; 
+    return isTactics ? 'border-[#FFD700] text-[#FFD700]' : 'bg-[#FFD700] text-black'; 
   };
 
   const handleGoogleLogin = async () => {
@@ -228,6 +237,74 @@ export default function App() {
   };
 
   const handleLogout = () => signOut(auth);
+
+  const handleUpdateName = async () => {
+    try {
+      await updateProfile(auth.currentUser, { displayName: profileName });
+      setUser({ ...auth.currentUser, displayName: profileName });
+      setProfileMessage({ type: 'success', text: 'Nombre actualizado con éxito.' });
+      setTimeout(() => setProfileMessage({ type: '', text: '' }), 3000);
+    } catch (error) {
+      setProfileMessage({ type: 'error', text: 'Error al actualizar el nombre.' });
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (newPassword.length < 6) return setProfileMessage({ type: 'error', text: 'La contraseña debe tener al menos 6 caracteres.' });
+    try {
+      await updatePassword(auth.currentUser, newPassword);
+      setProfileMessage({ type: 'success', text: 'Contraseña actualizada.' });
+      setNewPassword('');
+      setTimeout(() => setProfileMessage({ type: '', text: '' }), 3000);
+    } catch (error) {
+      if (error.code === 'auth/requires-recent-login') {
+        setProfileMessage({ type: 'error', text: 'Por seguridad, debes cerrar sesión y volver a entrar.' });
+      } else {
+        setProfileMessage({ type: 'error', text: 'Error al actualizar contraseña.' });
+      }
+    }
+  };
+
+  const handlePhotoUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploadingPhoto(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 150; 
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+        } else {
+          if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+
+        try {
+          await updateProfile(auth.currentUser, { photoURL: dataUrl });
+          setUser({ ...auth.currentUser, photoURL: dataUrl });
+          setProfileMessage({ type: 'success', text: 'Foto actualizada correctamente.' });
+        } catch (error) {
+          setProfileMessage({ type: 'error', text: 'Error al actualizar la foto.' });
+        } finally {
+          setIsUploadingPhoto(false);
+        }
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
 
   const formatValueInput = (val) => {
     if (!val) return '';
@@ -571,7 +648,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="h-screen bg-[#0a0a0b] flex flex-col items-center justify-center">
+      <div className="h-screen bg-[#0a0a0b] flex flex-col items-center justify-center overscroll-none" style={{ overscrollBehaviorY: 'none' }}>
         <RefreshCcw className="animate-spin text-green-500 mb-4" size={40} />
         <span className="text-white/40 text-xs font-bold uppercase tracking-widest">Cargando base de datos...</span>
       </div>
@@ -580,7 +657,7 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0a0a0b] text-white flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-[#0a0a0b] text-white flex flex-col items-center justify-center p-4 overscroll-none" style={{ overscrollBehaviorY: 'none' }}>
         <div className="mb-8 text-center">
           <span className="text-green-500 font-black text-5xl italic tracking-tighter">soccerclothes.</span>
           <h1 className="text-white/30 font-bold tracking-[0.3em] text-xs uppercase mt-2">Plataforma de Control</h1>
@@ -641,14 +718,10 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0b] text-white">
+    <div className="min-h-screen bg-[#0a0a0b] text-white flex flex-col overscroll-none" style={{ overscrollBehaviorY: 'none' }}>
       <header className="p-4 border-b border-white/10 flex justify-between items-center sticky top-0 bg-[#111114]/90 backdrop-blur-md z-40">
-        <div className="flex items-center gap-3">
-          <h1 className="text-green-500 font-black italic tracking-tighter text-xl">soccerclothes.</h1>
-          <div className="hidden sm:block h-4 w-px bg-white/10"></div>
-          <span className="hidden sm:block text-[10px] text-white/40 font-black uppercase tracking-widest">
-            Míster: {user.displayName || user.email.split('@')[0]}
-          </span>
+        <div className="flex items-center gap-2 md:gap-3">
+          <h1 className="text-green-500 font-black italic tracking-tighter text-lg md:text-xl ml-1">soccerclothes.</h1>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex bg-white/5 p-1 rounded-xl">
@@ -659,13 +732,27 @@ export default function App() {
               <LayoutDashboard size={16} /> <span className="hidden sm:inline">Táctica</span>
             </button>
           </div>
-          <button onClick={handleLogout} className="p-2.5 bg-white/5 hover:bg-red-500/10 text-white/40 hover:text-red-500 rounded-xl transition-all" title="Cerrar sesión"><LogOut size={16} /></button>
+          
+          <div className="hidden sm:block h-6 w-px bg-white/10 mx-1"></div>
+          
+          <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setActiveTab('profile')} title="Ver Perfil">
+            <span className="hidden sm:block text-[10px] text-white/40 font-black uppercase tracking-widest text-right">
+              {user.displayName || user.email.split('@')[0]}
+            </span>
+            {user.photoURL ? (
+              <img src={user.photoURL} alt="Avatar" className="w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-white/20 object-cover group-hover:border-green-500 transition-colors" />
+            ) : (
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-white/10 border-2 border-white/20 flex items-center justify-center group-hover:border-green-500 transition-colors">
+                <User size={16} className="text-white/50" />
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
-      <main className="p-2 md:p-4 max-w-lg mx-auto pb-24">
+      <main className="p-2 md:p-4 max-w-lg mx-auto flex flex-col flex-1 w-full pb-8">
         {activeTab === 'squad' && (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in">
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
@@ -690,7 +777,6 @@ export default function App() {
               <Plus size={16} /> Fichar Nuevo Jugador
             </button>
 
-            {}
             {showForm && (
               <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200" onClick={() => setShowForm(false)}>
                 <form onSubmit={addOrUpdatePlayer} className="bg-[#111114] border border-white/10 p-5 rounded-[32px] w-full max-w-sm shadow-2xl relative my-8" onClick={e => e.stopPropagation()}>
@@ -785,7 +871,6 @@ export default function App() {
               </div>
             )}
 
-            {}
             <div className="bg-[#111114] rounded-[24px] md:rounded-[32px] border border-white/10 overflow-hidden divide-y divide-white/5 shadow-2xl">
               {filteredPlayers.length === 0 && (
                 <div className="p-16 text-center text-white/10 font-black italic uppercase tracking-widest text-xs">
@@ -852,7 +937,6 @@ export default function App() {
           </div>
         )}
 
-        {}
         {activeTab === 'tactics' && (
           <div className="space-y-4 animate-in fade-in">
             <div className="flex flex-col gap-3 md:gap-4 mb-2">
@@ -895,7 +979,7 @@ export default function App() {
               )}
             </div>
 
-            <div className="bg-[#1a2e1d] border-4 border-green-500/20 rounded-[32px] md:rounded-[48px] p-6 relative min-h-[500px] md:min-h-[580px] overflow-hidden shadow-inner">
+            <div className="bg-[#1a2e1d] border-4 border-green-500/20 rounded-[32px] md:rounded-[48px] p-6 relative min-h-[550px] md:min-h-[620px] overflow-hidden shadow-inner">
               <div className="absolute inset-4 border-2 border-white/30 rounded-[28px] pointer-events-none"></div>
               <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-white/30 pointer-events-none"></div>
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 md:w-36 md:h-36 border-2 border-white/30 rounded-full pointer-events-none"></div>
@@ -911,7 +995,7 @@ export default function App() {
                 const isOccupiedSlotHighlight = draggedPlayer && player && draggedPlayer !== player.id && canDragPlayerPlayHere;
 
                 return (
-                  <div key={idx} style={{ left: `${slot.x}%`, top: `${slot.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-10">
+                  <div key={idx} style={{ left: `${slot.x}%`, top: `${slot.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-10 group hover:z-50">
                     <button 
                       data-slot={idx}
                       onClick={() => {
@@ -927,7 +1011,7 @@ export default function App() {
                       onTouchStart={(e) => handleTouchStartLocal(e, player?.id, idx)}
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, idx)}
-                      className={`w-12 h-12 md:w-14 md:h-14 rounded-full border-2 flex flex-col items-center justify-center font-black transition-all duration-300 shadow-2xl active:scale-90 touch-none ${player ? `bg-[#18181b] ${getCardStyle(player.rating, true)} scale-105` : 'bg-black/80 border-white/10 border-dashed text-white/20 hover:border-white/40'} ${isEmptySlotHighlight ? 'border-green-400 bg-green-500/20' : ''} ${isOccupiedSlotHighlight ? 'ring-4 ring-green-500/50 border-green-400' : ''}`}
+                      className={`w-12 h-12 md:w-14 md:h-14 rounded-full border-2 flex flex-col items-center justify-center font-black transition-all duration-300 shadow-2xl active:scale-90 touch-none z-10 ${player ? `bg-[#18181b] ${getCardStyle(player.rating, true)} scale-105` : 'bg-black/80 border-white/10 border-dashed text-white/20 hover:border-white/40'} ${isEmptySlotHighlight ? 'border-green-400 bg-green-500/20' : ''} ${isOccupiedSlotHighlight ? 'ring-4 ring-green-500/50 border-green-400' : ''}`}
                     >
                       {player ? (
                         <div className="flex flex-col items-center leading-none">
@@ -937,12 +1021,12 @@ export default function App() {
                       ) : <span className="text-[8px] md:text-[9px] uppercase tracking-tighter">{slot.pos}</span>}
                     </button>
                     {player && (
-                      <div className="flex flex-col items-center pointer-events-none mt-1 gap-0.5">
-                        <span className="text-[7px] md:text-[8px] font-black bg-black/90 text-white/90 px-1.5 md:px-2 py-0.5 rounded-md border border-white/10 shadow-lg whitespace-nowrap uppercase italic max-w-[70px] md:max-w-[80px] truncate">
+                      <div className="flex flex-col items-center pointer-events-none -mt-3 gap-0 z-20">
+                        <span className="text-[7px] md:text-[8px] font-black bg-black/90 text-white/90 px-1.5 md:px-2 py-0.5 rounded-md border border-white/10 shadow-lg whitespace-nowrap uppercase italic max-w-[65px] md:max-w-[80px] truncate leading-tight">
                           {player.name}
                         </span>
                         {player.positions?.filter(p => p !== slot.pos).length > 0 && (
-                          <span className="text-[6px] md:text-[7px] text-green-400 font-black uppercase tracking-widest bg-black/60 px-1.5 py-0.5 rounded">
+                          <span className="text-[6px] md:text-[7px] text-green-400 font-black uppercase tracking-widest bg-black/80 px-1.5 py-0.5 rounded mt-px">
                             {player.positions.filter(p => p !== slot.pos).join(' · ')}
                           </span>
                         )}
@@ -953,7 +1037,6 @@ export default function App() {
               })}
             </div>
 
-            {}
             <div className="mt-4 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 italic mb-3">Banquillo</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -1000,7 +1083,6 @@ export default function App() {
               </div>
             </div>
 
-            {}
             <div className="flex flex-col md:flex-row gap-4 mt-4">
               {/* No Convocados */}
               <div 
@@ -1094,9 +1176,73 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {activeTab === 'profile' && (
+          <div className="space-y-4 animate-in fade-in">
+            <div className="bg-[#111114] p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl space-y-6">
+              <h2 className="text-xl font-black uppercase italic tracking-tighter text-white text-center md:text-left">Perfil de Usuario</h2>
+
+              <div className="flex flex-col items-center gap-4 mb-6">
+                 <div className="relative group cursor-pointer" onClick={() => !isUploadingPhoto && fileInputRef.current?.click()}>
+                    {user.photoURL ? (
+                      <img src={user.photoURL} alt="Avatar" className="w-24 h-24 rounded-full border-4 border-white/10 object-cover shadow-2xl" />
+                    ) : (
+                      <div className="w-24 h-24 rounded-full bg-white/5 border-4 border-white/10 flex items-center justify-center shadow-2xl">
+                        <User size={40} className="text-white/30" />
+                      </div>
+                    )}
+                    <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handlePhotoUpload} />
+                    <button 
+                      disabled={isUploadingPhoto}
+                      className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      {isUploadingPhoto ? <RefreshCcw size={24} className="animate-spin text-white" /> : <Camera size={24} className="text-white" />}
+                    </button>
+                 </div>
+                 <p className="text-[10px] text-white/30 font-black uppercase tracking-widest bg-white/5 px-3 py-1 rounded-lg border border-white/5">{user.email}</p>
+              </div>
+
+              {profileMessage.text && (
+                <div className={`p-4 rounded-2xl text-xs font-bold flex items-center gap-2 ${profileMessage.type === 'error' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-green-500/10 text-green-500 border border-green-500/20'}`}>
+                  {profileMessage.type === 'error' ? <ShieldAlert size={16} /> : <ShieldCheck size={16} />}
+                  {profileMessage.text}
+                </div>
+              )}
+
+              <div className="space-y-6">
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1">Nombre de Entrenador</label>
+                    <div className="flex gap-2">
+                      <input type="text" value={profileName} onChange={e => setProfileName(e.target.value)} className="flex-1 bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold text-white text-sm" />
+                      <button onClick={handleUpdateName} className="bg-green-500 text-black px-4 md:px-6 rounded-xl font-black uppercase text-[10px] md:text-xs hover:bg-green-400 transition-all shadow-lg shadow-green-500/20 active:scale-95">Guardar</button>
+                    </div>
+                 </div>
+
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1">Cambiar Contraseña</label>
+                    <div className="flex gap-2">
+                      <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" className="flex-1 bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold text-white text-sm placeholder:text-white/20" />
+                      <button onClick={handleUpdatePassword} className="bg-white/10 text-white px-4 md:px-6 rounded-xl font-black uppercase text-[10px] md:text-xs hover:bg-white/20 transition-all border border-white/10 active:scale-95">Actualizar</button>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="pt-6 mt-6 border-t border-white/5">
+                 <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl bg-red-500/10 text-red-500 font-black uppercase text-xs hover:bg-red-500/20 transition-all border border-red-500/20 shadow-lg shadow-red-500/10">
+                   <LogOut size={16} /> Cerrar Sesión
+                 </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
-      {/* Floating Drag Avatar for Touch Devices */}
+      <footer className="w-full text-center pb-8 pt-4 mt-auto border-t border-white/5">
+        <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-white/30">
+          Creada y desarrollada por <span className="text-green-500/80">PedroOrange</span>
+        </p>
+      </footer>
+
       {floatingDrag && (
         <div 
           style={{ left: floatingDrag.x, top: floatingDrag.y }}
@@ -1107,7 +1253,6 @@ export default function App() {
         </div>
       )}
 
-      {}
       {pickingSlot !== null && (
         <div className="fixed inset-0 bg-black/95 z-[100] p-4 md:p-6 flex flex-col animate-in fade-in duration-200" onClick={() => setPickingSlot(null)}>
           <div className="bg-[#111114] border border-white/10 p-6 rounded-[32px] w-full max-w-sm mx-auto shadow-2xl relative my-auto flex flex-col" onClick={e => e.stopPropagation()}>
@@ -1163,7 +1308,6 @@ export default function App() {
         </div>
       )}
 
-      {}
       {selectedPlayerInfo && (
         <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setSelectedPlayerInfo(null)}>
           <div className="bg-[#111114] border border-white/10 p-6 rounded-[32px] w-full max-w-sm shadow-2xl relative" onClick={e => e.stopPropagation()}>
@@ -1229,7 +1373,6 @@ export default function App() {
         </div>
       )}
 
-      {}
       {playerToDelete && (
         <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#111114] border border-white/10 p-6 rounded-[32px] w-full max-w-sm text-center shadow-2xl">
@@ -1244,7 +1387,6 @@ export default function App() {
         </div>
       )}
 
-      {}
       {formationToDelete && (
         <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#111114] border border-white/10 p-6 rounded-[32px] w-full max-w-sm text-center shadow-2xl">
