@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Plus,
   Users,
@@ -17,8 +17,7 @@ import {
   Edit2,
   Shirt,
   ArrowRightLeft,
-  Tag,
-  Camera
+  Tag
 } from 'lucide-react';
 import { initializeApp, getApps } from 'firebase/app';
 import {
@@ -38,8 +37,7 @@ import {
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  updateProfile,
-  updatePassword
+  updateProfile
 } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -57,29 +55,28 @@ const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 const appId = 'fifa-manager-main';
 
-// Formaciones Re-calibradas para evitar solapamientos (Más espacio vertical)
 const FORMATIONS = {
-  '4-3-3': [{pos:'POR',x:50,y:92},{pos:'LD',x:82,y:72},{pos:'DFC',x:64,y:78},{pos:'DFC',x:36,y:78},{pos:'LI',x:18,y:72},{pos:'MC',x:50,y:54},{pos:'MC',x:24,y:46},{pos:'MC',x:76,y:46},{pos:'ED',x:78,y:22},{pos:'EI',x:22,y:22},{pos:'DC',x:50,y:10}],
-  '4-3-3 (MCO)': [{pos:'POR',x:50,y:92},{pos:'LD',x:82,y:72},{pos:'DFC',x:64,y:78},{pos:'DFC',x:36,y:78},{pos:'LI',x:18,y:72},{pos:'MC',x:34,y:54},{pos:'MC',x:66,y:54},{pos:'MCO',x:50,y:34},{pos:'ED',x:78,y:22},{pos:'EI',x:22,y:22},{pos:'DC',x:50,y:10}],
-  '4-3-3 (MCD)': [{pos:'POR',x:50,y:92},{pos:'LD',x:82,y:72},{pos:'DFC',x:64,y:78},{pos:'DFC',x:36,y:78},{pos:'LI',x:18,y:72},{pos:'MCD',x:50,y:62},{pos:'MC',x:30,y:46},{pos:'MC',x:70,y:46},{pos:'ED',x:78,y:22},{pos:'EI',x:22,y:22},{pos:'DC',x:50,y:10}],
-  '4-4-2': [{pos:'POR',x:50,y:92},{pos:'LD',x:82,y:72},{pos:'DFC',x:64,y:78},{pos:'DFC',x:36,y:78},{pos:'LI',x:18,y:72},{pos:'MD',x:82,y:48},{pos:'MC',x:60,y:50},{pos:'MC',x:40,y:50},{pos:'MI',x:18,y:48},{pos:'DC',x:60,y:14},{pos:'DC',x:40,y:14}],
-  '4-2-3-1': [{pos:'POR',x:50,y:92},{pos:'LD',x:82,y:72},{pos:'DFC',x:64,y:78},{pos:'DFC',x:36,y:78},{pos:'LI',x:18,y:72},{pos:'MCD',x:62,y:62},{pos:'MCD',x:38,y:62},{pos:'MD',x:78,y:38},{pos:'MCO',x:50,y:34},{pos:'MI',x:22,y:38},{pos:'DC',x:50,y:10}],
-  '4-1-2-1-2': [{pos:'POR',x:50,y:92},{pos:'LD',x:82,y:72},{pos:'DFC',x:64,y:78},{pos:'DFC',x:36,y:78},{pos:'LI',x:18,y:72},{pos:'MCD',x:50,y:62},{pos:'MD',x:78,y:48},{pos:'MI',x:22,y:48},{pos:'MCO',x:50,y:34},{pos:'DC',x:60,y:12},{pos:'DC',x:40,y:12}],
-  '4-3-1-2': [{pos:'POR',x:50,y:92},{pos:'LD',x:82,y:72},{pos:'DFC',x:64,y:78},{pos:'DFC',x:36,y:78},{pos:'LI',x:18,y:72},{pos:'MC',x:50,y:54},{pos:'MC',x:24,y:50},{pos:'MC',x:76,y:50},{pos:'MCO',x:50,y:34},{pos:'DC',x:60,y:12},{pos:'DC',x:40,y:12}],
-  '4-5-1': [{pos:'POR',x:50,y:92},{pos:'LD',x:82,y:72},{pos:'DFC',x:64,y:78},{pos:'DFC',x:36,y:78},{pos:'LI',x:18,y:72},{pos:'MC',x:50,y:54},{pos:'MD',x:80,y:46},{pos:'MI',x:20,y:46},{pos:'MCO',x:64,y:34},{pos:'MCO',x:36,y:34},{pos:'DC',x:50,y:10}],
-  '4-3-2-1': [{pos:'POR',x:50,y:92},{pos:'LD',x:82,y:72},{pos:'DFC',x:64,y:78},{pos:'DFC',x:36,y:78},{pos:'LI',x:18,y:72},{pos:'MC',x:50,y:52},{pos:'MC',x:26,y:46},{pos:'MC',x:74,y:46},{pos:'SD',x:64,y:28},{pos:'SD',x:36,y:28},{pos:'DC',x:50,y:10}],
-  '4-4-1-1': [{pos:'POR',x:50,y:92},{pos:'LD',x:82,y:72},{pos:'DFC',x:64,y:78},{pos:'DFC',x:36,y:78},{pos:'LI',x:18,y:72},{pos:'MD',x:82,y:48},{pos:'MC',x:60,y:50},{pos:'MC',x:40,y:50},{pos:'MI',x:18,y:48},{pos:'SD',x:50,y:30},{pos:'DC',x:50,y:10}],
-  '4-1-4-1': [{pos:'POR',x:50,y:92},{pos:'LD',x:82,y:72},{pos:'DFC',x:64,y:78},{pos:'DFC',x:36,y:78},{pos:'LI',x:18,y:72},{pos:'MCD',x:50,y:62},{pos:'MD',x:82,y:44},{pos:'MC',x:60,y:46},{pos:'MC',x:40,y:46},{pos:'MI',x:18,y:44},{pos:'DC',x:50,y:10}],
-  '4-2-2-2': [{pos:'POR',x:50,y:92},{pos:'LD',x:82,y:72},{pos:'DFC',x:64,y:78},{pos:'DFC',x:36,y:78},{pos:'LI',x:18,y:72},{pos:'MCD',x:62,y:60},{pos:'MCD',x:38,y:60},{pos:'MCO',x:78,y:34},{pos:'MCO',x:22,y:34},{pos:'DC',x:60,y:12},{pos:'DC',x:40,y:12}],
-  '4-2-4': [{pos:'POR',x:50,y:92},{pos:'LD',x:82,y:72},{pos:'DFC',x:64,y:78},{pos:'DFC',x:36,y:78},{pos:'LI',x:18,y:72},{pos:'MC',x:60,y:50},{pos:'MC',x:40,y:50},{pos:'ED',x:80,y:24},{pos:'EI',x:20,y:24},{pos:'DC',x:60,y:12},{pos:'DC',x:40,y:12}],
-  '5-3-2': [{pos:'POR',x:50,y:92},{pos:'CAD',x:84,y:68},{pos:'DFC',x:66,y:78},{pos:'DFC',x:50,y:80},{pos:'DFC',x:34,y:78},{pos:'CAI',x:16,y:68},{pos:'MC',x:50,y:50},{pos:'MC',x:70,y:46},{pos:'MC',x:30,y:46},{pos:'DC',x:60,y:12},{pos:'DC',x:40,y:12}],
-  '5-2-3': [{pos:'POR',x:50,y:92},{pos:'CAD',x:84,y:68},{pos:'DFC',x:66,y:78},{pos:'DFC',x:50,y:80},{pos:'DFC',x:34,y:78},{pos:'CAI',x:16,y:68},{pos:'MC',x:62,y:50},{pos:'MC',x:38,y:50},{pos:'ED',x:76,y:22},{pos:'EI',x:24,y:22},{pos:'DC',x:50,y:10}],
-  '5-4-1': [{pos:'POR',x:50,y:92},{pos:'CAD',x:84,y:68},{pos:'DFC',x:66,y:78},{pos:'DFC',x:50,y:80},{pos:'DFC',x:34,y:78},{pos:'CAI',x:16,y:68},{pos:'MD',x:78,y:48},{pos:'MC',x:60,y:50},{pos:'MC',x:40,y:50},{pos:'MI',x:22,y:48},{pos:'DC',x:50,y:10}],
-  '3-5-2': [{pos:'POR',x:50,y:92},{pos:'DFC',x:50,y:80},{pos:'DFC',x:72,y:78},{pos:'DFC',x:28,y:78},{pos:'MCD',x:50,y:64},{pos:'MC',x:66,y:48},{pos:'MC',x:34,y:48},{pos:'MD',x:84,y:40},{pos:'MI',x:16,y:40},{pos:'DC',x:60,y:12},{pos:'DC',x:40,y:12}],
-  '3-4-3': [{pos:'POR',x:50,y:92},{pos:'DFC',x:50,y:80},{pos:'DFC',x:72,y:78},{pos:'DFC',x:28,y:78},{pos:'MC',x:60,y:50},{pos:'MC',x:40,y:50},{pos:'MD',x:84,y:46},{pos:'MI',x:16,y:46},{pos:'ED',x:76,y:22},{pos:'EI',x:24,y:22},{pos:'DC',x:50,y:10}],
-  '3-4-1-2': [{pos:'POR',x:50,y:92},{pos:'DFC',x:50,y:80},{pos:'DFC',x:72,y:78},{pos:'DFC',x:28,y:78},{pos:'MC',x:60,y:52},{pos:'MC',x:40,y:52},{pos:'MD',x:84,y:46},{pos:'MI',x:16,y:46},{pos:'MCO',x:50,y:34},{pos:'DC',x:60,y:12},{pos:'DC',x:40,y:12}],
-  '3-4-2-1': [{pos:'POR',x:50,y:92},{pos:'DFC',x:50,y:80},{pos:'DFC',x:72,y:78},{pos:'DFC',x:28,y:78},{pos:'MC',x:60,y:52},{pos:'MC',x:40,y:52},{pos:'MD',x:84,y:46},{pos:'MI',x:16,y:46},{pos:'SD',x:66,y:28},{pos:'SD',x:34,y:28},{pos:'DC',x:50,y:10}],
-  '3-1-4-2': [{pos:'POR',x:50,y:92},{pos:'DFC',x:50,y:80},{pos:'DFC',x:72,y:78},{pos:'DFC',x:28,y:78},{pos:'MCD',x:50,y:64},{pos:'MC',x:64,y:46},{pos:'MC',x:36,y:46},{pos:'MD',x:84,y:40},{pos:'MI',x:16,y:40},{pos:'DC',x:60,y:12},{pos:'DC',x:40,y:12}],
+  '4-3-3': [{pos:'POR',x:50,y:88},{pos:'LD',x:82,y:68},{pos:'DFC',x:64,y:72},{pos:'DFC',x:36,y:72},{pos:'LI',x:18,y:68},{pos:'MC',x:50,y:52},{pos:'MC',x:24,y:46},{pos:'MC',x:76,y:46},{pos:'ED',x:78,y:22},{pos:'EI',x:22,y:22},{pos:'DC',x:50,y:14}],
+  '4-3-3 (MCO)': [{pos:'POR',x:50,y:88},{pos:'LD',x:82,y:68},{pos:'DFC',x:64,y:72},{pos:'DFC',x:36,y:72},{pos:'LI',x:18,y:68},{pos:'MC',x:34,y:54},{pos:'MC',x:66,y:54},{pos:'MCO',x:50,y:38},{pos:'ED',x:78,y:22},{pos:'EI',x:22,y:22},{pos:'DC',x:50,y:14}],
+  '4-3-3 (MCD)': [{pos:'POR',x:50,y:88},{pos:'LD',x:82,y:68},{pos:'DFC',x:64,y:72},{pos:'DFC',x:36,y:72},{pos:'LI',x:18,y:68},{pos:'MCD',x:50,y:58},{pos:'MC',x:30,y:46},{pos:'MC',x:70,y:46},{pos:'ED',x:78,y:22},{pos:'EI',x:22,y:22},{pos:'DC',x:50,y:14}],
+  '4-4-2': [{pos:'POR',x:50,y:88},{pos:'LD',x:82,y:68},{pos:'DFC',x:64,y:72},{pos:'DFC',x:36,y:72},{pos:'LI',x:18,y:68},{pos:'MD',x:82,y:45},{pos:'MC',x:60,y:48},{pos:'MC',x:40,y:48},{pos:'MI',x:18,y:45},{pos:'DC',x:60,y:18},{pos:'DC',x:40,y:18}],
+  '4-2-3-1': [{pos:'POR',x:50,y:88},{pos:'LD',x:82,y:68},{pos:'DFC',x:64,y:72},{pos:'DFC',x:36,y:72},{pos:'LI',x:18,y:68},{pos:'MCD',x:62,y:55},{pos:'MCD',x:38,y:55},{pos:'MD',x:78,y:38},{pos:'MCO',x:50,y:38},{pos:'MI',x:22,y:38},{pos:'DC',x:50,y:14}],
+  '4-1-2-1-2': [{pos:'POR',x:50,y:88},{pos:'LD',x:82,y:68},{pos:'DFC',x:64,y:72},{pos:'DFC',x:36,y:72},{pos:'LI',x:18,y:68},{pos:'MCD',x:50,y:58},{pos:'MD',x:78,y:45},{pos:'MI',x:22,y:45},{pos:'MCO',x:50,y:34},{pos:'DC',x:60,y:18},{pos:'DC',x:40,y:18}],
+  '4-3-1-2': [{pos:'POR',x:50,y:88},{pos:'LD',x:82,y:68},{pos:'DFC',x:64,y:72},{pos:'DFC',x:36,y:72},{pos:'LI',x:18,y:68},{pos:'MC',x:50,y:54},{pos:'MC',x:24,y:50},{pos:'MC',x:76,y:50},{pos:'MCO',x:50,y:35},{pos:'DC',x:60,y:18},{pos:'DC',x:40,y:18}],
+  '4-5-1': [{pos:'POR',x:50,y:88},{pos:'LD',x:82,y:68},{pos:'DFC',x:64,y:72},{pos:'DFC',x:36,y:72},{pos:'LI',x:18,y:68},{pos:'MC',x:50,y:54},{pos:'MD',x:80,y:42},{pos:'MI',x:20,y:42},{pos:'MCO',x:64,y:34},{pos:'MCO',x:36,y:34},{pos:'DC',x:50,y:14}],
+  '4-3-2-1': [{pos:'POR',x:50,y:88},{pos:'LD',x:82,y:68},{pos:'DFC',x:64,y:72},{pos:'DFC',x:36,y:72},{pos:'LI',x:18,y:68},{pos:'MC',x:50,y:54},{pos:'MC',x:26,y:48},{pos:'MC',x:74,y:48},{pos:'SD',x:64,y:30},{pos:'SD',x:36,y:30},{pos:'DC',x:50,y:14}],
+  '4-4-1-1': [{pos:'POR',x:50,y:88},{pos:'LD',x:82,y:68},{pos:'DFC',x:64,y:72},{pos:'DFC',x:36,y:72},{pos:'LI',x:18,y:68},{pos:'MD',x:82,y:45},{pos:'MC',x:60,y:48},{pos:'MC',x:40,y:48},{pos:'MI',x:18,y:45},{pos:'SD',x:50,y:30},{pos:'DC',x:50,y:14}],
+  '4-1-4-1': [{pos:'POR',x:50,y:88},{pos:'LD',x:82,y:68},{pos:'DFC',x:64,y:72},{pos:'DFC',x:36,y:72},{pos:'LI',x:18,y:68},{pos:'MCD',x:50,y:58},{pos:'MD',x:82,y:40},{pos:'MC',x:60,y:42},{pos:'MC',x:40,y:42},{pos:'MI',x:18,y:40},{pos:'DC',x:50,y:14}],
+  '4-2-2-2': [{pos:'POR',x:50,y:88},{pos:'LD',x:82,y:68},{pos:'DFC',x:64,y:72},{pos:'DFC',x:36,y:72},{pos:'LI',x:18,y:68},{pos:'MCD',x:62,y:55},{pos:'MCD',x:38,y:55},{pos:'MCO',x:78,y:38},{pos:'MCO',x:22,y:38},{pos:'DC',x:60,y:18},{pos:'DC',x:40,y:18}],
+  '4-2-4': [{pos:'POR',x:50,y:88},{pos:'LD',x:82,y:68},{pos:'DFC',x:64,y:72},{pos:'DFC',x:36,y:72},{pos:'LI',x:18,y:68},{pos:'MC',x:60,y:48},{pos:'MC',x:40,y:48},{pos:'ED',x:80,y:22},{pos:'EI',x:20,y:22},{pos:'DC',x:60,y:16},{pos:'DC',x:40,y:16}],
+  '5-3-2': [{pos:'POR',x:50,y:88},{pos:'CAD',x:84,y:64},{pos:'DFC',x:66,y:72},{pos:'DFC',x:50,y:74},{pos:'DFC',x:34,y:72},{pos:'CAI',x:16,y:64},{pos:'MC',x:50,y:48},{pos:'MC',x:70,y:46},{pos:'MC',x:30,y:46},{pos:'DC',x:60,y:18},{pos:'DC',x:40,y:18}],
+  '5-2-3': [{pos:'POR',x:50,y:88},{pos:'CAD',x:84,y:64},{pos:'DFC',x:66,y:72},{pos:'DFC',x:50,y:74},{pos:'DFC',x:34,y:72},{pos:'CAI',x:16,y:64},{pos:'MC',x:62,y:46},{pos:'MC',x:38,y:46},{pos:'ED',x:76,y:22},{pos:'EI',x:24,y:22},{pos:'DC',x:50,y:14}],
+  '5-4-1': [{pos:'POR',x:50,y:88},{pos:'CAD',x:84,y:64},{pos:'DFC',x:66,y:72},{pos:'DFC',x:50,y:74},{pos:'DFC',x:34,y:72},{pos:'CAI',x:16,y:64},{pos:'MD',x:78,y:44},{pos:'MC',x:60,y:48},{pos:'MC',x:40,y:48},{pos:'MI',x:22,y:44},{pos:'DC',x:50,y:16}],
+  '3-5-2': [{pos:'POR',x:50,y:88},{pos:'DFC',x:50,y:72},{pos:'DFC',x:72,y:70},{pos:'DFC',x:28,y:70},{pos:'MCD',x:50,y:54},{pos:'MC',x:66,y:46},{pos:'MC',x:34,y:46},{pos:'MD',x:84,y:38},{pos:'MI',x:16,y:38},{pos:'DC',x:60,y:18},{pos:'DC',x:40,y:18}],
+  '3-4-3': [{pos:'POR',x:50,y:88},{pos:'DFC',x:50,y:72},{pos:'DFC',x:72,y:70},{pos:'DFC',x:28,y:70},{pos:'MC',x:60,y:48},{pos:'MC',x:40,y:48},{pos:'MD',x:84,y:42},{pos:'MI',x:16,y:42},{pos:'ED',x:76,y:22},{pos:'EI',x:24,y:22},{pos:'DC',x:50,y:14}],
+  '3-4-1-2': [{pos:'POR',x:50,y:88},{pos:'DFC',x:50,y:72},{pos:'DFC',x:72,y:70},{pos:'DFC',x:28,y:70},{pos:'MC',x:60,y:50},{pos:'MC',x:40,y:50},{pos:'MD',x:84,y:44},{pos:'MI',x:16,y:44},{pos:'MCO',x:50,y:34},{pos:'DC',x:60,y:16},{pos:'DC',x:40,y:16}],
+  '3-4-2-1': [{pos:'POR',x:50,y:88},{pos:'DFC',x:50,y:72},{pos:'DFC',x:72,y:70},{pos:'DFC',x:28,y:70},{pos:'MC',x:60,y:50},{pos:'MC',x:40,y:50},{pos:'MD',x:84,y:44},{pos:'MI',x:16,y:44},{pos:'SD',x:66,y:30},{pos:'SD',x:34,y:30},{pos:'DC',x:50,y:14}],
+  '3-1-4-2': [{pos:'POR',x:50,y:88},{pos:'DFC',x:50,y:72},{pos:'DFC',x:72,y:70},{pos:'DFC',x:28,y:70},{pos:'MCD',x:50,y:58},{pos:'MC',x:64,y:44},{pos:'MC',x:36,y:44},{pos:'MD',x:84,y:38},{pos:'MI',x:16,y:38},{pos:'DC',x:60,y:18},{pos:'DC',x:40,y:18}],
 };
 
 const ALL_POSITIONS = ['POR', 'DFC', 'LD', 'LI', 'CAD', 'CAI', 'MCD', 'MC', 'MD', 'MI', 'MCO', 'ED', 'EI', 'SD', 'DC'];
@@ -130,18 +127,11 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [pickingSlot, setPickingSlot] = useState(null);
 
-  const [profileName, setProfileName] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [profileMessage, setProfileMessage] = useState({ type: '', text: '' });
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const fileInputRef = useRef(null);
-
   const isUncalledZone = (slot) => ['uncalled', 'forLoan', 'forSale'].includes(String(slot));
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (u) setProfileName(u.displayName || u.email.split('@')[0]);
       setLoading(false);
     });
     return () => unsubscribe();
@@ -207,9 +197,9 @@ export default function App() {
   }, [floatingDrag]);
 
   const getCardStyle = (rating, isTactics = false) => {
-    if (rating <= 64) return isTactics ? 'border-[#CD7F32] text-[#CD7F32]' : 'bg-[#CD7F32] text-black'; 
-    if (rating >= 65 && rating <= 74) return isTactics ? 'border-[#C0C0C0] text-[#C0C0C0]' : 'bg-[#C0C0C0] text-black'; 
-    return isTactics ? 'border-[#FFD700] text-[#FFD700]' : 'bg-[#FFD700] text-black'; 
+    if (rating <= 64) return isTactics ? 'border-[#CD7F32] text-[#CD7F32]' : 'bg-[#CD7F32] text-black'; // Bronce
+    if (rating >= 65 && rating <= 74) return isTactics ? 'border-[#C0C0C0] text-[#C0C0C0]' : 'bg-[#C0C0C0] text-black'; // Plata
+    return isTactics ? 'border-[#FFD700] text-[#FFD700]' : 'bg-[#FFD700] text-black'; // Oro
   };
 
   const handleGoogleLogin = async () => {
@@ -237,74 +227,6 @@ export default function App() {
   };
 
   const handleLogout = () => signOut(auth);
-
-  const handleUpdateName = async () => {
-    try {
-      await updateProfile(auth.currentUser, { displayName: profileName });
-      setUser({ ...auth.currentUser, displayName: profileName });
-      setProfileMessage({ type: 'success', text: 'Nombre actualizado con éxito.' });
-      setTimeout(() => setProfileMessage({ type: '', text: '' }), 3000);
-    } catch (error) {
-      setProfileMessage({ type: 'error', text: 'Error al actualizar el nombre.' });
-    }
-  };
-
-  const handleUpdatePassword = async () => {
-    if (newPassword.length < 6) return setProfileMessage({ type: 'error', text: 'La contraseña debe tener al menos 6 caracteres.' });
-    try {
-      await updatePassword(auth.currentUser, newPassword);
-      setProfileMessage({ type: 'success', text: 'Contraseña actualizada.' });
-      setNewPassword('');
-      setTimeout(() => setProfileMessage({ type: '', text: '' }), 3000);
-    } catch (error) {
-      if (error.code === 'auth/requires-recent-login') {
-        setProfileMessage({ type: 'error', text: 'Por seguridad, debes cerrar sesión y volver a entrar.' });
-      } else {
-        setProfileMessage({ type: 'error', text: 'Error al actualizar contraseña.' });
-      }
-    }
-  };
-
-  const handlePhotoUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setIsUploadingPhoto(true);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = async () => {
-        const canvas = document.createElement('canvas');
-        const MAX_SIZE = 150; 
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
-        } else {
-          if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-
-        try {
-          await updateProfile(auth.currentUser, { photoURL: dataUrl });
-          setUser({ ...auth.currentUser, photoURL: dataUrl });
-          setProfileMessage({ type: 'success', text: 'Foto actualizada correctamente.' });
-        } catch (error) {
-          setProfileMessage({ type: 'error', text: 'Error al actualizar la foto.' });
-        } finally {
-          setIsUploadingPhoto(false);
-        }
-      };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
-  };
 
   const formatValueInput = (val) => {
     if (!val) return '';
@@ -720,18 +642,11 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#0a0a0b] text-white">
       <header className="p-4 border-b border-white/10 flex justify-between items-center sticky top-0 bg-[#111114]/90 backdrop-blur-md z-40">
-        <div className="flex items-center gap-2 md:gap-3">
-          {user.photoURL ? (
-            <img src={user.photoURL} alt="Avatar" className="w-6 h-6 md:w-8 md:h-8 rounded-full border border-white/20 object-cover" />
-          ) : (
-            <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
-              <User size={14} className="text-white/50" />
-            </div>
-          )}
-          <h1 className="text-green-500 font-black italic tracking-tighter text-lg md:text-xl">soccerclothes.</h1>
-          <div className="hidden sm:block h-4 w-px bg-white/10 mx-1"></div>
+        <div className="flex items-center gap-3">
+          <h1 className="text-green-500 font-black italic tracking-tighter text-xl">soccerclothes.</h1>
+          <div className="hidden sm:block h-4 w-px bg-white/10"></div>
           <span className="hidden sm:block text-[10px] text-white/40 font-black uppercase tracking-widest">
-            {user.displayName || user.email.split('@')[0]}
+            Míster: {user.displayName || user.email.split('@')[0]}
           </span>
         </div>
         <div className="flex items-center gap-3">
@@ -742,10 +657,8 @@ export default function App() {
             <button onClick={() => setActiveTab('tactics')} className={`px-4 py-2 flex items-center gap-2 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === 'tactics' ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'text-white/40'}`}>
               <LayoutDashboard size={16} /> <span className="hidden sm:inline">Táctica</span>
             </button>
-            <button onClick={() => setActiveTab('profile')} className={`px-4 py-2 flex items-center gap-2 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === 'profile' ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'text-white/40'}`}>
-              <User size={16} /> <span className="hidden sm:inline">Perfil</span>
-            </button>
           </div>
+          <button onClick={handleLogout} className="p-2.5 bg-white/5 hover:bg-red-500/10 text-white/40 hover:text-red-500 rounded-xl transition-all" title="Cerrar sesión"><LogOut size={16} /></button>
         </div>
       </header>
 
@@ -776,6 +689,7 @@ export default function App() {
               <Plus size={16} /> Fichar Nuevo Jugador
             </button>
 
+            {}
             {showForm && (
               <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200" onClick={() => setShowForm(false)}>
                 <form onSubmit={addOrUpdatePlayer} className="bg-[#111114] border border-white/10 p-5 rounded-[32px] w-full max-w-sm shadow-2xl relative my-8" onClick={e => e.stopPropagation()}>
@@ -870,6 +784,7 @@ export default function App() {
               </div>
             )}
 
+            {}
             <div className="bg-[#111114] rounded-[24px] md:rounded-[32px] border border-white/10 overflow-hidden divide-y divide-white/5 shadow-2xl">
               {filteredPlayers.length === 0 && (
                 <div className="p-16 text-center text-white/10 font-black italic uppercase tracking-widest text-xs">
@@ -936,6 +851,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         {activeTab === 'tactics' && (
           <div className="space-y-4 animate-in fade-in">
             <div className="flex flex-col gap-3 md:gap-4 mb-2">
@@ -994,7 +910,7 @@ export default function App() {
                 const isOccupiedSlotHighlight = draggedPlayer && player && draggedPlayer !== player.id && canDragPlayerPlayHere;
 
                 return (
-                  <div key={idx} style={{ left: `${slot.x}%`, top: `${slot.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-10 group hover:z-50">
+                  <div key={idx} style={{ left: `${slot.x}%`, top: `${slot.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-10">
                     <button 
                       data-slot={idx}
                       onClick={() => {
@@ -1036,9 +952,10 @@ export default function App() {
               })}
             </div>
 
+            {}
             <div className="mt-4 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 italic mb-3">Banquillo</h3>
-              <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((idx) => {
                   const playerId = bench[idx];
                   const player = playerId ? players.find((p) => p.id === playerId) : null;
@@ -1059,19 +976,21 @@ export default function App() {
                       onTouchStart={(e) => handleTouchStartLocal(e, player?.id, `bench-${idx}`)}
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, `bench-${idx}`)}
-                      className={`w-full aspect-square flex flex-col items-center justify-center p-2 rounded-xl border cursor-pointer active:cursor-grabbing touch-none transition-all duration-200 ${player ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-black/40 border-white/10 border-dashed hover:border-white/40'} ${draggedPlayer && !player ? 'border-green-400 bg-green-500/10' : ''}`}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl border cursor-pointer active:cursor-grabbing touch-none transition-all duration-200 min-h-[48px] ${player ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-black/40 border-white/10 border-dashed hover:border-white/40 justify-center'} ${draggedPlayer && !player ? 'border-green-400 bg-green-500/10' : ''}`}
                     >
                       {player ? (
                         <>
-                          <div className={`w-8 h-8 md:w-10 md:h-10 rounded-lg flex flex-shrink-0 items-center justify-center font-black text-[10px] md:text-xs mb-1 ${getCardStyle(player.rating)}`}>
+                          <div className={`w-8 h-8 rounded-lg flex flex-shrink-0 items-center justify-center font-black text-[10px] ${getCardStyle(player.rating)}`}>
                             {player.rating}
                           </div>
-                          <span className="text-[9px] md:text-[10px] font-bold uppercase italic text-white/90 w-full text-center truncate pointer-events-none">{player.name.split(' ').pop()}</span>
-                          <span className="text-[7px] text-green-400 font-black uppercase tracking-widest w-full text-center truncate pointer-events-none">{player.positions?.join('·')}</span>
+                          <div className="flex flex-col flex-1 min-w-0 pointer-events-none text-left">
+                            <span className="text-[10px] md:text-xs font-bold uppercase italic text-white/90 truncate">{player.name}</span>
+                            <span className="text-[8px] text-green-400 font-black uppercase tracking-widest truncate">{player.positions?.join(' · ')}</span>
+                          </div>
                         </>
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center opacity-30 pointer-events-none">
-                          <span className="text-xl font-black">+</span>
+                        <div className="flex items-center justify-center opacity-30 pointer-events-none">
+                          <span className="text-xl font-black leading-none">+</span>
                         </div>
                       )}
                     </div>
@@ -1080,6 +999,7 @@ export default function App() {
               </div>
             </div>
 
+            {}
             <div className="flex flex-col md:flex-row gap-4 mt-4">
               {/* No Convocados */}
               <div 
@@ -1089,7 +1009,7 @@ export default function App() {
                 className={`flex-1 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl min-h-[120px] transition-colors ${draggedPlayer ? 'border-dashed border-white/20 bg-white/[0.02]' : ''}`}
               >
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 italic mb-3">No Convocados</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
                   {players.filter(p => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && (p.transferStatus || 'Activo') === 'Activo').sort((a, b) => b.rating - a.rating).map(p => (
                     <div 
                       key={p.id} 
@@ -1119,7 +1039,7 @@ export default function App() {
                 className={`flex-1 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-yellow-500/10 shadow-2xl min-h-[120px] transition-colors ${draggedPlayer ? 'border-dashed border-yellow-500/30 bg-yellow-500/[0.02]' : ''}`}
               >
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-yellow-500/60 italic mb-3">Para Ceder</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
                   {players.filter(p => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && p.transferStatus === 'Cedible').sort((a, b) => b.rating - a.rating).map(p => (
                     <div 
                       key={p.id} 
@@ -1149,7 +1069,7 @@ export default function App() {
                 className={`flex-1 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-red-500/10 shadow-2xl min-h-[120px] transition-colors ${draggedPlayer ? 'border-dashed border-red-500/30 bg-red-500/[0.02]' : ''}`}
               >
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-red-500/60 italic mb-3">Para Vender</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
                   {players.filter(p => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && p.transferStatus === 'Transferible').sort((a, b) => b.rating - a.rating).map(p => (
                     <div 
                       key={p.id} 
@@ -1173,73 +1093,7 @@ export default function App() {
             </div>
           </div>
         )}
-
-        {activeTab === 'profile' && (
-          <div className="space-y-4 animate-in fade-in">
-            <div className="bg-[#111114] p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl space-y-6">
-              <h2 className="text-xl font-black uppercase italic tracking-tighter text-white text-center md:text-left">Perfil de Usuario</h2>
-
-              <div className="flex flex-col items-center gap-4 mb-6">
-                 <div className="relative group cursor-pointer" onClick={() => !isUploadingPhoto && fileInputRef.current?.click()}>
-                    {user.photoURL ? (
-                      <img src={user.photoURL} alt="Avatar" className="w-24 h-24 rounded-full border-4 border-white/10 object-cover shadow-2xl" />
-                    ) : (
-                      <div className="w-24 h-24 rounded-full bg-white/5 border-4 border-white/10 flex items-center justify-center shadow-2xl">
-                        <User size={40} className="text-white/30" />
-                      </div>
-                    )}
-                    <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handlePhotoUpload} />
-                    <button 
-                      disabled={isUploadingPhoto}
-                      className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      {isUploadingPhoto ? <RefreshCcw size={24} className="animate-spin text-white" /> : <Camera size={24} className="text-white" />}
-                    </button>
-                 </div>
-                 <p className="text-[10px] text-white/30 font-black uppercase tracking-widest bg-white/5 px-3 py-1 rounded-lg border border-white/5">{user.email}</p>
-              </div>
-
-              {profileMessage.text && (
-                <div className={`p-4 rounded-2xl text-xs font-bold flex items-center gap-2 ${profileMessage.type === 'error' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-green-500/10 text-green-500 border border-green-500/20'}`}>
-                  {profileMessage.type === 'error' ? <ShieldAlert size={16} /> : <ShieldCheck size={16} />}
-                  {profileMessage.text}
-                </div>
-              )}
-
-              <div className="space-y-6">
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1">Nombre de Entrenador</label>
-                    <div className="flex gap-2">
-                      <input type="text" value={profileName} onChange={e => setProfileName(e.target.value)} className="flex-1 bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold text-white text-sm" />
-                      <button onClick={handleUpdateName} className="bg-green-500 text-black px-4 md:px-6 rounded-xl font-black uppercase text-[10px] md:text-xs hover:bg-green-400 transition-all shadow-lg shadow-green-500/20 active:scale-95">Guardar</button>
-                    </div>
-                 </div>
-
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1">Cambiar Contraseña</label>
-                    <div className="flex gap-2">
-                      <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" className="flex-1 bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold text-white text-sm placeholder:text-white/20" />
-                      <button onClick={handleUpdatePassword} className="bg-white/10 text-white px-4 md:px-6 rounded-xl font-black uppercase text-[10px] md:text-xs hover:bg-white/20 transition-all border border-white/10 active:scale-95">Actualizar</button>
-                    </div>
-                 </div>
-              </div>
-
-              <div className="pt-6 mt-6 border-t border-white/5">
-                 <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl bg-red-500/10 text-red-500 font-black uppercase text-xs hover:bg-red-500/20 transition-all border border-red-500/20 shadow-lg shadow-red-500/10">
-                   <LogOut size={16} /> Cerrar Sesión
-                 </button>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
-
-      {/* Footer PedroOrange */}
-      <footer className="w-full text-center pb-8 pt-4">
-        <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-white/30">
-          Creada y desarrollada por <span className="text-green-500/70">PedroOrange</span>
-        </p>
-      </footer>
 
       {/* Floating Drag Avatar for Touch Devices */}
       {floatingDrag && (
@@ -1252,6 +1106,7 @@ export default function App() {
         </div>
       )}
 
+      {}
       {pickingSlot !== null && (
         <div className="fixed inset-0 bg-black/95 z-[100] p-4 md:p-6 flex flex-col animate-in fade-in duration-200" onClick={() => setPickingSlot(null)}>
           <div className="bg-[#111114] border border-white/10 p-6 rounded-[32px] w-full max-w-sm mx-auto shadow-2xl relative my-auto flex flex-col" onClick={e => e.stopPropagation()}>
@@ -1307,6 +1162,7 @@ export default function App() {
         </div>
       )}
 
+      {}
       {selectedPlayerInfo && (
         <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setSelectedPlayerInfo(null)}>
           <div className="bg-[#111114] border border-white/10 p-6 rounded-[32px] w-full max-w-sm shadow-2xl relative" onClick={e => e.stopPropagation()}>
@@ -1372,6 +1228,7 @@ export default function App() {
         </div>
       )}
 
+      {}
       {playerToDelete && (
         <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#111114] border border-white/10 p-6 rounded-[32px] w-full max-w-sm text-center shadow-2xl">
@@ -1386,6 +1243,7 @@ export default function App() {
         </div>
       )}
 
+      {}
       {formationToDelete && (
         <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#111114] border border-white/10 p-6 rounded-[32px] w-full max-w-sm text-center shadow-2xl">
