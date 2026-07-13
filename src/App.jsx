@@ -18,7 +18,9 @@ import {
   Shirt,
   ArrowRightLeft,
   Tag,
-  Camera
+  Camera,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { initializeApp, getApps } from 'firebase/app';
 import {
@@ -130,6 +132,9 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [formError, setFormError] = useState(''); // Estado para errores de validación de jugador
   const [pickingSlot, setPickingSlot] = useState(null);
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const [profileName, setProfileName] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -702,6 +707,19 @@ export default function App() {
   if (filterType === 'age-desc') filteredPlayers.sort((a, b) => b.age - a.age);
   if (filterType === 'age-asc') filteredPlayers.sort((a, b) => a.age - b.age);
   if (filterType === 'name-asc') filteredPlayers.sort((a, b) => a.name.localeCompare(b.name));
+  if (filterType === 'status-role') {
+    filteredPlayers.sort((a, b) => {
+      const getRoleScore = (id) => {
+        if (Object.values(lineup).includes(id)) return 1;
+        if (Object.values(bench).includes(id)) return 2;
+        return 3;
+      };
+      const scoreA = getRoleScore(a.id);
+      const scoreB = getRoleScore(b.id);
+      if (scoreA !== scoreB) return scoreA - scoreB;
+      return b.rating - a.rating;
+    });
+  }
 
   if (loading) {
     return (
@@ -749,7 +767,10 @@ export default function App() {
               <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1 mb-1 block">Contraseña</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-                <input type="password" placeholder="Mínimo 6 caracteres" className="w-full bg-white/5 p-4 pl-12 rounded-2xl border border-white/10 outline-none focus:border-green-500 text-base md:text-sm font-bold text-white placeholder:text-white/20" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <input type={showPassword ? "text" : "password"} placeholder="Mínimo 6 caracteres" className="w-full bg-white/5 p-4 pl-12 pr-12 rounded-2xl border border-white/10 outline-none focus:border-green-500 text-base md:text-sm font-bold text-white placeholder:text-white/20" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
             <button type="submit" className="w-full bg-green-500 text-black font-black py-4 rounded-2xl text-xs uppercase tracking-wider shadow-lg shadow-green-500/20 active:scale-95 transition-all mt-6">
@@ -832,6 +853,7 @@ export default function App() {
                 <option value="age-desc">Mayor Edad</option>
                 <option value="age-asc">Menor Edad</option>
                 <option value="name-asc">Nombre (A-Z)</option>
+                <option value="status-role">Rol en Equipo</option>
               </select>
             </div>
 
@@ -1301,7 +1323,12 @@ export default function App() {
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1">Cambiar Contraseña</label>
                     <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                      <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" className="w-full sm:flex-1 bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold text-white placeholder:text-white/20 text-base md:text-sm" />
+                      <div className="relative w-full sm:flex-1">
+                        <input type={showNewPassword ? "text" : "password"} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" className="w-full bg-white/5 p-4 pr-12 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold text-white placeholder:text-white/20 text-base md:text-sm" />
+                        <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
+                          {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                       <button onClick={handleUpdatePassword} className="w-full sm:w-auto bg-white/10 text-white p-4 rounded-xl font-black uppercase text-[10px] md:text-xs hover:bg-white/20 transition-all border border-white/10 active:scale-95">Actualizar</button>
                     </div>
                  </div>
