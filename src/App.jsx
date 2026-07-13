@@ -57,7 +57,7 @@ const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 const appId = 'fifa-manager-main';
 
-// Formaciones Re-calibradas para evitar solapamientos (Más espacio vertical)
+// Formaciones Re-calibradas para evitar solapamientos
 const FORMATIONS = {
   '4-3-3': [{pos:'POR',x:50,y:92},{pos:'LD',x:84,y:72},{pos:'DFC',x:66,y:76},{pos:'DFC',x:34,y:76},{pos:'LI',x:16,y:72},{pos:'MC',x:50,y:58},{pos:'MC',x:26,y:46},{pos:'MC',x:74,y:46},{pos:'ED',x:80,y:24},{pos:'EI',x:20,y:24},{pos:'DC',x:50,y:12}],
   '4-3-3 (MCO)': [{pos:'POR',x:50,y:92},{pos:'LD',x:84,y:72},{pos:'DFC',x:66,y:76},{pos:'DFC',x:34,y:76},{pos:'LI',x:16,y:72},{pos:'MC',x:34,y:56},{pos:'MC',x:66,y:56},{pos:'MCO',x:50,y:36},{pos:'ED',x:80,y:24},{pos:'EI',x:20,y:24},{pos:'DC',x:50,y:12}],
@@ -128,6 +128,7 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [authError, setAuthError] = useState('');
+  const [formError, setFormError] = useState(''); // Estado para errores de validación de jugador
   const [pickingSlot, setPickingSlot] = useState(null);
 
   const [profileName, setProfileName] = useState('');
@@ -137,6 +138,18 @@ export default function App() {
   const fileInputRef = useRef(null);
 
   const isUncalledZone = (slot) => ['uncalled', 'forLoan', 'forSale'].includes(String(slot));
+
+  useEffect(() => {
+    const modalsActive = showForm || pickingSlot !== null || selectedPlayerInfo || playerToDelete || formationToDelete;
+    if (modalsActive) {
+      document.body.classList.add('overflow-hidden');
+    } else {
+      document.body.classList.remove('overflow-hidden');
+    }
+    return () => {
+      document.body.classList.remove('overflow-hidden');
+    };
+  }, [showForm, pickingSlot, selectedPlayerInfo, playerToDelete, formationToDelete]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -350,33 +363,77 @@ export default function App() {
 
   const addOrUpdatePlayer = async (e) => {
     e.preventDefault();
-    if (!user || !newPlayer.name || newPlayer.positions.length === 0) return;
+    if (!user) return;
 
+    // Validaciones estrictas de campos obligatorios
+    if (!newPlayer.name || !newPlayer.name.trim()) {
+      setFormError('El nombre del jugador es obligatorio.');
+      return;
+    }
+    if (!newPlayer.positions || newPlayer.positions.length === 0) {
+      setFormError('Debes seleccionar al menos una posición.');
+      return;
+    }
+    if (!newPlayer.rating) {
+      setFormError('La valoración media es obligatoria.');
+      return;
+    }
+    const rVal = parseInt(newPlayer.rating);
+    if (isNaN(rVal) || rVal < 1 || rVal > 99) {
+      setFormError('La valoración media debe ser un número entre 1 y 99.');
+      return;
+    }
+    if (!newPlayer.age) {
+      setFormError('La edad del jugador es obligatoria.');
+      return;
+    }
+    const aVal = parseInt(newPlayer.age);
+    if (isNaN(aVal) || aVal < 15 || aVal > 50) {
+      setFormError('La edad debe ser coherente (entre 15 y 50 años).');
+      return;
+    }
+    if (!newPlayer.marketValue || parseValue(newPlayer.marketValue) <= 0) {
+      setFormError('El valor de mercado es obligatorio y debe ser mayor que 0.');
+      return;
+    }
+    if (newPlayer.type === 'Comprado' && (!newPlayer.value || parseValue(newPlayer.value) <= 0)) {
+      setFormError('El precio de compra es obligatorio para jugadores comprados.');
+      return;
+    }
+    if (newPlayer.type === 'Cedido' && (!newPlayer.originClub || !newPlayer.originClub.trim())) {
+      setFormError('El club de origen es obligatorio para jugadores cedidos.');
+      return;
+    }
+
+    // Si supera las validaciones, procedemos a guardar
+    setFormError('');
     try {
       const id = editingId || crypto.randomUUID();
       const playerRef = doc(db, 'artifacts', appId, 'users', user.uid, 'players', id);
       await setDoc(playerRef, {
-        name: newPlayer.name,
-        rating: parseInt(newPlayer.rating) || 0,
+        name: newPlayer.name.trim(),
+        rating: rVal,
         positions: newPlayer.positions,
-        age: parseInt(newPlayer.age) || 0,
+        age: aVal,
         preferredFoot: newPlayer.preferredFoot || 'Diestro',
         marketValue: parseValue(newPlayer.marketValue),
         type: newPlayer.type,
         value: newPlayer.type === 'Comprado' ? parseValue(newPlayer.value) : 0,
         loanDuration: newPlayer.type === 'Cedido' ? newPlayer.loanDuration : null,
-        originClub: newPlayer.type === 'Cedido' ? newPlayer.originClub : null
+        originClub: newPlayer.type === 'Cedido' ? newPlayer.originClub.trim() : null
       }, { merge: true });
+      
       setShowForm(false);
       setNewPlayer({ name: '', rating: '', positions: [], age: '', preferredFoot: 'Diestro', marketValue: '', type: 'Comprado', value: '', loanDuration: '1 Temporada', originClub: '' });
       setEditingId(null);
     } catch (err) {
-      setAuthError('Error al guardar jugador.');
+      setFormError('Error de base de datos al guardar jugador.');
     }
   };
 
   const editPlayer = (p) => {
     setEditingId(p.id);
+    setFormError('');
     setNewPlayer({
       name: p.name,
       rating: p.rating || '',
@@ -677,7 +734,7 @@ export default function App() {
                 <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1 mb-1 block">Tu Nombre de Míster</label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-                  <input type="text" placeholder="Ej: Míster Guardiola" className="w-full bg-white/5 p-4 pl-12 rounded-2xl border border-white/10 outline-none focus:border-green-500 text-sm font-bold text-white placeholder:text-white/20" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+                  <input type="text" placeholder="Ej: Míster Guardiola" className="w-full bg-white/5 p-4 pl-12 rounded-2xl border border-white/10 outline-none focus:border-green-500 text-base md:text-sm font-bold text-white placeholder:text-white/20" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
                 </div>
               </div>
             )}
@@ -685,14 +742,14 @@ export default function App() {
               <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1 mb-1 block">Correo Electrónico</label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-                <input type="email" placeholder="ejemplo@correo.com" className="w-full bg-white/5 p-4 pl-12 rounded-2xl border border-white/10 outline-none focus:border-green-500 text-sm font-bold text-white placeholder:text-white/20" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <input type="email" placeholder="ejemplo@correo.com" className="w-full bg-white/5 p-4 pl-12 rounded-2xl border border-white/10 outline-none focus:border-green-500 text-base md:text-sm font-bold text-white placeholder:text-white/20" value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
             </div>
             <div>
               <label className="text-[10px] font-black text-white/40 uppercase tracking-wider ml-1 mb-1 block">Contraseña</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-                <input type="password" placeholder="Mínimo 6 caracteres" className="w-full bg-white/5 p-4 pl-12 rounded-2xl border border-white/10 outline-none focus:border-green-500 text-sm font-bold text-white placeholder:text-white/20" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <input type="password" placeholder="Mínimo 6 caracteres" className="w-full bg-white/5 p-4 pl-12 rounded-2xl border border-white/10 outline-none focus:border-green-500 text-base md:text-sm font-bold text-white placeholder:text-white/20" value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
             </div>
             <button type="submit" className="w-full bg-green-500 text-black font-black py-4 rounded-2xl text-xs uppercase tracking-wider shadow-lg shadow-green-500/20 active:scale-95 transition-all mt-6">
@@ -756,9 +813,9 @@ export default function App() {
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
-                <input type="text" placeholder="Buscar jugador..." className="w-full bg-[#111114] p-4 pl-12 rounded-2xl border border-white/5 outline-none focus:border-green-500 text-xs font-bold text-white placeholder:text-white/20" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                <input type="text" placeholder="Buscar jugador..." className="w-full bg-[#111114] p-4 pl-12 rounded-2xl border border-white/5 outline-none focus:border-green-500 text-base md:text-xs font-bold text-white placeholder:text-white/20" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
               </div>
-              <select className="bg-[#111114] border border-white/5 rounded-2xl px-3 outline-none text-xs font-bold text-white/60 focus:border-green-500" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+              <select className="bg-[#111114] border border-white/5 rounded-2xl px-3 outline-none text-base md:text-xs font-bold text-white/60 focus:border-green-500" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
                 <option value="rating-desc">Mayor Media</option>
                 <option value="rating-asc">Menor Media</option>
                 <option value="value-desc">Mayor Valor</option>
@@ -773,26 +830,34 @@ export default function App() {
               <span className="text-[10px] text-white/30 font-black uppercase tracking-widest">{players.length} Jugadores en Plantilla</span>
             </div>
 
-            <button onClick={() => { setEditingId(null); setNewPlayer({ name: '', rating: '', positions: [], age: '', preferredFoot: 'Diestro', marketValue: '', type: 'Comprado', value: '', loanDuration: '1 Temporada', originClub: '' }); setShowForm(true); }} className="w-full bg-green-500 text-black p-4 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 hover:bg-green-400">
+            <button onClick={() => { setEditingId(null); setFormError(''); setNewPlayer({ name: '', rating: '', positions: [], age: '', preferredFoot: 'Diestro', marketValue: '', type: 'Comprado', value: '', loanDuration: '1 Temporada', originClub: '' }); setShowForm(true); }} className="w-full bg-green-500 text-black p-4 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 hover:bg-green-400">
               <Plus size={16} /> Fichar Nuevo Jugador
             </button>
 
+            {}
             {showForm && (
-              <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200" onClick={() => setShowForm(false)}>
-                <form onSubmit={addOrUpdatePlayer} className="bg-[#111114] border border-white/10 p-5 rounded-[32px] w-full max-w-sm shadow-2xl relative my-8" onClick={e => e.stopPropagation()}>
+              <div className="fixed inset-0 bg-black/95 z-[150] flex items-start justify-center p-4 overflow-y-auto animate-in fade-in duration-200" onClick={() => setShowForm(false)}>
+                <form onSubmit={addOrUpdatePlayer} className="bg-[#111114] border border-white/10 p-5 rounded-[32px] w-full max-w-sm shadow-2xl relative my-6 sm:my-auto" onClick={e => e.stopPropagation()}>
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="font-black italic text-green-500 text-sm uppercase">{editingId ? 'Editar Jugador' : 'Nuevo Jugador'}</h3>
                     <button type="button" onClick={() => setShowForm(false)} className="p-1 text-white/20 hover:text-white transition-colors"><X size={18} /></button>
                   </div>
 
-                  <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1 no-scrollbar">
+                  {formError && (
+                    <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl mb-4 flex gap-2 text-red-400 text-[10px] font-black items-center animate-pulse">
+                      <ShieldAlert size={14} className="shrink-0" />
+                      <span>{formError}</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-4 max-h-[58vh] overflow-y-auto pr-1 no-scrollbar">
                     <div className="space-y-1">
-                      <label className="text-[9px] font-black text-white/30 ml-1">Nombre</label>
-                      <input type="text" placeholder="Ej: Erling Haaland" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold placeholder:text-white/20 text-white" value={newPlayer.name} onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })} />
+                      <label className="text-[9px] font-black text-white/30 ml-1">Nombre <span className="text-red-500">*</span></label>
+                      <input type="text" placeholder="Ej: Erling Haaland" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 focus:border-green-500 font-bold placeholder:text-[#3f3f46] text-white text-base md:text-sm" value={newPlayer.name} onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })} />
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[9px] font-black text-white/30 ml-1">Posiciones (Toca para seleccionar varias)</label>
+                      <label className="text-[9px] font-black text-white/30 ml-1">Posiciones (Selección múltiple) <span className="text-red-500">*</span></label>
                       <div className="flex flex-wrap gap-1.5 p-2 bg-white/5 rounded-xl border border-white/5">
                         {ALL_POSITIONS.map(pos => (
                           <button 
@@ -808,16 +873,16 @@ export default function App() {
 
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1">
-                        <label className="text-[9px] font-black text-white/30 ml-1">Media</label>
-                        <input type="number" placeholder="90" min="1" max="99" className="w-full h-14 bg-white/5 rounded-xl outline-none border border-white/5 text-center font-black text-xl text-white placeholder:text-white/20" value={newPlayer.rating} onChange={(e) => setNewPlayer({ ...newPlayer, rating: e.target.value })} />
+                        <label className="text-[9px] font-black text-white/30 ml-1">Media <span className="text-red-500">*</span></label>
+                        <input type="number" placeholder="90" min="1" max="99" className="w-full h-14 bg-white/5 rounded-xl outline-none border border-white/5 text-center font-black text-base md:text-xl text-white placeholder:text-[#3f3f46]" value={newPlayer.rating} onChange={(e) => setNewPlayer({ ...newPlayer, rating: e.target.value })} />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[9px] font-black text-white/30 ml-1">Edad</label>
-                        <input type="number" placeholder="23" min="15" max="50" className="w-full h-14 bg-white/5 rounded-xl outline-none border border-white/5 text-center font-black text-xl text-white placeholder:text-white/20" value={newPlayer.age} onChange={(e) => setNewPlayer({ ...newPlayer, age: e.target.value })} />
+                        <label className="text-[9px] font-black text-white/30 ml-1">Edad <span className="text-red-500">*</span></label>
+                        <input type="number" placeholder="23" min="15" max="50" className="w-full h-14 bg-white/5 rounded-xl outline-none border border-white/5 text-center font-black text-base md:text-xl text-white placeholder:text-[#3f3f46]" value={newPlayer.age} onChange={(e) => setNewPlayer({ ...newPlayer, age: e.target.value })} />
                       </div>
                       <div className="space-y-1">
                         <label className="text-[9px] font-black text-white/30 ml-1">Pierna</label>
-                        <select className="w-full h-14 bg-[#111114] rounded-xl outline-none border border-white/5 text-center font-black text-[10px] text-white" value={newPlayer.preferredFoot} onChange={(e) => setNewPlayer({ ...newPlayer, preferredFoot: e.target.value })}>
+                        <select className="w-full h-14 bg-[#111114] rounded-xl outline-none border border-white/5 text-center font-black text-base md:text-[10px] text-white" value={newPlayer.preferredFoot} onChange={(e) => setNewPlayer({ ...newPlayer, preferredFoot: e.target.value })}>
                           <option value="Diestro">Diestro</option>
                           <option value="Zurdo">Zurdo</option>
                           <option value="Ambas">Ambas</option>
@@ -826,8 +891,8 @@ export default function App() {
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[9px] font-black text-white/30 ml-1">Valor de Mercado (€)</label>
-                      <input type="text" placeholder="Ej: 80.000.000" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 text-center font-black text-lg text-white placeholder:text-white/20" value={newPlayer.marketValue} onChange={(e) => setNewPlayer({ ...newPlayer, marketValue: formatValueInput(e.target.value) })} />
+                      <label className="text-[9px] font-black text-white/30 ml-1">Valor de Mercado (€) <span className="text-red-500">*</span></label>
+                      <input type="text" placeholder="Ej: 80.000.000" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 text-center font-black text-base md:text-lg text-white placeholder:text-[#3f3f46]" value={newPlayer.marketValue} onChange={(e) => setNewPlayer({ ...newPlayer, marketValue: formatValueInput(e.target.value) })} />
                     </div>
 
                     <div className="space-y-1">
@@ -841,8 +906,8 @@ export default function App() {
 
                     {newPlayer.type === 'Comprado' && (
                       <div className="space-y-1">
-                        <label className="text-[9px] font-black text-white/30 ml-1">Precio de Compra (€)</label>
-                        <input type="text" placeholder="Ej: 50.000.000" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 text-center font-black text-lg text-white placeholder:text-white/20" value={newPlayer.value} onChange={(e) => setNewPlayer({ ...newPlayer, value: formatValueInput(e.target.value) })} />
+                        <label className="text-[9px] font-black text-white/30 ml-1">Precio de Compra (€) <span className="text-red-500">*</span></label>
+                        <input type="text" placeholder="Ej: 50.000.000" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 text-center font-black text-base md:text-lg text-white placeholder:text-[#3f3f46]" value={newPlayer.value} onChange={(e) => setNewPlayer({ ...newPlayer, value: formatValueInput(e.target.value) })} />
                       </div>
                     )}
 
@@ -850,21 +915,21 @@ export default function App() {
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <label className="text-[9px] font-black text-white/30 ml-1">Duración Cesión</label>
-                          <select className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 font-black text-xs text-white" value={newPlayer.loanDuration} onChange={(e) => setNewPlayer({ ...newPlayer, loanDuration: e.target.value })}>
+                          <select className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 font-black text-base md:text-xs text-white" value={newPlayer.loanDuration} onChange={(e) => setNewPlayer({ ...newPlayer, loanDuration: e.target.value })}>
                             <option value="6 Meses">6 Meses</option>
                             <option value="1 Temporada">1 Temporada</option>
                             <option value="2 Temporadas">2 Temporadas</option>
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black text-white/30 ml-1">Club de Origen</label>
-                          <input type="text" placeholder="Ej: Real Madrid" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 font-bold text-sm text-white placeholder:text-white/20" value={newPlayer.originClub} onChange={(e) => setNewPlayer({ ...newPlayer, originClub: e.target.value })} />
+                          <label className="text-[9px] font-black text-white/30 ml-1">Club de Origen <span className="text-red-500">*</span></label>
+                          <input type="text" placeholder="Ej: Real Madrid" className="w-full bg-white/5 p-4 rounded-xl outline-none border border-white/5 font-bold text-base md:text-sm text-white placeholder:text-[#3f3f46]" value={newPlayer.originClub} onChange={(e) => setNewPlayer({ ...newPlayer, originClub: e.target.value })} />
                         </div>
                       </div>
                     )}
                   </div>
 
-                  <button type="submit" className="w-full bg-green-500 text-black p-4 rounded-xl font-black uppercase text-xs tracking-wider mt-4 hover:bg-green-400">
+                  <button type="submit" className="w-full bg-green-500 text-black p-4 rounded-xl font-black uppercase text-xs tracking-wider mt-4 hover:bg-green-400 active:scale-95 transition-all">
                     {editingId ? 'Guardar Cambios' : 'Añadir a la Plantilla'}
                   </button>
                 </form>
@@ -942,7 +1007,7 @@ export default function App() {
             <div className="flex flex-col gap-3 md:gap-4 mb-2">
               <div className="flex justify-between items-center bg-[#111114] p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-white/5 shadow-2xl">
                 <span className="text-[10px] font-black uppercase tracking-widest text-white/40 italic">Esquema Táctico</span>
-                <select value={formation} onChange={(e) => handleFormationChange(e.target.value)} className="bg-transparent text-green-500 font-black uppercase outline-none cursor-pointer text-xs">
+                <select value={formation} onChange={(e) => handleFormationChange(e.target.value)} className="bg-transparent text-green-500 font-black uppercase outline-none cursor-pointer text-base md:text-xs">
                   {Object.keys(FORMATIONS).map((f) => <option key={f} value={f} className="bg-[#111114]">{f}</option>)}
                 </select>
               </div>
@@ -951,7 +1016,7 @@ export default function App() {
                 <input
                   type="text"
                   placeholder="Nombre de la táctica..."
-                  className="flex-1 bg-white/5 p-3 rounded-xl outline-none border border-white/5 focus:border-green-500 text-xs font-bold text-white placeholder:text-white/20"
+                  className="flex-1 bg-white/5 p-3 rounded-xl outline-none border border-white/5 focus:border-green-500 text-base md:text-xs font-bold text-white placeholder:text-white/20"
                   value={newFormationName}
                   onChange={(e) => setNewFormationName(e.target.value)}
                 />
@@ -979,6 +1044,7 @@ export default function App() {
               )}
             </div>
 
+            {}
             <div className="bg-[#1a2e1d] border-4 border-green-500/20 rounded-[32px] md:rounded-[48px] p-6 relative min-h-[550px] md:min-h-[620px] overflow-hidden shadow-inner">
               <div className="absolute inset-4 border-2 border-white/30 rounded-[28px] pointer-events-none"></div>
               <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-white/30 pointer-events-none"></div>
@@ -1037,6 +1103,7 @@ export default function App() {
               })}
             </div>
 
+            {}
             <div className="mt-4 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 italic mb-3">Banquillo</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -1083,6 +1150,7 @@ export default function App() {
               </div>
             </div>
 
+            {}
             <div className="flex flex-col md:flex-row gap-4 mt-4">
               {/* No Convocados */}
               <div 
@@ -1092,7 +1160,7 @@ export default function App() {
                 className={`flex-1 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl min-h-[120px] transition-colors ${draggedPlayer ? 'border-dashed border-white/20 bg-white/[0.02]' : ''}`}
               >
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 italic mb-3">No Convocados</h3>
-                <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {players.filter(p => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && (p.transferStatus || 'Activo') === 'Activo').sort((a, b) => b.rating - a.rating).map(p => (
                     <div 
                       key={p.id} 
@@ -1105,7 +1173,7 @@ export default function App() {
                       <div className={`w-8 h-8 rounded-lg flex flex-shrink-0 items-center justify-center font-black text-[10px] ${getCardStyle(p.rating)}`}>
                         {p.rating}
                       </div>
-                      <div className="flex flex-col flex-1 min-w-0">
+                      <div className="flex flex-col flex-1 min-w-0 text-left">
                         <span className="text-[10px] md:text-xs font-bold uppercase italic text-white/90 truncate">{p.name}</span>
                         <span className="text-[8px] text-green-400 font-black uppercase tracking-widest truncate">{p.positions?.join(' · ')}</span>
                       </div>
@@ -1122,7 +1190,7 @@ export default function App() {
                 className={`flex-1 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-yellow-500/10 shadow-2xl min-h-[120px] transition-colors ${draggedPlayer ? 'border-dashed border-yellow-500/30 bg-yellow-500/[0.02]' : ''}`}
               >
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-yellow-500/60 italic mb-3">Para Ceder</h3>
-                <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {players.filter(p => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && p.transferStatus === 'Cedible').sort((a, b) => b.rating - a.rating).map(p => (
                     <div 
                       key={p.id} 
@@ -1135,7 +1203,7 @@ export default function App() {
                       <div className={`w-8 h-8 rounded-lg flex flex-shrink-0 items-center justify-center font-black text-[10px] ${getCardStyle(p.rating)}`}>
                         {p.rating}
                       </div>
-                      <div className="flex flex-col flex-1 min-w-0">
+                      <div className="flex flex-col flex-1 min-w-0 text-left">
                         <span className="text-[10px] md:text-xs font-bold uppercase italic text-white/90 truncate">{p.name}</span>
                         <span className="text-[8px] text-yellow-500 font-black uppercase tracking-widest truncate">{p.positions?.join(' · ')}</span>
                       </div>
@@ -1152,7 +1220,7 @@ export default function App() {
                 className={`flex-1 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-red-500/10 shadow-2xl min-h-[120px] transition-colors ${draggedPlayer ? 'border-dashed border-red-500/30 bg-red-500/[0.02]' : ''}`}
               >
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-red-500/60 italic mb-3">Para Vender</h3>
-                <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {players.filter(p => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id) && p.transferStatus === 'Transferible').sort((a, b) => b.rating - a.rating).map(p => (
                     <div 
                       key={p.id} 
@@ -1165,7 +1233,7 @@ export default function App() {
                       <div className={`w-8 h-8 rounded-lg flex flex-shrink-0 items-center justify-center font-black text-[10px] ${getCardStyle(p.rating)}`}>
                         {p.rating}
                       </div>
-                      <div className="flex flex-col flex-1 min-w-0">
+                      <div className="flex flex-col flex-1 min-w-0 text-left">
                         <span className="text-[10px] md:text-xs font-bold uppercase italic text-white/90 truncate">{p.name}</span>
                         <span className="text-[8px] text-red-400 font-black uppercase tracking-widest truncate">{p.positions?.join(' · ')}</span>
                       </div>
@@ -1177,6 +1245,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         {activeTab === 'profile' && (
           <div className="space-y-4 animate-in fade-in">
             <div className="bg-[#111114] p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl space-y-6">
@@ -1253,6 +1322,7 @@ export default function App() {
         </div>
       )}
 
+      {}
       {pickingSlot !== null && (
         <div className="fixed inset-0 bg-black/95 z-[100] p-4 md:p-6 flex flex-col animate-in fade-in duration-200" onClick={() => setPickingSlot(null)}>
           <div className="bg-[#111114] border border-white/10 p-6 rounded-[32px] w-full max-w-sm mx-auto shadow-2xl relative my-auto flex flex-col" onClick={e => e.stopPropagation()}>
@@ -1308,6 +1378,7 @@ export default function App() {
         </div>
       )}
 
+      {}
       {selectedPlayerInfo && (
         <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setSelectedPlayerInfo(null)}>
           <div className="bg-[#111114] border border-white/10 p-6 rounded-[32px] w-full max-w-sm shadow-2xl relative" onClick={e => e.stopPropagation()}>
@@ -1373,6 +1444,7 @@ export default function App() {
         </div>
       )}
 
+      {}
       {playerToDelete && (
         <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#111114] border border-white/10 p-6 rounded-[32px] w-full max-w-sm text-center shadow-2xl">
