@@ -20,7 +20,8 @@ import {
   Tag,
   Camera,
   Eye,
-  EyeOff
+  EyeOff,
+  Sparkles
 } from 'lucide-react';
 import { initializeApp, getApps } from 'firebase/app';
 import {
@@ -59,7 +60,6 @@ const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 const appId = 'fifa-manager-main';
 
-// Formaciones Re-calibradas para evitar solapamientos
 const FORMATIONS = {
   '4-3-3': [{pos:'POR',x:50,y:92},{pos:'LD',x:84,y:72},{pos:'DFC',x:66,y:76},{pos:'DFC',x:34,y:76},{pos:'LI',x:16,y:72},{pos:'MC',x:50,y:58},{pos:'MC',x:26,y:46},{pos:'MC',x:74,y:46},{pos:'ED',x:80,y:24},{pos:'EI',x:20,y:24},{pos:'DC',x:50,y:12}],
   '4-3-3 (MCO)': [{pos:'POR',x:50,y:92},{pos:'LD',x:84,y:72},{pos:'DFC',x:66,y:76},{pos:'DFC',x:34,y:76},{pos:'LI',x:16,y:72},{pos:'MC',x:34,y:56},{pos:'MC',x:66,y:56},{pos:'MCO',x:50,y:36},{pos:'ED',x:80,y:24},{pos:'EI',x:20,y:24},{pos:'DC',x:50,y:12}],
@@ -130,7 +130,7 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [authError, setAuthError] = useState('');
-  const [formError, setFormError] = useState(''); // Estado para errores de validación de jugador
+  const [formError, setFormError] = useState(''); 
   const [pickingSlot, setPickingSlot] = useState(null);
 
   const [showPassword, setShowPassword] = useState(false);
@@ -142,7 +142,7 @@ export default function App() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const fileInputRef = useRef(null);
 
-  const isUncalledZone = (slot) => ['uncalled', 'forLoan', 'forSale'].includes(String(slot));
+  const isUncalledZone = (slot) => ['uncalled', 'forLoan', 'forSale', 'loanedOut'].includes(String(slot));
 
   useEffect(() => {
     const modalsActive = showForm || pickingSlot !== null || selectedPlayerInfo || playerToDelete || formationToDelete;
@@ -204,7 +204,7 @@ export default function App() {
       
       if (slotElement) {
         let targetSlot = slotElement.getAttribute('data-slot');
-        if (targetSlot !== 'uncalled' && targetSlot !== 'forLoan' && targetSlot !== 'forSale' && !targetSlot.startsWith('bench-')) {
+        if (targetSlot !== 'uncalled' && targetSlot !== 'forLoan' && targetSlot !== 'forSale' && targetSlot !== 'loanedOut' && !targetSlot.startsWith('bench-')) {
           targetSlot = parseInt(targetSlot, 10);
         }
         executeMove(floatingDrag.player.id, floatingDrag.sourceSlot, targetSlot);
@@ -370,7 +370,6 @@ export default function App() {
     e.preventDefault();
     if (!user) return;
 
-    // Validaciones estrictas de campos obligatorios
     if (!newPlayer.name || !newPlayer.name.trim()) {
       setFormError('El nombre del jugador es obligatorio.');
       return;
@@ -410,7 +409,6 @@ export default function App() {
       return;
     }
 
-    // Si supera las validaciones, procedemos a guardar
     setFormError('');
     try {
       const id = editingId || crypto.randomUUID();
@@ -479,13 +477,6 @@ export default function App() {
 
   const clearTactics = () => {
     if (!user) return;
-    
-    const playersToUpdate = [...Object.values(lineup), ...Object.values(bench)];
-    playersToUpdate.forEach(playerId => {
-      const playerRef = doc(db, 'artifacts', appId, 'users', user.uid, 'players', playerId);
-      updateDoc(playerRef, { transferStatus: 'Activo' });
-    });
-
     setLineup({});
     setBench({});
     saveTactics(formation, {}, {});
@@ -546,6 +537,29 @@ export default function App() {
     setPlayerToDelete(null);
   };
 
+  const removePlayerFromTactic = (playerId) => {
+    const newLineup = { ...lineup };
+    const newBench = { ...bench };
+    let changed = false;
+    Object.keys(newLineup).forEach((slot) => {
+      if (newLineup[slot] === playerId) {
+        delete newLineup[slot];
+        changed = true;
+      }
+    });
+    Object.keys(newBench).forEach((slot) => {
+      if (newBench[slot] === playerId) {
+        delete newBench[slot];
+        changed = true;
+      }
+    });
+    if (changed) {
+      setLineup(newLineup);
+      setBench(newBench);
+      saveTactics(formation, newLineup, newBench);
+    }
+  };
+
   const executeMove = (playerId, source, target) => {
     if (!playerId || String(source) === String(target)) return;
 
@@ -582,6 +596,7 @@ export default function App() {
       let newStatus = 'Activo';
       if (target === 'forLoan') newStatus = 'Cedible';
       if (target === 'forSale') newStatus = 'Transferible';
+      if (target === 'loanedOut') newStatus = 'CedidoFuera';
       
       const playerRef = doc(db, 'artifacts', appId, 'users', user.uid, 'players', playerId);
       updateDoc(playerRef, { transferStatus: newStatus });
@@ -721,6 +736,10 @@ export default function App() {
     });
   }
 
+  // Separamos jugadores activos de los que han sido cedidos fuera
+  const activePlayers = filteredPlayers.filter(p => p.transferStatus !== 'CedidoFuera');
+  const loanedOutPlayers = filteredPlayers.filter(p => p.transferStatus === 'CedidoFuera');
+
   if (loading) {
     return (
       <div className="h-screen bg-[#0a0a0b] flex flex-col items-center justify-center overscroll-none" style={{ overscrollBehaviorY: 'none' }}>
@@ -838,6 +857,7 @@ export default function App() {
       </header>
 
       <main className="p-2 md:p-4 max-w-lg mx-auto flex flex-col flex-1 w-full pb-8">
+        {}
         {activeTab === 'squad' && (
           <div className="space-y-4 animate-in fade-in">
             <div className="flex gap-2">
@@ -858,14 +878,13 @@ export default function App() {
             </div>
 
             <div className="flex justify-between items-center px-2">
-              <span className="text-[10px] text-white/30 font-black uppercase tracking-widest">{players.length} Jugadores en Plantilla</span>
+              <span className="text-[10px] text-white/30 font-black uppercase tracking-widest">{activePlayers.length} Jugadores Activos</span>
             </div>
 
             <button onClick={() => { setEditingId(null); setFormError(''); setNewPlayer({ name: '', rating: '', positions: [], age: '', preferredFoot: 'Diestro', marketValue: '', type: 'Comprado', value: '', loanDuration: '1 Temporada', originClub: '' }); setShowForm(true); }} className="w-full bg-green-500 text-black p-4 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 hover:bg-green-400">
               <Plus size={16} /> Fichar Nuevo Jugador
             </button>
 
-            {}
             {showForm && (
               <div className="fixed inset-0 bg-black/95 z-[150] flex items-start justify-center p-4 overflow-y-auto animate-in fade-in duration-200" onClick={() => setShowForm(false)}>
                 <form onSubmit={addOrUpdatePlayer} className="bg-[#111114] border border-white/10 p-5 rounded-[32px] w-full max-w-sm shadow-2xl relative my-6 sm:my-auto" onClick={e => e.stopPropagation()}>
@@ -967,13 +986,14 @@ export default function App() {
               </div>
             )}
 
+            {/* Listado Principal de la Plantilla */}
             <div className="bg-[#111114] rounded-[24px] md:rounded-[32px] border border-white/10 overflow-hidden divide-y divide-white/5 shadow-2xl">
-              {filteredPlayers.length === 0 && (
+              {activePlayers.length === 0 && (
                 <div className="p-16 text-center text-white/10 font-black italic uppercase tracking-widest text-xs">
-                  {searchQuery ? 'No se encontraron jugadores' : 'Plantilla Vacía'}
+                  {searchQuery ? 'No se encontraron jugadores activos' : 'Sin jugadores activos en plantilla'}
                 </div>
               )}
-              {filteredPlayers.map((p) => (
+              {activePlayers.map((p) => (
                 <div key={p.id} className="p-3 md:p-4 flex items-center justify-between group hover:bg-white/[0.01] transition-all gap-4">
                   <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
                     <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}>
@@ -1030,9 +1050,50 @@ export default function App() {
                 </div>
               ))}
             </div>
+
+            {/* Apartado Especial: Jugadores Cedidos a otros Clubes (Bajas Temporales) */}
+            {loanedOutPlayers.length > 0 && (
+              <div className="mt-8 pt-6 border-t border-white/10 space-y-3 opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300">
+                <div className="px-2 flex items-center gap-2 text-zinc-400">
+                  <ArrowRightLeft size={14} />
+                  <h3 className="text-xs font-black uppercase tracking-widest italic">Jugadores Cedidos a otros Clubes</h3>
+                </div>
+                <div className="bg-[#111114] rounded-[24px] md:rounded-[32px] border border-white/10 overflow-hidden divide-y divide-white/5 shadow-2xl">
+                  {loanedOutPlayers.map((p) => (
+                    <div key={p.id} className="p-3 md:p-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+                        <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}>
+                          <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span>
+                          <span className="text-lg md:text-xl">{p.rating}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-zinc-400">
+                            {p.name}
+                          </div>
+                          <div className="text-[8px] md:text-[9px] text-zinc-500 font-black uppercase tracking-widest">
+                            {p.positions?.join(' · ')}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                            <span className="text-[8px] md:text-[9px] text-zinc-600 font-black bg-white/5 px-2 py-0.5 rounded">Cedido</span>
+                            {p.loanDuration && (
+                              <span className="text-[8px] md:text-[9px] text-zinc-500 font-black bg-white/5 px-2 py-0.5 rounded">{formatLoanDuration(p.loanDuration)}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => { setSelectedPlayerInfo(p); setInfoSlot('uncalled'); }} className="p-1.5 md:p-2 text-zinc-500 hover:text-white transition-colors bg-white/5 rounded-xl"><Edit2 size={14} /></button>
+                        <button onClick={() => setPlayerToDelete(p.id)} className="p-1.5 md:p-2 text-zinc-500 hover:text-red-500 transition-colors bg-white/5 rounded-xl"><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
+        {}
         {activeTab === 'tactics' && (
           <div className="space-y-4 animate-in fade-in">
             <div className="flex flex-col gap-3 md:gap-4 mb-2">
@@ -1055,7 +1116,7 @@ export default function App() {
                   <button onClick={saveCurrentFormation} className="flex-1 sm:flex-none bg-green-500 text-black px-4 py-3 rounded-xl font-black uppercase text-[10px] shadow-lg shadow-green-500/20 active:scale-95 transition-all">
                     Guardar
                   </button>
-                  <button onClick={clearTactics} className="flex-1 sm:flex-none bg-red-500/10 text-red-500 px-4 py-3 rounded-xl font-black uppercase text-[10px] hover:bg-red-500/20 transition-all border border-red-500/20 flex items-center justify-center gap-2" title="Mandar todos a no convocados">
+                  <button onClick={clearTactics} className="flex-1 sm:flex-none bg-red-500/10 text-red-500 px-4 py-3 rounded-xl font-black uppercase text-[10px] hover:bg-red-500/20 transition-all border border-red-500/20 flex items-center justify-center gap-2" title="Vaciar alineaciones">
                     <Trash2 size={16} /> <span className="hidden md:inline">Vaciar Todo</span>
                   </button>
                 </div>
@@ -1077,7 +1138,7 @@ export default function App() {
               )}
             </div>
 
-            {}
+            {/* Campo Táctico */}
             <div className="bg-[#1a2e1d] border-4 border-green-500/20 rounded-[32px] md:rounded-[48px] p-6 relative min-h-[550px] md:min-h-[620px] overflow-hidden shadow-inner">
               <div className="absolute inset-4 border-2 border-white/30 rounded-[28px] pointer-events-none"></div>
               <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-white/30 pointer-events-none"></div>
@@ -1136,8 +1197,8 @@ export default function App() {
               })}
             </div>
 
-            {}
-            <div className="mt-4 bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl">
+            {/* Banquillo */}
+            <div className="bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40 italic mb-3">Banquillo</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((idx) => {
@@ -1183,7 +1244,7 @@ export default function App() {
               </div>
             </div>
 
-            {}
+            {/* Zonas de Plantilla Secundarias */}
             <div className="flex flex-col md:flex-row gap-4 mt-4">
               {/* No Convocados */}
               <div 
@@ -1275,10 +1336,39 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            {/* Apartado Especial: Cedidos Fuera de mi Plantilla */}
+            <div 
+              data-slot="loanedOut"
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, 'loanedOut')}
+              className={`bg-[#111114] p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-zinc-500/10 shadow-2xl min-h-[120px] transition-all opacity-50 grayscale hover:opacity-100 hover:grayscale-0 ${draggedPlayer ? 'border-dashed border-zinc-500/30 bg-zinc-500/[0.02]' : ''}`}
+            >
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-500/70 italic mb-3">Cedidos Fuera (Baja Temporal)</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {players.filter(p => p.transferStatus === 'CedidoFuera').sort((a, b) => b.rating - a.rating).map(p => (
+                  <div 
+                    key={p.id} 
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, p.id, 'loanedOut')}
+                    onTouchStart={(e) => handleTouchStartLocal(e, p.id, 'loanedOut')}
+                    onClick={() => { setSelectedPlayerInfo(p); setInfoSlot('loanedOut'); }}
+                    className="flex items-center gap-3 bg-white/5 px-3 py-2 rounded-xl border border-white/5 cursor-pointer active:cursor-grabbing touch-none hover:bg-white/10"
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex flex-shrink-0 items-center justify-center font-black text-[10px] ${getCardStyle(p.rating)}`}>
+                      {p.rating}
+                    </div>
+                    <div className="flex flex-col flex-1 min-w-0 text-left">
+                      <span className="text-[10px] md:text-xs font-bold uppercase italic text-white/90 truncate">{p.name}</span>
+                      <span className="text-[8px] text-zinc-500 font-black uppercase tracking-widest truncate">{p.positions?.join(' · ')}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
-        {}
         {activeTab === 'profile' && (
           <div className="space-y-4 animate-in fade-in">
             <div className="bg-[#111114] p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl space-y-6">
@@ -1384,7 +1474,8 @@ export default function App() {
                 const slotData = isBenchSlot ? null : FORMATIONS[formation][pickingSlot];
                 const canPlay = isBenchSlot || (p.positions && slotData && p.positions.includes(slotData.pos));
 
-                if (!canPlay) return null;
+                // No permitir elegir jugadores cedidos fuera de nuestro club
+                if (!canPlay || p.transferStatus === 'CedidoFuera') return null;
 
                 const isAlreadyIn11 = Object.values(lineup).includes(p.id);
                 const isAlreadyInBench = Object.values(bench).includes(p.id);
@@ -1416,7 +1507,6 @@ export default function App() {
         </div>
       )}
 
-      {}
       {selectedPlayerInfo && (
         <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setSelectedPlayerInfo(null)}>
           <div className="bg-[#111114] border border-white/10 p-6 rounded-[32px] w-full max-w-sm shadow-2xl relative" onClick={e => e.stopPropagation()}>
@@ -1456,12 +1546,60 @@ export default function App() {
                </div>
             </div>
 
-            <div className="flex flex-col gap-2 mt-6">
+            {/* Selector de Estado de Mercado y Situación */}
+            <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/5 space-y-2">
+              <span className="text-[9px] font-black uppercase tracking-widest text-white/40 block">Estado del Jugador</span>
+              <div className="grid grid-cols-2 gap-2">
+                <button 
+                  type="button"
+                  onClick={async () => {
+                     await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'players', selectedPlayerInfo.id), { transferStatus: 'Activo' });
+                     setSelectedPlayerInfo({...selectedPlayerInfo, transferStatus: 'Activo'});
+                  }}
+                  className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${selectedPlayerInfo.transferStatus === 'Activo' || !selectedPlayerInfo.transferStatus ? 'bg-green-500 text-black border-green-500' : 'bg-transparent border-white/10 text-white/60 hover:border-white/20'}`}
+                >
+                  Activo
+                </button>
+                <button 
+                  type="button"
+                  onClick={async () => {
+                     await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'players', selectedPlayerInfo.id), { transferStatus: 'Cedible' });
+                     setSelectedPlayerInfo({...selectedPlayerInfo, transferStatus: 'Cedible'});
+                  }}
+                  className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${selectedPlayerInfo.transferStatus === 'Cedible' ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-transparent border-white/10 text-white/60 hover:border-white/20'}`}
+                >
+                  Cedible
+                </button>
+                <button 
+                  type="button"
+                  onClick={async () => {
+                     await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'players', selectedPlayerInfo.id), { transferStatus: 'Transferible' });
+                     setSelectedPlayerInfo({...selectedPlayerInfo, transferStatus: 'Transferible'});
+                  }}
+                  className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${selectedPlayerInfo.transferStatus === 'Transferible' ? 'bg-red-500 text-black border-red-500' : 'bg-transparent border-white/10 text-white/60 hover:border-white/20'}`}
+                >
+                  Venta
+                </button>
+                <button 
+                  type="button"
+                  onClick={async () => {
+                     await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'players', selectedPlayerInfo.id), { transferStatus: 'CedidoFuera' });
+                     setSelectedPlayerInfo({...selectedPlayerInfo, transferStatus: 'CedidoFuera'});
+                     removePlayerFromTactic(selectedPlayerInfo.id);
+                  }}
+                  className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${selectedPlayerInfo.transferStatus === 'CedidoFuera' ? 'bg-zinc-600 text-white border-zinc-600' : 'bg-transparent border-white/10 text-white/60 hover:border-white/20'}`}
+                >
+                  Cedido Fuera
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 mt-4">
                <button onClick={() => { setActiveTab('squad'); setSelectedPlayerInfo(null); editPlayer(selectedPlayerInfo); }} className="w-full py-4 rounded-2xl bg-blue-500/10 text-blue-500 font-black uppercase text-[10px] hover:bg-blue-500/20 transition-all flex justify-center items-center gap-2 border border-blue-500/20 shadow-lg shadow-blue-500/10">
-                  <Edit2 size={14}/> Editar Jugador
+                  <Edit2 size={14}/> Editar Ficha
                </button>
 
-               {!isUncalledZone(infoSlot) && !String(infoSlot).startsWith('bench-') && [0,1,2,3,4,5,6,7,8].find(i => !bench[i]) !== undefined && (
+               {selectedPlayerInfo.transferStatus !== 'CedidoFuera' && !isUncalledZone(infoSlot) && !String(infoSlot).startsWith('bench-') && [0,1,2,3,4,5,6,7,8].find(i => !bench[i]) !== undefined && (
                   <button onClick={() => { const emptyIdx = [0,1,2,3,4,5,6,7,8].find(i => !bench[i]); assignPlayerToSlot(`bench-${emptyIdx}`, selectedPlayerInfo.id); setSelectedPlayerInfo(null); }} className="w-full py-4 rounded-2xl bg-yellow-500/10 text-yellow-500 font-black uppercase text-[10px] hover:bg-yellow-500/20 border border-yellow-500/20 transition-all flex justify-center items-center gap-2 shadow-lg shadow-yellow-500/10">
                      Mandar al Banquillo
                   </button>
@@ -1482,7 +1620,6 @@ export default function App() {
         </div>
       )}
 
-      {}
       {playerToDelete && (
         <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#111114] border border-white/10 p-6 rounded-[32px] w-full max-w-sm text-center shadow-2xl">
