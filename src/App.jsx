@@ -161,7 +161,7 @@ export default function App() {
 
     try {
       const apiKey = "AIzaSyCBHVoGwQduqSHJUERc7IT6XC4580TNaEk";
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
 
       const imageParts = await Promise.all(
         Array.from(files).map(async (file) => {
@@ -171,7 +171,7 @@ export default function App() {
               resolve({
                 inline_data: {
                   mime_type: file.type,
-                  data: reader.result.split(',')[1] // Solo el Base64
+                  data: reader.result.split(',')[1] 
                 }
               });
             };
@@ -180,7 +180,6 @@ export default function App() {
         })
       );
 
-      // Preparamos el paquete de datos para enviar a Google
       const payload = {
         contents: [{
           parts: [
@@ -190,7 +189,6 @@ export default function App() {
         }]
       };
 
-      // Hacemos la llamada directa
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
