@@ -162,6 +162,7 @@ export default function App() {
     return () => { window.removeEventListener('touchmove', handleGlobalTouchMove); window.removeEventListener('touchend', handleGlobalTouchEnd); };
   }, [floatingDrag]);
 
+  // Lógica principal automática de OCR para múltiples fotos
   const handleOCRUpload = async (e) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -216,10 +217,13 @@ export default function App() {
 
       setIsScanning(false);
       setOcrError('');
-      alert('¡Jugadores escaneados y añadidos a la plantilla correctamente!');
+      setShowForm(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      
     } catch (error) {
-      setOcrError('Error en la lectura: Verifica tu consola de Firebase o AppCheck.');
+      console.error("Error completo de IA:", error);
+      // ESTO AHORA IMPRIMIRÁ EL ERROR REAL DE FIREBASE EN PANTALLA
+      setOcrError('Fallo IA: ' + error.message);
       setIsScanning(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
