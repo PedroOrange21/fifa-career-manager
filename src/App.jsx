@@ -151,7 +151,7 @@ export default function App() {
     return () => { window.removeEventListener('touchmove', handleGlobalTouchMove); window.removeEventListener('touchend', handleGlobalTouchEnd); };
   }, [floatingDrag]);
 
-  // Lógica principal automática de OCR (Vía Google AI Studio Directo)
+  // Lógica de Escáner OCR 100% Gratuito y Local (Sin APIs, Sin Límites)
   const handleOCRUpload = async (e) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -160,54 +160,64 @@ export default function App() {
     setOcrError('');
 
     try {
-      const apiKey = "AIzaSyCBHVoGwQduqSHJUERc7IT6XC4580TNaEk";
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
-
-      const imageParts = await Promise.all(
-        Array.from(files).map(async (file) => {
-          return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              resolve({
-                inline_data: {
-                  mime_type: file.type,
-                  data: reader.result.split(',')[1] 
-                }
-              });
-            };
-            reader.readAsDataURL(file);
-          });
-        })
-      );
-
-      const payload = {
-        contents: [{
-          parts: [
-            { text: `Analiza estas imágenes del juego FIFA. Extrae los jugadores detectados. Devuelve ÚNICAMENTE un array JSON válido con esta estructura: [{"name": "Nombre", "rating": 90, "positions": ["POR"], "age": 25, "value": 50000000}]. No incluyas markdown ni texto adicional.` },
-            ...imageParts
-          ]
-        }]
-      };
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || "Error desconocido al conectar con Google AI.");
+      // 1. Cargar Tesseract.js dinámicamente de forma gratuita
+      if (!window.Tesseract) {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('No se pudo cargar la librería OCR'));
+          document.head.appendChild(script);
+        });
       }
 
-      const data = await response.json();
-      const text = data.candidates[0].content.parts[0].text;
-      
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) throw new Error('Formato de datos irreconocible.');
-      
-      const extractedPlayers = JSON.parse(jsonMatch[0]);
+      const Tesseract = window.Tesseract;
+      const extractedPlayers = [];
 
+      // 2. Procesar cada imagen subida localmente
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // Ejecutar reconocimiento óptico de caracteres
+        const { data: { text } } = await Tesseract.recognize(file, 'spa');
+
+        // 3. Lógica para "entender" el texto de la pantalla del FIFA
+        const lines = text.split('\n');
+        const positionsRegex = /\b(POR|DFC|LD|LI|CAD|CAI|MCD|MC|MD|MI|MCO|ED|EI|SD|DC)\b/g;
+
+        lines.forEach(line => {
+          const posMatch = line.match(positionsRegex);
+          if (posMatch) {
+            // Buscar números de 2 dígitos (Suelen ser la Media y la Edad)
+            const numbers = line.match(/\b\d{2}\b/g) || [];
+            let rating = numbers.length > 0 ? parseInt(numbers[0]) : 0;
+            let age = numbers.length > 1 ? parseInt(numbers[1]) : 0;
+            
+            // Limpiar el nombre quitando las posiciones, números y caracteres raros
+            let name = line.replace(positionsRegex, '')
+                           .replace(/\b\d+\b/g, '')
+                           .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '')
+                           .replace(/\s+/g, ' ')
+                           .trim();
+            
+            if (name.length >= 3) {
+              extractedPlayers.push({
+                name: name,
+                rating: rating,
+                positions: [...new Set(posMatch)], // Evitar posiciones duplicadas
+                age: age,
+                marketValue: 0
+              });
+            }
+          }
+        });
+      }
+
+      if (extractedPlayers.length === 0) {
+        throw new Error("No se detectó ningún jugador válido. Intenta que la foto esté más recta y sin brillos en la pantalla.");
+      }
+
+      // 4. Guardar automáticamente en tu Firebase
       for (const p of extractedPlayers) {
         const existingPlayer = players.find(player => player.name.toLowerCase() === p.name.toLowerCase());
         const id = existingPlayer ? existingPlayer.id : crypto.randomUUID();
@@ -215,11 +225,11 @@ export default function App() {
         const playerRef = doc(db, 'artifacts', appId, 'users', user.uid, 'players', id);
         await setDoc(playerRef, {
           name: p.name,
-          rating: parseInt(p.rating) || existingPlayer?.rating || 0,
+          rating: p.rating || existingPlayer?.rating || 0,
           positions: p.positions || existingPlayer?.positions || [],
-          age: parseInt(p.age) || existingPlayer?.age || 0,
+          age: p.age || existingPlayer?.age || 0,
           preferredFoot: existingPlayer?.preferredFoot || 'Diestro',
-          marketValue: p.value || existingPlayer?.marketValue || 0,
+          marketValue: existingPlayer?.marketValue || 0,
           type: existingPlayer?.type || 'Comprado',
           value: existingPlayer?.value || 0,
           loanDuration: existingPlayer?.loanDuration || null,
@@ -230,12 +240,11 @@ export default function App() {
 
       setIsScanning(false);
       setOcrError('');
-      alert('¡Jugadores escaneados y añadidos a la plantilla correctamente!');
+      alert(`¡Escaneo completado! Se guardaron/actualizaron ${extractedPlayers.length} jugadores en tu plantilla.`);
       if (fileInputRef.current) fileInputRef.current.value = '';
       
     } catch (error) {
-      console.error("Error completo de IA:", error);
-      setOcrError('Fallo IA: ' + error.message);
+      setOcrError('Fallo en el escáner: ' + error.message);
       setIsScanning(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
