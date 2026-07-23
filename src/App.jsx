@@ -172,7 +172,8 @@ export default function App() {
 
     try {
       const vertexAI = getVertexAI(app);
-      const model = getGenerativeModel(vertexAI, { model: "gemini-1.5-flash" });
+      // ACTUALIZADO: Usamos la versión nueva de Gemini porque la 1.5 ya no existe
+      const model = getGenerativeModel(vertexAI, { model: "gemini-2.0-flash" });
 
       const imageParts = await Promise.all(
         Array.from(files).map(async (file) => {
