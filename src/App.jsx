@@ -160,11 +160,9 @@ export default function App() {
     setOcrError('');
 
     try {
-      // API Key directa de Google AI Studio proporcionada por el usuario
       const apiKey = "AIzaSyCBHVoGwQduqSHJUERc7IT6XC4580TNaEk";
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
-      // Convertir las imágenes para que la API REST las entienda
       const imageParts = await Promise.all(
         Array.from(files).map(async (file) => {
           return new Promise((resolve) => {
