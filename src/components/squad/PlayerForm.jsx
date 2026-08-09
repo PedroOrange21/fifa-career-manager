@@ -19,9 +19,20 @@ const FOOT_OPTIONS = [
   { value: 'Ambas', label: 'Ambas', icon: (<span className="flex items-center -space-x-1"><Footprints size={13} className="scale-x-[-1]" /><Footprints size={13} /></span>) },
 ];
 
+// Campos de texto/número compactos, uniformes en toda la tarjeta: 16px (text-base) en
+// móvil para evitar el auto-zoom de Safari/Chrome, algo más compactos en escritorio.
+const FIELD_BASE = 'w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-black text-base md:text-sm text-fg placeholder:text-fg-faint';
+const FIELD_CLASS = `${FIELD_BASE} text-center`;
+const SELECT_CLASS = 'w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-center font-black text-base md:text-sm text-fg';
+
 // Evita el auto-zoom agresivo de iOS/Android: por debajo de 16px el navegador móvil
 // hace zoom al enfocar el campo. Al perder el foco, recuperamos la posición/escala original.
 const resetMobileViewport = () => window.scrollTo(0, 0);
+
+// Ningún campo de este asistente se envía con Enter: no hay <form>, así que Enter no
+// tendría efecto por defecto, pero lo bloqueamos explícitamente para que nunca dispare
+// un avance de paso ni ninguna acción inesperada mientras el usuario escribe.
+const blockEnterKey = (e) => { if (e.key === 'Enter') e.preventDefault(); };
 
 const splitName = (fullName) => {
   const parts = (fullName || '').trim().split(/\s+/).filter(Boolean);
@@ -64,6 +75,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
     return () => showChrome();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   const [form, setForm] = useState(() => toFormState(editingPlayer || prefill || null));
   const initialFormRef = useRef(form);
   const [step, setStep] = useState(1);
@@ -78,6 +90,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
+  // --- Selección de posiciones: cada botón corta la propagación por su cuenta, no
+  // dependen de ningún manejador en un contenedor padre para quedar aislados. ---
   const selectPrimary = (e, pos) => {
     e.stopPropagation();
     set({ primaryPosition: pos, secondaryPositions: pos === 'POR' ? [] : form.secondaryPositions.filter((p) => p !== 'POR' && p !== pos) });
@@ -88,9 +102,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
     set({ secondaryPositions: form.secondaryPositions.includes(pos) ? form.secondaryPositions.filter((p) => p !== pos) : [...form.secondaryPositions, pos] });
   };
 
-  // Formatea los campos monetarios (puntos de miles) sin que el cursor salte al final del
-  // texto al editar un dígito en medio del número, que es lo que hacía que campos como la
-  // Cláusula pareciesen "bloqueados" al escribir o corregir un valor ya introducido.
+  // Formatea los campos monetarios (puntos de miles) sin que el cursor salte al final
+  // del texto al editar un dígito en medio del número.
   const formatMoneyField = (field) => (e) => {
     const input = e.target;
     const raw = input.value;
@@ -137,6 +150,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
     return '';
   };
 
+  // --- Navegación: exclusivamente por los botones Anterior/Siguiente del pie. ---
   const goNext = () => {
     const err = validateStep(step);
     if (err) { setFormError(err); return; }
@@ -182,8 +196,13 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
     }
   };
 
+  // --- Cierre: única y exclusivamente disparado por el botón X. ---
   const isDirty = JSON.stringify(form) !== JSON.stringify(initialFormRef.current);
-  const requestClose = () => { if (isDirty) setShowDiscardConfirm(true); else onClose(); };
+  const handleCloseClick = (e) => {
+    e.stopPropagation();
+    if (isDirty) setShowDiscardConfirm(true);
+    else onClose();
+  };
 
   const fullNamePreview = `${form.firstName.trim()}${form.lastName.trim() ? ` ${form.lastName.trim()}` : ''}` || 'Nuevo Jugador';
 
@@ -193,170 +212,260 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
   return (
     <>
-    {/* Sin onClick en el fondo a propósito: la alerta de salida solo debe poder
-        activarse desde el botón X, nunca desde un toque accidental fuera de la tarjeta. */}
-    <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-surface border border-border rounded-[32px] w-full max-w-sm shadow-2xl relative my-auto max-h-[88vh] overflow-y-auto no-scrollbar overscroll-contain">
-        <div className="sticky top-0 z-40 bg-surface/95 backdrop-blur-sm flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
-          <h3 className="font-black italic text-green-500 text-sm uppercase">{editingPlayer ? 'Editar Jugador' : 'Fichar Jugador'}</h3>
-          <button type="button" onClick={(e) => { e.stopPropagation(); requestClose(); }} className="relative z-50 p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
-        </div>
-
-        <div className="px-5 pt-4">
-          <div className="mb-4">
-            <div className="flex items-center gap-1.5">
-              {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
-                <div key={n} className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${n <= step ? 'bg-green-500' : 'bg-well-strong'}`} />
-              ))}
-            </div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-fg-muted text-center mt-2">Paso {step} de {TOTAL_STEPS} · {STEP_TITLES[step - 1]}</p>
+      {/* Fondo sin onClick a propósito: la alerta de salida solo puede activarse
+          desde el botón X, nunca por un toque accidental fuera de la tarjeta. */}
+      <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div
+          className="bg-surface border border-border rounded-[32px] w-full max-w-sm shadow-2xl relative my-auto max-h-[88vh] overflow-y-auto no-scrollbar overscroll-contain"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={blockEnterKey}
+        >
+          <div className="sticky top-0 z-40 bg-surface/95 backdrop-blur-sm flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
+            <h3 className="font-black italic text-green-500 text-sm uppercase">{editingPlayer ? 'Editar Jugador' : 'Fichar Jugador'}</h3>
+            <button type="button" onClick={handleCloseClick} className="relative z-50 p-1 text-fg-faint hover:text-fg transition-colors">
+              <X size={18} />
+            </button>
           </div>
 
-          {formError && <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl mb-3 flex gap-2 text-red-400 text-[10px] font-black items-center animate-pulse"><ShieldAlert size={14} className="shrink-0" /><span>{formError}</span></div>}
+          <div className="px-5 pt-4">
+            <div className="mb-4">
+              <div className="flex items-center gap-1.5">
+                {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
+                  <div key={n} className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${n <= step ? 'bg-green-500' : 'bg-well-strong'}`} />
+                ))}
+              </div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-fg-muted text-center mt-2">Paso {step} de {TOTAL_STEPS} · {STEP_TITLES[step - 1]}</p>
+            </div>
 
-          <div key={step} className="space-y-4 pb-4 animate-in fade-in slide-in-from-right-4 duration-300">
-          {step === 1 && (
-            <>
-              <div className="flex flex-col items-center gap-2 mb-2">
-                <div className="relative group cursor-pointer" onClick={() => !isUploadingPhoto && fileInputRef.current?.click()}>
-                  {form.photo ? <img src={form.photo} alt="Foto" className="w-20 h-20 rounded-full border-2 border-border object-cover shadow-lg" /> : <div className="w-20 h-20 rounded-full bg-well border-2 border-dashed border-border flex flex-col items-center justify-center text-fg-muted hover:border-green-500 hover:text-green-500 transition-all"><User size={26} /></div>}
-                  <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handlePhotoChange} />
-                  <button type="button" disabled={isUploadingPhoto} className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">{isUploadingPhoto ? <RefreshCcw size={18} className="animate-spin text-white" /> : <Camera size={18} className="text-white" />}</button>
-                </div>
-                <span className="text-[9px] text-fg-faint font-black uppercase tracking-widest">Foto / Avatar (opcional)</span>
+            {formError && (
+              <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl mb-3 flex gap-2 text-red-400 text-[10px] font-black items-center animate-pulse">
+                <ShieldAlert size={14} className="shrink-0" /><span>{formError}</span>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Nombre *</label><input type="text" required autoComplete="off" placeholder="Erling" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={form.firstName} onChange={(e) => set({ firstName: e.target.value })} /></div>
-                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Apellido</label><input type="text" autoComplete="off" placeholder="Haaland" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={form.lastName} onChange={(e) => set({ lastName: e.target.value })} /></div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-black text-fg-muted ml-1">Nacionalidad</label>
-                <div className="relative"><Globe2 className="absolute left-4 top-1/2 -translate-y-1/2 text-fg-faint" size={16} /><input type="text" placeholder="Ej: Noruega" className="w-full bg-well p-4 pl-11 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={form.nationality} onChange={(e) => set({ nationality: e.target.value })} /></div>
-              </div>
-            </>
-          )}
+            )}
 
-          {step === 2 && (
-            <>
-              <div className="space-y-1 relative">
-                <label className="text-[9px] font-black text-fg-muted ml-1">Posición Principal *</label>
-                <div className="flex flex-wrap gap-1.5 p-2 bg-well rounded-xl border border-border-subtle">
-                  {ALL_POSITIONS.map((pos) => (<button key={pos} type="button" onClick={(e) => selectPrimary(e, pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${form.primaryPosition === pos ? 'bg-green-500 text-black shadow-lg shadow-green-500/30' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>))}
-                </div>
-              </div>
-              {form.primaryPosition && form.primaryPosition !== 'POR' && (
-                <div className="space-y-1 relative">
-                  <label className="text-[9px] font-black text-fg-muted ml-1">Posiciones Secundarias</label>
-                  <div className="flex flex-wrap gap-1.5 p-2 bg-well rounded-xl border border-border-subtle">
-                    {ALL_POSITIONS.filter((pos) => pos !== 'POR' && pos !== form.primaryPosition).map((pos) => (<button key={pos} type="button" onClick={(e) => toggleSecondary(e, pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${form.secondaryPositions.includes(pos) ? 'bg-green-500/80 text-black shadow-lg shadow-green-500/20' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>))}
+            {/* Solo se monta en el DOM el paso activo: nada oculto por CSS. */}
+            <div key={step} className="space-y-4 pb-4 animate-in fade-in slide-in-from-right-4 duration-300">
+              {step === 1 && (
+                <>
+                  <div className="flex flex-col items-center gap-2 mb-2">
+                    <div className="relative group cursor-pointer" onClick={(e) => { e.stopPropagation(); if (!isUploadingPhoto) fileInputRef.current?.click(); }}>
+                      {form.photo ? (
+                        <img src={form.photo} alt="Foto" className="w-20 h-20 rounded-full border-2 border-border object-cover shadow-lg" />
+                      ) : (
+                        <div className="w-20 h-20 rounded-full bg-well border-2 border-dashed border-border flex flex-col items-center justify-center text-fg-muted hover:border-green-500 hover:text-green-500 transition-all">
+                          <User size={26} />
+                        </div>
+                      )}
+                      <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handlePhotoChange} />
+                      <button type="button" disabled={isUploadingPhoto} className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        {isUploadingPhoto ? <RefreshCcw size={18} className="animate-spin text-white" /> : <Camera size={18} className="text-white" />}
+                      </button>
+                    </div>
+                    <span className="text-[9px] text-fg-faint font-black uppercase tracking-widest">Foto / Avatar (opcional)</span>
                   </div>
-                </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Nombre *</label>
+                      <input type="text" required autoComplete="off" placeholder="Erling" onKeyDown={blockEnterKey} className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={form.firstName} onChange={(e) => set({ firstName: e.target.value })} />
+                    </div>
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Apellido</label>
+                      <input type="text" autoComplete="off" placeholder="Haaland" onKeyDown={blockEnterKey} className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={form.lastName} onChange={(e) => set({ lastName: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="space-y-1 relative">
+                    <label className="text-[9px] font-black text-fg-muted ml-1">Nacionalidad</label>
+                    <div className="relative">
+                      <Globe2 className="absolute left-4 top-1/2 -translate-y-1/2 text-fg-faint pointer-events-none" size={16} />
+                      <input type="text" placeholder="Ej: Noruega" onKeyDown={blockEnterKey} className="w-full bg-well p-4 pl-11 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={form.nationality} onChange={(e) => set({ nationality: e.target.value })} />
+                    </div>
+                  </div>
+                </>
               )}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1 relative"><label className="text-[9px] font-black text-fg-muted ml-1">Media *</label><input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="90" min="1" max="99" onBlur={resetMobileViewport} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-base text-fg placeholder:text-fg-faint" value={form.rating} onChange={(e) => set({ rating: e.target.value })} /></div>
-                <div className="space-y-1 relative"><label className="text-[9px] font-black text-fg-muted ml-1">Edad *</label><input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="23" min="15" max="50" onBlur={resetMobileViewport} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-base text-fg placeholder:text-fg-faint" value={form.age} onChange={(e) => set({ age: e.target.value })} /></div>
-                <div className="space-y-1 relative" ref={footMenuRef}>
-                  <label className="text-[9px] font-black text-fg-muted ml-1">Pierna</label>
-                  <button type="button" onClick={(e) => { e.stopPropagation(); setShowFootMenu((o) => !o); }} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg">
-                    {FOOT_OPTIONS.find((f) => f.value === form.preferredFoot)?.icon}
-                    <span className="text-[8px] uppercase tracking-wide">{form.preferredFoot}</span>
-                  </button>
-                  {showFootMenu && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-20 animate-in fade-in slide-in-from-top-2 duration-150 p-1">
-                      {FOOT_OPTIONS.map((opt) => (
-                        <button key={opt.value} type="button" onClick={(e) => { e.stopPropagation(); set({ preferredFoot: opt.value }); setShowFootMenu(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
-                          {opt.icon} {opt.label}
+
+              {step === 2 && (
+                <>
+                  <div className="space-y-1 relative">
+                    <label className="text-[9px] font-black text-fg-muted ml-1">Posición Principal *</label>
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-well rounded-xl border border-border-subtle">
+                      {ALL_POSITIONS.map((pos) => (
+                        <button key={pos} type="button" onClick={(e) => selectPrimary(e, pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${form.primaryPosition === pos ? 'bg-green-500 text-black shadow-lg shadow-green-500/30' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>
+                          {pos}
                         </button>
                       ))}
                     </div>
+                  </div>
+                  {form.primaryPosition && form.primaryPosition !== 'POR' && (
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Posiciones Secundarias</label>
+                      <div className="flex flex-wrap gap-1.5 p-2 bg-well rounded-xl border border-border-subtle">
+                        {ALL_POSITIONS.filter((pos) => pos !== 'POR' && pos !== form.primaryPosition).map((pos) => (
+                          <button key={pos} type="button" onClick={(e) => toggleSecondary(e, pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${form.secondaryPositions.includes(pos) ? 'bg-green-500/80 text-black shadow-lg shadow-green-500/20' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>
+                            {pos}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
-                </div>
-              </div>
-            </>
-          )}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Media *</label>
+                      <input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="90" min="1" max="99" onBlur={resetMobileViewport} onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.rating} onChange={(e) => set({ rating: e.target.value })} />
+                    </div>
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Edad *</label>
+                      <input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="23" min="15" max="50" onBlur={resetMobileViewport} onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.age} onChange={(e) => set({ age: e.target.value })} />
+                    </div>
+                    <div className="space-y-1 relative" ref={footMenuRef}>
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Pierna</label>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setShowFootMenu((o) => !o); }} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg">
+                        {FOOT_OPTIONS.find((f) => f.value === form.preferredFoot)?.icon}
+                        <span className="text-[8px] uppercase tracking-wide">{form.preferredFoot}</span>
+                      </button>
+                      {showFootMenu && (
+                        <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-20 animate-in fade-in slide-in-from-top-2 duration-150 p-1">
+                          {FOOT_OPTIONS.map((opt) => (
+                            <button key={opt.value} type="button" onClick={(e) => { e.stopPropagation(); set({ preferredFoot: opt.value }); setShowFootMenu(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
+                              {opt.icon} {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
 
-          {step === 3 && (
-            <>
-              <div className="space-y-1">
-                <label className="text-[9px] font-black text-fg-muted ml-1">Tipo de Adquisición</label>
-                <div className="flex gap-2">
-                  <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Cantera', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Cantera' ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cantera</button>
-                  <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Cedido', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cedido</button>
-                  <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Comprado', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Comprado' ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Comprado</button>
-                </div>
-              </div>
-              {form.type === 'Cantera' && (<div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Potencial (1-99)</label><input type="number" min="1" max="99" placeholder="Ej: 88" className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg placeholder:text-fg-faint" value={form.potential} onChange={(e) => set({ potential: e.target.value })} /></div>)}
-              {form.type === 'Comprado' && (<div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Precio de Compra (€) *</label><input type="text" inputMode="numeric" required placeholder="Ej: 50.000.000" className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg placeholder:text-fg-faint" value={form.value} onChange={formatMoneyField('value')} /></div>)}
-              {form.type === 'Cedido' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Duración Cesión</label><select className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg" value={form.loanDuration} onChange={(e) => set({ loanDuration: e.target.value })}><option value="6 Meses">6 Meses</option><option value="1 Temporada">1 Temporada</option><option value="2 Temporadas">2 Temporadas</option></select></div>
-                  <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Club de Origen *</label><input type="text" required placeholder="Ej: Real Madrid" className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle font-black text-sm text-fg placeholder:text-fg-faint" value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} /></div>
+              {step === 3 && (
+                <>
+                  <div className="space-y-1 relative">
+                    <label className="text-[9px] font-black text-fg-muted ml-1">Tipo de Adquisición</label>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Cantera', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Cantera' ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cantera</button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Cedido', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cedido</button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Comprado', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Comprado' ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Comprado</button>
+                    </div>
+                  </div>
+                  {form.type === 'Cantera' && (
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Potencial (1-99)</label>
+                      <input type="number" min="1" max="99" placeholder="Ej: 88" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.potential} onChange={(e) => set({ potential: e.target.value })} />
+                    </div>
+                  )}
+                  {form.type === 'Comprado' && (
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Precio de Compra (€) *</label>
+                      <input type="text" inputMode="numeric" required placeholder="Ej: 50.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.value} onChange={formatMoneyField('value')} />
+                    </div>
+                  )}
+                  {form.type === 'Cedido' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1 relative">
+                        <label className="text-[9px] font-black text-fg-muted ml-1">Duración Cesión</label>
+                        <select className={SELECT_CLASS} value={form.loanDuration} onChange={(e) => set({ loanDuration: e.target.value })}>
+                          <option value="6 Meses">6 Meses</option>
+                          <option value="1 Temporada">1 Temporada</option>
+                          <option value="2 Temporadas">2 Temporadas</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1 relative">
+                        <label className="text-[9px] font-black text-fg-muted ml-1">Club de Origen *</label>
+                        <input type="text" required placeholder="Ej: Real Madrid" onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} />
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Valor de Mercado (€) *</label>
+                      <input type="text" inputMode="numeric" required placeholder="Ej: 80.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.marketValue} onChange={formatMoneyField('marketValue')} />
+                    </div>
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Anual (€)</label>
+                      <input type="text" inputMode="numeric" placeholder="Ej: 5.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.wage} onChange={formatMoneyField('wage')} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Cláusula (€)</label>
+                      <input type="text" inputMode="numeric" placeholder="Ej: 150.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.releaseClause} onChange={formatMoneyField('releaseClause')} />
+                    </div>
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Años Contrato</label>
+                      <select className={SELECT_CLASS} value={form.contractYears} onChange={(e) => set({ contractYears: e.target.value })}>
+                        <option value="">Seleccionar</option>
+                        {contractYearOptions.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+                      </select>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {step === 4 && (
+                <div className="flex flex-col items-center">
+                  <div className={`relative w-52 rounded-[28px] p-5 shadow-2xl border-2 border-black/10 ${getCardStyle(parseInt(form.rating) || 0)}`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex flex-col items-center leading-none">
+                        <span className="text-4xl font-black">{form.rating}</span>
+                        <span className="text-[10px] font-black uppercase mt-1 tracking-wider">{form.primaryPosition}</span>
+                      </div>
+                      {form.nationality && <span className="text-[8px] font-black uppercase bg-black/10 px-2 py-1 rounded-lg max-w-[70px] truncate text-right">{form.nationality}</span>}
+                    </div>
+                    <div className="flex justify-center my-3">
+                      {form.photo ? (
+                        <img src={form.photo} alt="Foto" className="w-20 h-20 rounded-full object-cover border-4 border-black/10 shadow-lg" />
+                      ) : (
+                        <div className="w-20 h-20 rounded-full bg-black/10 flex items-center justify-center border-4 border-black/10"><User size={30} /></div>
+                      )}
+                    </div>
+                    <div className="text-center font-black uppercase italic text-sm tracking-tight border-t border-black/10 pt-2 truncate">{fullNamePreview}</div>
+                    {form.secondaryPositions.length > 0 && <div className="text-center text-[9px] font-bold uppercase opacity-70 mt-0.5 truncate">{form.secondaryPositions.join(' · ')}</div>}
+                  </div>
+
+                  <div className="w-full mt-4 bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+                    <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Edad</span><span className="text-xs font-black text-fg">{form.age} Años</span></div>
+                    <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Adquisición</span><span className="text-xs font-black text-fg">{form.type}{form.type === 'Cedido' && form.originClub ? ` · ${form.originClub}` : ''}</span></div>
+                    <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Valor de Mercado</span><span className="text-xs font-black text-green-500">{form.marketValue || '0'} €</span></div>
+                    {form.wage && <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Sueldo Anual</span><span className="text-xs font-black text-fg">{form.wage} €</span></div>}
+                    {form.releaseClause && <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Cláusula</span><span className="text-xs font-black text-fg">{form.releaseClause} €</span></div>}
+                    {form.contractYears && <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Contrato</span><span className="text-xs font-black text-fg">{form.contractYears} Años</span></div>}
+                  </div>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Valor de Mercado (€) *</label><input type="text" inputMode="numeric" required placeholder="Ej: 80.000.000" className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg placeholder:text-fg-faint" value={form.marketValue} onChange={formatMoneyField('marketValue')} /></div>
-                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Anual (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 5.000.000" className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg placeholder:text-fg-faint" value={form.wage} onChange={formatMoneyField('wage')} /></div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Cláusula (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 150.000.000" className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg placeholder:text-fg-faint" value={form.releaseClause} onChange={formatMoneyField('releaseClause')} /></div>
-                <div className="space-y-1">
-                  <label className="text-[9px] font-black text-fg-muted ml-1">Años Contrato</label>
-                  <select className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg" value={form.contractYears} onChange={(e) => set({ contractYears: e.target.value })}>
-                    <option value="">Seleccionar</option>
-                    {contractYearOptions.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
-                  </select>
-                </div>
-              </div>
-            </>
-          )}
-
-          {step === 4 && (
-            <div className="flex flex-col items-center">
-              <div className={`relative w-52 rounded-[28px] p-5 shadow-2xl border-2 border-black/10 ${getCardStyle(parseInt(form.rating) || 0)}`}>
-                <div className="flex items-start justify-between">
-                  <div className="flex flex-col items-center leading-none"><span className="text-4xl font-black">{form.rating}</span><span className="text-[10px] font-black uppercase mt-1 tracking-wider">{form.primaryPosition}</span></div>
-                  {form.nationality && <span className="text-[8px] font-black uppercase bg-black/10 px-2 py-1 rounded-lg max-w-[70px] truncate text-right">{form.nationality}</span>}
-                </div>
-                <div className="flex justify-center my-3">
-                  {form.photo ? <img src={form.photo} alt="Foto" className="w-20 h-20 rounded-full object-cover border-4 border-black/10 shadow-lg" /> : <div className="w-20 h-20 rounded-full bg-black/10 flex items-center justify-center border-4 border-black/10"><User size={30} /></div>}
-                </div>
-                <div className="text-center font-black uppercase italic text-sm tracking-tight border-t border-black/10 pt-2 truncate">{fullNamePreview}</div>
-                {form.secondaryPositions.length > 0 && <div className="text-center text-[9px] font-bold uppercase opacity-70 mt-0.5 truncate">{form.secondaryPositions.join(' · ')}</div>}
-              </div>
-
-              <div className="w-full mt-4 bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
-                <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Edad</span><span className="text-xs font-black text-fg">{form.age} Años</span></div>
-                <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Adquisición</span><span className="text-xs font-black text-fg">{form.type}{form.type === 'Cedido' && form.originClub ? ` · ${form.originClub}` : ''}</span></div>
-                <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Valor de Mercado</span><span className="text-xs font-black text-green-500">{form.marketValue || '0'} €</span></div>
-                {form.wage && <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Sueldo Anual</span><span className="text-xs font-black text-fg">{form.wage} €</span></div>}
-                {form.releaseClause && <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Cláusula</span><span className="text-xs font-black text-fg">{form.releaseClause} €</span></div>}
-                {form.contractYears && <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Contrato</span><span className="text-xs font-black text-fg">{form.contractYears} Años</span></div>}
-              </div>
             </div>
-          )}
+          </div>
+
+          <div className="sticky bottom-0 z-40 bg-surface/95 backdrop-blur-sm border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+            {step > 1 && (
+              <button type="button" onClick={goPrev} className="flex-1 py-4 rounded-xl bg-well-strong text-fg font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:brightness-125 transition-all">
+                <ChevronLeft size={16} /> Anterior
+              </button>
+            )}
+            {step < TOTAL_STEPS && (
+              <button type="button" onClick={goNext} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all">
+                Siguiente <ChevronRight size={16} />
+              </button>
+            )}
+            {step === TOTAL_STEPS && (
+              <button type="button" disabled={isSubmitting} onClick={handleConfirm} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all disabled:opacity-50">
+                {isSubmitting ? 'Guardando...' : (<><Check size={16} /> Confirmar Fichaje</>)}
+              </button>
+            )}
           </div>
         </div>
-
-        <div className="sticky bottom-0 z-40 bg-surface/95 backdrop-blur-sm border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-          {step > 1 && (<button type="button" onClick={goPrev} className="flex-1 py-4 rounded-xl bg-well-strong text-fg font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:brightness-125 transition-all"><ChevronLeft size={16} /> Anterior</button>)}
-          {step < TOTAL_STEPS && (<button type="button" onClick={goNext} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all">Siguiente <ChevronRight size={16} /></button>)}
-          {step === TOTAL_STEPS && (<button type="button" disabled={isSubmitting} onClick={handleConfirm} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all disabled:opacity-50">{isSubmitting ? 'Guardando...' : (<><Check size={16} /> Confirmar Fichaje</>)}</button>)}
-        </div>
       </div>
-    </div>
 
-    {showDiscardConfirm && (
-      <ConfirmModal
-        icon={ShieldAlert}
-        title="¿Deseas salir?"
-        message="Se perderán los datos introducidos del jugador."
-        confirmLabel="Salir y Descartar"
-        confirmClassName="bg-red-500 text-black shadow-red-500/20 hover:bg-red-400"
-        zIndexClassName="z-[250]"
-        onCancel={() => setShowDiscardConfirm(false)}
-        onConfirm={onClose}
-      />
-    )}
+      {showDiscardConfirm && (
+        <ConfirmModal
+          icon={ShieldAlert}
+          title="¿Deseas salir?"
+          message="Se perderán los datos introducidos del jugador."
+          confirmLabel="Salir y Descartar"
+          confirmClassName="bg-red-500 text-black shadow-red-500/20 hover:bg-red-400"
+          zIndexClassName="z-[250]"
+          onCancel={() => setShowDiscardConfirm(false)}
+          onConfirm={onClose}
+        />
+      )}
     </>
   );
 }
