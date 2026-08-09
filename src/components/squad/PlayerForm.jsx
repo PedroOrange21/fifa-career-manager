@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ShieldAlert, Camera, RefreshCcw, User, ChevronLeft, ChevronRight, Check, Globe2, Footprints } from 'lucide-react';
+import { X, ShieldAlert, Camera, RefreshCcw, User, ChevronLeft, ChevronRight, Check, Globe2, Footprints, Pencil } from 'lucide-react';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { flagEmoji, detectCountry } from '../../constants/countries';
 import { formatValueInput, parseValue } from '../../utils/format';
@@ -464,6 +464,14 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
               {step === 4 && (
                 <div className="flex flex-col items-center">
                   <div className={`relative w-52 rounded-[28px] p-5 shadow-2xl border-2 border-black/10 ${getCardStyle(parseInt(form.rating) || 0)}`}>
+                    {/* Edición rápida: cada pulsación lleva de vuelta al paso donde vive ese
+                        dato, sin perder lo ya rellenado en el resto del asistente. */}
+                    <button type="button" onClick={() => { setFormError(''); setStep(1); }} title="Editar identidad" className="absolute -top-2 -left-2 z-10 bg-well border border-border-subtle text-fg-muted rounded-full p-1.5 shadow-lg active:scale-90 transition-all touch-manipulation">
+                      <Pencil size={12} />
+                    </button>
+                    <button type="button" onClick={() => { setFormError(''); setStep(2); }} title="Editar atributos" className="absolute -top-2 -right-2 z-10 bg-well border border-border-subtle text-fg-muted rounded-full p-1.5 shadow-lg active:scale-90 transition-all touch-manipulation">
+                      <Pencil size={12} />
+                    </button>
                     <div className="flex items-start justify-between">
                       <div className="flex flex-col items-center leading-none">
                         <span className="text-4xl font-black">{form.rating}</span>
@@ -484,7 +492,13 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     {form.secondaryPositions.length > 0 && <div className="text-center text-[9px] font-bold uppercase opacity-70 mt-0.5 truncate">{form.secondaryPositions.join(' · ')}</div>}
                   </div>
 
-                  <div className="w-full mt-4 bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+                  <div className="w-full flex justify-between items-center mt-4 mb-1 px-1">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-fg-faint">Detalles</span>
+                    <button type="button" onClick={() => { setFormError(''); setStep(3); }} className="flex items-center gap-1 text-[9px] font-black uppercase text-green-500 touch-manipulation">
+                      <Pencil size={10} /> Editar
+                    </button>
+                  </div>
+                  <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
                     <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Edad</span><span className="text-xs font-black text-fg">{form.age} Años</span></div>
                     <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Adquisición</span><span className="text-xs font-black text-fg">{form.type}{form.type === 'Cedido' && form.originClub ? ` · ${form.originClub}` : ''}</span></div>
                     <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Valor de Mercado</span><span className="text-xs font-black text-green-500">{form.marketValue || '0'} €</span></div>
@@ -509,8 +523,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
               </button>
             )}
             {step === TOTAL_STEPS && (
-              <button type="button" disabled={isSubmitting} onClick={handleConfirm} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all disabled:opacity-50 touch-manipulation">
-                {isSubmitting ? 'Guardando...' : (<><Check size={16} /> Confirmar Fichaje</>)}
+              <button type="button" disabled={isSubmitting} onClick={handleConfirm} className="flex-1 w-full py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-2 hover:bg-green-400 transition-all disabled:opacity-50 touch-manipulation">
+                {isSubmitting ? 'Guardando...' : (<><Check size={16} className="shrink-0" /> <span>Confirmar Fichaje</span></>)}
               </button>
             )}
           </footer>

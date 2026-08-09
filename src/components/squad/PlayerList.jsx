@@ -133,24 +133,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
         {activePlayers.length === 0 && (<div className="p-16 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">{searchQuery ? 'No se encontraron jugadores' : 'Plantilla Vacía'}</div>)}
         {activePlayers.map((p) => (
-          <div key={p.id} className="p-3 md:p-4 flex items-center justify-between group hover:bg-well/50 transition-all gap-4">
-            <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-              <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
-              <div className="flex-1 min-w-0">
-                <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight flex items-center gap-2 text-black dark:text-white">{p.name}</div>
-                <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest mb-1">{p.positions?.join(' · ') || p.pos}</div>
-                <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                  <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{p.age} Años</span>
-                  {p.marketValue && (<span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(p.marketValue)}</span>)}
-                  {p.type === 'Cedido' ? (<span className="text-[7px] md:text-[8px] text-yellow-500 font-black uppercase tracking-widest bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">Cedido ({formatLoanDuration(p.loanDuration)})</span>) : p.type ? (<span className={`text-[7px] md:text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider ${p.type === 'Cantera' ? 'bg-emerald-600/20 text-emerald-400' : 'bg-blue-600/20 text-blue-400'}`}>{p.type}</span>) : null}
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              {Object.values(lineup).includes(p.id) ? (<span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-green-500/20 text-green-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-green-500/20"><Shirt size={12} /> <span className="hidden sm:inline">Titular</span><span className="sm:hidden">11</span></span>) : Object.values(bench).includes(p.id) ? (<span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-blue-500/20 text-blue-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-blue-500/20"><Users size={12} /> <span className="hidden sm:inline">Banquillo</span><span className="sm:hidden">Banq</span></span>) : p.transferStatus === 'Cedible' ? (<span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} /> Cedible</span>) : p.transferStatus === 'Transferible' ? (<span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-red-500/20 text-red-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-red-500/20"><Tag size={12} /> Venta</span>) : null}
-              <div className="flex gap-1 mt-1"><button onClick={() => openEditForm(p)} className="p-1.5 md:p-2 text-fg-faint hover:text-green-500 transition-colors bg-well rounded-xl"><Edit2 size={14} /></button><button onClick={() => setPlayerToDelete(p.id)} className="p-1.5 md:p-2 text-fg-faint hover:text-red-500 transition-colors bg-well rounded-xl"><Trash2 size={14} /></button></div>
-            </div>
-          </div>
+          <PlayerRow key={p.id} p={p} lineup={lineup} bench={bench} onEdit={openEditForm} onDelete={setPlayerToDelete} />
         ))}
       </div>
 
@@ -183,6 +166,112 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
           onConfirm={confirmDeletePlayer}
         />
       )}
+    </div>
+  );
+}
+
+const SWIPE_ACTION_WIDTH = 128;
+
+// Fila de jugador con deslizar-para-revelar (Editar/Eliminar) nativo por táctil. Se usa un
+// listener nativo de touchmove con { passive: false } porque React registra los onTouchMove
+// sintéticos como pasivos por defecto y no deja llamar a preventDefault() desde la prop JSX
+// (necesario aquí para bloquear el scroll vertical de la lista mientras se arrastra en
+// horizontal). El eje del gesto (horizontal vs vertical) se decide en los primeros píxeles
+// de movimiento y ya no cambia durante ese mismo toque.
+function PlayerRow({ p, lineup, bench, onEdit, onDelete }) {
+  const [offset, setOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const rowRef = useRef(null);
+  const offsetRef = useRef(0);
+
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+    const drag = { startX: 0, startY: 0, active: false, axis: null, startOffset: 0 };
+    const onStart = (e) => {
+      const t = e.touches[0];
+      drag.startX = t.clientX; drag.startY = t.clientY; drag.active = true; drag.axis = null; drag.startOffset = offsetRef.current;
+    };
+    const onMove = (e) => {
+      if (!drag.active) return;
+      const t = e.touches[0];
+      const dx = t.clientX - drag.startX;
+      const dy = t.clientY - drag.startY;
+      if (!drag.axis) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        drag.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+        if (drag.axis === 'x') setDragging(true);
+      }
+      if (drag.axis === 'x') {
+        e.preventDefault();
+        const next = Math.max(-SWIPE_ACTION_WIDTH, Math.min(0, drag.startOffset + dx));
+        offsetRef.current = next;
+        setOffset(next);
+      }
+    };
+    const onEnd = () => {
+      if (drag.axis === 'x') {
+        const next = offsetRef.current < -SWIPE_ACTION_WIDTH / 2 ? -SWIPE_ACTION_WIDTH : 0;
+        offsetRef.current = next;
+        setOffset(next);
+      }
+      drag.active = false;
+      drag.axis = null;
+      setDragging(false);
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd, { passive: true });
+    el.addEventListener('touchcancel', onEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, []);
+
+  const close = () => { offsetRef.current = 0; setOffset(0); };
+
+  return (
+    <div className="relative overflow-hidden">
+      <div className="absolute inset-y-0 right-0 flex">
+        <button type="button" onClick={() => { onEdit(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well text-fg-muted active:bg-well-strong touch-manipulation">
+          <Edit2 size={18} />
+          <span className="text-[8px] font-black uppercase">Editar</span>
+        </button>
+        <button type="button" onClick={() => { onDelete(p.id); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-red-500 text-white active:bg-red-400 touch-manipulation">
+          <Trash2 size={18} />
+          <span className="text-[8px] font-black uppercase">Borrar</span>
+        </button>
+      </div>
+      <div
+        ref={rowRef}
+        onClick={() => { if (offsetRef.current < 0) close(); }}
+        style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
+        className="relative bg-surface p-3 md:p-4 flex items-center justify-between hover:bg-well/50 transition-colors gap-4 touch-pan-y"
+      >
+        <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+          <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
+          <div className="flex-1 min-w-0">
+            <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight flex items-center gap-2 text-black dark:text-white">{p.name}</div>
+            <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest mb-1">{p.positions?.join(' · ') || p.pos}</div>
+            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+              <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{p.age} Años</span>
+              {p.marketValue && (<span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(p.marketValue)}</span>)}
+              {p.type === 'Cedido' && p.loanDuration && (<span className="text-[7px] md:text-[8px] text-yellow-500 font-black uppercase tracking-widest bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">{formatLoanDuration(p.loanDuration)}</span>)}
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          {Object.values(lineup).includes(p.id) ? (<span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-green-500/20 text-green-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-green-500/20"><Shirt size={12} /> <span className="hidden sm:inline">Titular</span><span className="sm:hidden">11</span></span>) : Object.values(bench).includes(p.id) ? (<span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-blue-500/20 text-blue-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-blue-500/20"><Users size={12} /> <span className="hidden sm:inline">Banquillo</span><span className="sm:hidden">Banq</span></span>) : p.transferStatus === 'Cedible' ? (<span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} /> Cedible</span>) : p.transferStatus === 'Transferible' ? (<span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-red-500/20 text-red-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-red-500/20"><Tag size={12} /> Venta</span>) : null}
+          {p.type && (
+            <span className={`text-[8px] md:text-[9px] px-2 md:px-3 py-1 rounded-lg font-black uppercase tracking-widest border ${p.type === 'Cantera' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' : p.type === 'Cedido' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20' : 'bg-blue-500/20 text-blue-400 border-blue-500/20'}`}>
+              {p.type}
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
