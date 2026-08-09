@@ -1,0 +1,135 @@
+import { X, Edit2, RefreshCcw, Trash2, Tag, Users, ArrowRightLeft } from 'lucide-react';
+import { useState } from 'react';
+import { getCardStyle } from '../../utils/cardStyle';
+import { abbreviateValue, formatLoanDuration } from '../../utils/format';
+import { isUncalledZone } from '../../utils/slots';
+import { useClubData } from '../../context/ClubDataContext';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import SellPlayerModal from '../economy/SellPlayerModal';
+import LoanOutModal from '../economy/LoanOutModal';
+
+const ACTION_STYLES = {
+  blue: 'bg-blue-500/10 text-blue-500 border-blue-500/20 hover:bg-blue-500/20 shadow-lg shadow-blue-500/10',
+  red: 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20 shadow-lg shadow-red-500/10',
+  yellow: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20 hover:bg-yellow-500/20 shadow-lg shadow-yellow-500/10',
+  neutral: 'bg-well-strong text-fg border-transparent hover:brightness-125',
+};
+
+const ACTIVE_STYLES = {
+  red: 'bg-red-500 text-black border-red-500',
+  yellow: 'bg-yellow-500 text-black border-yellow-500',
+};
+
+export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onReplace, hideMarketStatus = false }) {
+  useBodyScrollLock();
+  const { bench, assignPlayerToSlot, setPlayerTransferStatus } = useClubData();
+  const [current, setCurrent] = useState(player);
+  const [showSellModal, setShowSellModal] = useState(false);
+  const [showLoanModal, setShowLoanModal] = useState(false);
+
+  const changeStatus = async (status) => {
+    await setPlayerTransferStatus(current.id, status);
+    setCurrent({ ...current, transferStatus: status });
+  };
+
+  const emptyBenchIdx = [0, 1, 2, 3, 4, 5, 6, 7, 8].find((i) => !bench[i]);
+  const canSendToBench = current.transferStatus !== 'CedidoFuera' && !isUncalledZone(infoSlot) && !String(infoSlot).startsWith('bench-') && emptyBenchIdx !== undefined;
+
+  // Contexto genérico (Plantilla / Mercado): un único grid con todas las acciones.
+  const actions = [{ key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit(current), color: 'blue' }];
+  if (current.transferStatus !== 'CedidoFuera') actions.push({ key: 'sell', icon: Tag, label: 'Vender', onClick: () => setShowSellModal(true), color: 'red' });
+  if (canSendToBench) actions.push({ key: 'bench', icon: Users, label: 'Al Banquillo', onClick: () => { assignPlayerToSlot(`bench-${emptyBenchIdx}`, current.id); onClose(); }, color: 'yellow' });
+  if (!isUncalledZone(infoSlot)) {
+    actions.push({ key: 'replace', icon: RefreshCcw, label: 'Reemplazar', onClick: () => onReplace(infoSlot), color: 'neutral' });
+    actions.push({ key: 'uncalled', icon: Trash2, label: 'No Convocado', onClick: () => { assignPlayerToSlot(infoSlot, null); onClose(); }, color: 'red' });
+  }
+
+  // Contexto Táctica: fila 1 (3 columnas fijas: Reemplazar / Banquillo / No Convocado) con gestión de
+  // alineación, fila 2 (2 columnas) con accesos directos a las listas de mercado. Las acciones que no
+  // aplican al slot actual se muestran deshabilitadas en vez de desaparecer, para mantener la rejilla fija.
+  const primaryActions = [
+    { key: 'replace', icon: RefreshCcw, label: 'Reemplazar', onClick: () => onReplace(infoSlot), color: 'neutral', disabled: isUncalledZone(infoSlot) },
+    { key: 'bench', icon: Users, label: 'Mandar al Banquillo', onClick: () => { assignPlayerToSlot(`bench-${emptyBenchIdx}`, current.id); onClose(); }, color: 'neutral', disabled: !canSendToBench },
+    { key: 'uncalled', icon: Trash2, label: 'Mandar a No Convocados', onClick: () => { assignPlayerToSlot(infoSlot, null); onClose(); }, color: 'neutral', disabled: isUncalledZone(infoSlot) },
+  ];
+
+  const marketActions = [
+    { key: 'transferible', icon: Tag, label: 'Mandar a Transferibles', onClick: () => changeStatus('Transferible'), color: 'red', active: current.transferStatus === 'Transferible' },
+    { key: 'cedible', icon: ArrowRightLeft, label: 'Mandar a Cedibles', onClick: () => changeStatus('Cedible'), color: 'yellow', active: current.transferStatus === 'Cedible' },
+  ];
+
+  const directMarketActions = [
+    { key: 'sell', icon: Tag, label: 'Vender Jugador', onClick: () => setShowSellModal(true), color: 'red', disabled: current.transferStatus === 'CedidoFuera' },
+    { key: 'loan', icon: ArrowRightLeft, label: 'Ceder Jugador', onClick: () => setShowLoanModal(true), color: 'yellow', disabled: current.transferStatus === 'CedidoFuera' },
+  ];
+
+  return (
+    <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
+      <div className="bg-surface border border-border p-6 rounded-[32px] w-full max-w-sm shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-well rounded-full hover:bg-well-strong text-fg-muted hover:text-fg"><X size={18} /></button>
+        <h3 className="text-center text-[10px] font-black uppercase tracking-widest text-fg-muted italic mb-4">Ficha del Jugador</h3>
+        <div className="p-4 bg-well rounded-[24px] border border-border-subtle flex flex-col gap-4 relative">
+          {hideMarketStatus && (
+            <button onClick={() => onEdit(current)} title="Editar Jugador" className="absolute top-3 right-3 p-2 rounded-full bg-well-strong text-fg-faint hover:text-blue-500 transition-colors"><Edit2 size={13} /></button>
+          )}
+          <div className="flex items-center gap-4">
+            <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center font-black leading-none shadow-lg flex-shrink-0 ${getCardStyle(current.rating)}`}><span className="text-[8px] opacity-70 font-bold mb-0.5">{current.positions?.[0]}</span><span className="text-xl">{current.rating}</span></div>
+            <div className={`flex-1 min-w-0 ${hideMarketStatus ? 'pr-6' : ''}`}>
+              <div className="font-black uppercase italic text-lg truncate tracking-tighter leading-tight text-black dark:text-white">{current.name}</div>
+              <div className="text-[10px] text-green-500/80 font-black uppercase tracking-widest mb-1 mt-0.5 truncate">{current.positions?.join(' · ')}</div>
+              <div className="flex flex-wrap items-center gap-1.5 mt-1"><span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{current.age} Años</span><span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{current.preferredFoot || 'Diestro'}</span><span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{abbreviateValue(current.marketValue || current.value)}</span>{current.type === 'Cedido' ? (<span className="text-[8px] text-yellow-500 font-black uppercase tracking-widest bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">Cedido ({formatLoanDuration(current.loanDuration)})</span>) : current.type ? (<span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider ${current.type === 'Cantera' ? 'bg-emerald-600/20 text-emerald-400' : 'bg-blue-600/20 text-blue-400'}`}>{current.type}</span>) : null}</div>
+            </div>
+          </div>
+        </div>
+
+        {!hideMarketStatus && (
+          <div className="mt-4 p-3 bg-well rounded-xl border border-border-subtle space-y-2">
+            <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted block">Estado de Mercado</span>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => changeStatus('Activo')} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${current.transferStatus === 'Activo' || !current.transferStatus ? 'bg-green-500 text-black border-green-500' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Activo</button>
+              <button type="button" onClick={() => changeStatus('Cedible')} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${current.transferStatus === 'Cedible' ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Cedible</button>
+              <button type="button" onClick={() => changeStatus('Transferible')} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${current.transferStatus === 'Transferible' ? 'bg-red-500 text-black border-red-500' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Venta</button>
+              <button type="button" onClick={() => changeStatus('CedidoFuera')} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${current.transferStatus === 'CedidoFuera' ? 'bg-zinc-600 text-white border-zinc-600' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Cedido Fuera</button>
+            </div>
+          </div>
+        )}
+
+        {hideMarketStatus ? (
+          <>
+            <div className="grid grid-cols-3 gap-1.5 mt-3">
+              {primaryActions.map(({ key, icon: Icon, label, onClick, color, disabled }) => (
+                <button key={key} onClick={onClick} disabled={disabled} className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-black uppercase text-[8px] leading-tight text-center transition-all duration-150 border ${disabled ? 'opacity-40 pointer-events-none bg-well-strong text-fg-faint border-transparent' : `${ACTION_STYLES[color]} hover:scale-105 active:scale-95`}`}>
+                  <Icon size={14} /> {label}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {marketActions.map(({ key, icon: Icon, label, onClick, color, active }) => (
+                <button key={key} onClick={onClick} className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-black uppercase text-[9px] transition-all border ${active ? ACTIVE_STYLES[color] : ACTION_STYLES[color]}`}>
+                  <Icon size={16} /> {label}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {directMarketActions.map(({ key, icon: Icon, label, onClick, color, disabled }) => (
+                <button key={key} onClick={onClick} disabled={disabled} className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-black uppercase text-[9px] transition-all border ${disabled ? 'opacity-40 pointer-events-none bg-well-strong text-fg-faint border-transparent' : ACTION_STYLES[color]}`}>
+                  <Icon size={16} /> {label}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            {actions.map(({ key, icon: Icon, label, onClick, color }) => (
+              <button key={key} onClick={onClick} className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-black uppercase text-[9px] transition-all border ${ACTION_STYLES[color]}`}>
+                <Icon size={16} /> {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {showSellModal && <SellPlayerModal player={current} onClose={() => { setShowSellModal(false); onClose(); }} />}
+      {showLoanModal && <LoanOutModal player={current} onClose={() => { setShowLoanModal(false); onClose(); }} />}
+    </div>
+  );
+}

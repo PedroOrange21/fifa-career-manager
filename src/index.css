@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --app-base: #f4f5f7;
+  --app-surface: #ffffff;
+  --app-well: rgba(0, 0, 0, 0.04);
+  --app-well-strong: rgba(0, 0, 0, 0.08);
+  --app-border: rgba(0, 0, 0, 0.12);
+  --app-border-subtle: rgba(0, 0, 0, 0.06);
+  --app-text: #0a0a0b;
+  --app-text-secondary: rgba(10, 10, 11, 0.75);
+  --app-text-muted: rgba(10, 10, 11, 0.45);
+  --app-text-faint: rgba(10, 10, 11, 0.28);
+  color-scheme: light;
+}
+
+.dark {
+  --app-base: #0a0a0b;
+  --app-surface: #111114;
+  --app-well: rgba(255, 255, 255, 0.05);
+  --app-well-strong: rgba(255, 255, 255, 0.1);
+  --app-border: rgba(255, 255, 255, 0.1);
+  --app-border-subtle: rgba(255, 255, 255, 0.05);
+  --app-text: #ffffff;
+  --app-text-secondary: rgba(255, 255, 255, 0.8);
+  --app-text-muted: rgba(255, 255, 255, 0.45);
+  --app-text-faint: rgba(255, 255, 255, 0.2);
+  color-scheme: dark;
+}
+
+@theme inline {
+  /* "canvas" (no "base"): Tailwind reserva "base" para su escala de tamaños de
+     texto (text-base = 1rem). Un color de tema llamado --color-base colisiona
+     con esa escala y hace que CUALQUIER text-base/md:text-base de la app deje
+     de fijar el tamaño de fuente y en su lugar sobreescriba el color del texto
+     con el color de fondo de la página (bug real detectado: nombres de
+     jugador casi invisibles en escritorio). No renombrar de vuelta a "base". */
+  --color-canvas: var(--app-base);
+  --color-surface: var(--app-surface);
+  --color-well: var(--app-well);
+  --color-well-strong: var(--app-well-strong);
+  --color-border: var(--app-border);
+  --color-border-subtle: var(--app-border-subtle);
+  --color-fg: var(--app-text);
+  --color-fg-secondary: var(--app-text-secondary);
+  --color-fg-muted: var(--app-text-muted);
+  --color-fg-faint: var(--app-text-faint);
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--app-base);
+  color: var(--app-text);
+}
+
+input, textarea, select {
+  color: var(--app-text);
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--app-text);
+  caret-color: var(--app-text);
+  transition: background-color 999999s ease-in-out 0s;
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
