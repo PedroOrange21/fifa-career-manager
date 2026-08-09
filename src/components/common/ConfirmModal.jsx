@@ -14,8 +14,8 @@ export default function ConfirmModal({
         <h3 className="text-lg font-black uppercase italic mb-2 text-fg">{title}</h3>
         <p className="text-[10px] text-fg-muted mb-6 font-bold uppercase tracking-widest">{message}</p>
         <div className="flex gap-3">
-          <button type="button" onClick={onCancel} className="flex-1 py-4 rounded-2xl bg-well text-fg-muted font-black uppercase text-[10px] hover:bg-well-strong transition-all active:scale-95">Cancelar</button>
-          <button type="button" onClick={onConfirm} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[10px] shadow-lg transition-all active:scale-95 ${confirmClassName}`}>{confirmLabel}</button>
+          <button type="button" onClick={onCancel} className="flex-1 py-4 rounded-2xl bg-well text-fg-muted font-black uppercase text-[10px] hover:bg-well-strong transition-all active:scale-95 touch-manipulation">Cancelar</button>
+          <button type="button" onClick={onConfirm} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[10px] shadow-lg transition-all active:scale-95 touch-manipulation ${confirmClassName}`}>{confirmLabel}</button>
         </div>
       </div>
     </div>

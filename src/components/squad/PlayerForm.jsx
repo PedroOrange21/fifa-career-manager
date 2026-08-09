@@ -214,15 +214,15 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
     <>
       {/* Fondo sin onClick a propósito: la alerta de salida solo puede activarse
           desde el botón X, nunca por un toque accidental fuera de la tarjeta. */}
-      <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200 touch-manipulation">
         <div
-          className="bg-surface border border-border rounded-[32px] w-full max-w-sm shadow-2xl relative my-auto max-h-[88vh] overflow-y-auto no-scrollbar overscroll-contain"
+          className="bg-surface border border-border rounded-[32px] w-full max-w-sm shadow-2xl relative my-auto max-h-[88dvh] overflow-y-auto no-scrollbar overscroll-contain touch-manipulation"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={blockEnterKey}
         >
           <div className="sticky top-0 z-40 bg-surface/95 backdrop-blur-sm flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
             <h3 className="font-black italic text-green-500 text-sm uppercase">{editingPlayer ? 'Editar Jugador' : 'Fichar Jugador'}</h3>
-            <button type="button" onClick={handleCloseClick} className="relative z-50 p-1 text-fg-faint hover:text-fg transition-colors">
+            <button type="button" onClick={handleCloseClick} className="relative z-50 p-1 text-fg-faint hover:text-fg transition-colors touch-manipulation">
               <X size={18} />
             </button>
           </div>
@@ -257,7 +257,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                         </div>
                       )}
                       <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handlePhotoChange} />
-                      <button type="button" disabled={isUploadingPhoto} className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button type="button" disabled={isUploadingPhoto} className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity touch-manipulation">
                         {isUploadingPhoto ? <RefreshCcw size={18} className="animate-spin text-white" /> : <Camera size={18} className="text-white" />}
                       </button>
                     </div>
@@ -289,7 +289,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     <label className="text-[9px] font-black text-fg-muted ml-1">Posición Principal *</label>
                     <div className="flex flex-wrap gap-1.5 p-2 bg-well rounded-xl border border-border-subtle">
                       {ALL_POSITIONS.map((pos) => (
-                        <button key={pos} type="button" onClick={(e) => selectPrimary(e, pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${form.primaryPosition === pos ? 'bg-green-500 text-black shadow-lg shadow-green-500/30' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>
+                        <button key={pos} type="button" onClick={(e) => selectPrimary(e, pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.primaryPosition === pos ? 'bg-green-500 text-black shadow-lg shadow-green-500/30' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>
                           {pos}
                         </button>
                       ))}
@@ -300,7 +300,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       <label className="text-[9px] font-black text-fg-muted ml-1">Posiciones Secundarias</label>
                       <div className="flex flex-wrap gap-1.5 p-2 bg-well rounded-xl border border-border-subtle">
                         {ALL_POSITIONS.filter((pos) => pos !== 'POR' && pos !== form.primaryPosition).map((pos) => (
-                          <button key={pos} type="button" onClick={(e) => toggleSecondary(e, pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${form.secondaryPositions.includes(pos) ? 'bg-green-500/80 text-black shadow-lg shadow-green-500/20' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>
+                          <button key={pos} type="button" onClick={(e) => toggleSecondary(e, pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.secondaryPositions.includes(pos) ? 'bg-green-500/80 text-black shadow-lg shadow-green-500/20' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>
                             {pos}
                           </button>
                         ))}
@@ -318,14 +318,14 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     </div>
                     <div className="space-y-1 relative" ref={footMenuRef}>
                       <label className="text-[9px] font-black text-fg-muted ml-1">Pierna</label>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setShowFootMenu((o) => !o); }} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setShowFootMenu((o) => !o); }} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg touch-manipulation">
                         {FOOT_OPTIONS.find((f) => f.value === form.preferredFoot)?.icon}
                         <span className="text-[8px] uppercase tracking-wide">{form.preferredFoot}</span>
                       </button>
                       {showFootMenu && (
                         <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[45] animate-in fade-in slide-in-from-top-2 duration-150 p-1">
                           {FOOT_OPTIONS.map((opt) => (
-                            <button key={opt.value} type="button" onClick={(e) => { e.stopPropagation(); set({ preferredFoot: opt.value }); setShowFootMenu(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
+                            <button key={opt.value} type="button" onClick={(e) => { e.stopPropagation(); set({ preferredFoot: opt.value }); setShowFootMenu(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
                               {opt.icon} {opt.label}
                             </button>
                           ))}
@@ -341,9 +341,9 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                   <div className="space-y-1 relative">
                     <label className="text-[9px] font-black text-fg-muted ml-1">Tipo de Adquisición</label>
                     <div className="flex gap-2">
-                      <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Cantera', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Cantera' ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cantera</button>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Cedido', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cedido</button>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Comprado', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Comprado' ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Comprado</button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Cantera', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Cantera' ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cantera</button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Cedido', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cedido</button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Comprado', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Comprado' ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Comprado</button>
                     </div>
                   </div>
                   {form.type === 'Cantera' && (
@@ -436,17 +436,17 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
           <div className="sticky bottom-0 z-40 bg-surface/95 backdrop-blur-sm border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
             {step > 1 && (
-              <button type="button" onClick={goPrev} className="flex-1 py-4 rounded-xl bg-well-strong text-fg font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:brightness-125 transition-all">
+              <button type="button" onClick={goPrev} className="flex-1 py-4 rounded-xl bg-well-strong text-fg font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:brightness-125 transition-all touch-manipulation">
                 <ChevronLeft size={16} /> Anterior
               </button>
             )}
             {step < TOTAL_STEPS && (
-              <button type="button" onClick={goNext} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all">
+              <button type="button" onClick={goNext} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all touch-manipulation">
                 Siguiente <ChevronRight size={16} />
               </button>
             )}
             {step === TOTAL_STEPS && (
-              <button type="button" disabled={isSubmitting} onClick={handleConfirm} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all disabled:opacity-50">
+              <button type="button" disabled={isSubmitting} onClick={handleConfirm} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all disabled:opacity-50 touch-manipulation">
                 {isSubmitting ? 'Guardando...' : (<><Check size={16} /> Confirmar Fichaje</>)}
               </button>
             )}
