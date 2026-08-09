@@ -3,7 +3,7 @@ import { useClubs } from '../../context/ClubsContext';
 import { formatCurrency } from '../../utils/format';
 import ClubMenu from './ClubMenu';
 
-export default function Header({ setActiveTab, onSwitchClub }) {
+export default function Header({ setActiveTab, onSwitchClub, onNavigateToFinance }) {
   const { activeClub, clubs, loadingClubs } = useClubs();
   const hasNoClubs = clubs.length === 0 && !loadingClubs;
   const transferBudget = activeClub?.transferBudget || 0;
@@ -18,14 +18,14 @@ export default function Header({ setActiveTab, onSwitchClub }) {
       <div className="flex items-center gap-4">
         {!hasNoClubs && activeClub && (
           <>
-            <div className={`flex md:hidden items-center gap-1 px-2.5 py-1.5 rounded-lg bg-well border border-border-subtle shrink-0 ${transferBudget < 0 ? 'text-red-500' : 'text-green-500'}`}>
+            <button type="button" onClick={onNavigateToFinance} title="Ir a Finanzas" className={`flex md:hidden items-center gap-1 px-2.5 py-1.5 rounded-lg bg-well border border-border-subtle shrink-0 cursor-pointer hover:bg-well-strong active:scale-95 transition-all ${transferBudget < 0 ? 'text-red-500' : 'text-green-500'}`}>
               <Wallet size={11} className="shrink-0" />
               <span className="font-black text-[11px] whitespace-nowrap">{formatCurrency(transferBudget)}</span>
-            </div>
-            <div className="hidden md:flex flex-col items-end mr-2">
+            </button>
+            <button type="button" onClick={onNavigateToFinance} title="Ir a Finanzas" className="hidden md:flex flex-col items-end mr-2 cursor-pointer hover:opacity-80 active:scale-95 transition-all">
               <span className="text-[9px] font-black uppercase text-fg-muted tracking-widest">Presupuesto</span>
               <span className={`font-black text-sm ${transferBudget < 0 ? 'text-red-500' : 'text-green-500'}`}>{formatCurrency(transferBudget)}</span>
-            </div>
+            </button>
           </>
         )}
         <ClubMenu setActiveTab={setActiveTab} onSwitchClub={onSwitchClub} />

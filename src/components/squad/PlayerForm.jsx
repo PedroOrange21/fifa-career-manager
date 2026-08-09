@@ -135,25 +135,26 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
   const fullNamePreview = `${form.firstName.trim()}${form.lastName.trim() ? ` ${form.lastName.trim()}` : ''}` || 'Nuevo Jugador';
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200 overscroll-contain" onClick={onClose}>
-      <div className="bg-surface border border-border p-5 rounded-[32px] w-full max-w-sm shadow-2xl relative my-auto flex flex-col max-h-[88vh]" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-3 shrink-0">
+    <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
+      <div className="bg-surface border border-border rounded-[32px] w-full max-w-sm shadow-2xl relative my-auto max-h-[88vh] overflow-y-auto no-scrollbar overscroll-contain" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-20 bg-surface/95 backdrop-blur-sm flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
           <h3 className="font-black italic text-green-500 text-sm uppercase">{editingPlayer ? 'Editar Jugador' : 'Fichar Jugador'}</h3>
           <button type="button" onClick={onClose} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
         </div>
 
-        <div className="shrink-0 mb-4">
-          <div className="flex items-center gap-1.5">
-            {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
-              <div key={n} className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${n <= step ? 'bg-green-500' : 'bg-well-strong'}`} />
-            ))}
+        <div className="px-5 pt-4">
+          <div className="mb-4">
+            <div className="flex items-center gap-1.5">
+              {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
+                <div key={n} className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${n <= step ? 'bg-green-500' : 'bg-well-strong'}`} />
+              ))}
+            </div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-fg-muted text-center mt-2">Paso {step} de {TOTAL_STEPS} · {STEP_TITLES[step - 1]}</p>
           </div>
-          <p className="text-[9px] font-black uppercase tracking-widest text-fg-muted text-center mt-2">Paso {step} de {TOTAL_STEPS} · {STEP_TITLES[step - 1]}</p>
-        </div>
 
-        {formError && <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl mb-3 flex gap-2 text-red-400 text-[10px] font-black items-center animate-pulse shrink-0"><ShieldAlert size={14} className="shrink-0" /><span>{formError}</span></div>}
+          {formError && <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl mb-3 flex gap-2 text-red-400 text-[10px] font-black items-center animate-pulse"><ShieldAlert size={14} className="shrink-0" /><span>{formError}</span></div>}
 
-        <div key={step} className="space-y-4 overflow-y-auto pr-1 no-scrollbar flex-1 pb-2 overscroll-contain animate-in fade-in slide-in-from-right-4 duration-300">
+          <div key={step} className="space-y-4 pb-4 animate-in fade-in slide-in-from-right-4 duration-300">
           {step === 1 && (
             <>
               <div className="flex flex-col items-center gap-2 mb-2">
@@ -250,9 +251,10 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
               </div>
             </div>
           )}
+          </div>
         </div>
 
-        <div className="flex gap-2 mt-4 shrink-0">
+        <div className="sticky bottom-0 z-20 bg-surface/95 backdrop-blur-sm border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
           {step > 1 && (<button type="button" onClick={goPrev} className="flex-1 py-4 rounded-xl bg-well-strong text-fg font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:brightness-125 transition-all"><ChevronLeft size={16} /> Anterior</button>)}
           {step < TOTAL_STEPS && (<button type="button" onClick={goNext} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all">Siguiente <ChevronRight size={16} /></button>)}
           {step === TOTAL_STEPS && (<button type="button" disabled={isSubmitting} onClick={handleConfirm} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all disabled:opacity-50">{isSubmitting ? 'Guardando...' : (<><Check size={16} /> Confirmar Fichaje</>)}</button>)}

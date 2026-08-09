@@ -32,11 +32,12 @@ export default function ClubShell() {
   const requestNewPlayer = () => { setActiveTab('club'); setClubSubTab('squad'); setPendingPrefill({}); };
   const switchClub = (clubId) => { setActiveClubId(clubId); setActiveTab('club'); setClubSubTab('squad'); };
   const goToScoutingMarket = () => { setActiveTab('market'); setMarketSubTab('scouting'); };
+  const goToFinance = () => { setActiveTab('office'); setOfficeSubTab('finance'); };
 
   return (
     <ClubDataProvider>
       <div className="min-h-screen bg-canvas text-fg flex flex-col overscroll-none" style={{ overscrollBehaviorY: 'none' }}>
-        <Header setActiveTab={setActiveTab} onSwitchClub={switchClub} />
+        <Header setActiveTab={setActiveTab} onSwitchClub={switchClub} onNavigateToFinance={goToFinance} />
 
         <main className="p-2 md:p-4 max-w-lg mx-auto flex flex-col flex-1 w-full relative z-10 pb-28 md:pb-32">
           {loadingClubs ? (
