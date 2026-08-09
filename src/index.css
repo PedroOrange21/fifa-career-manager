@@ -92,16 +92,6 @@ input, textarea, select {
   color: var(--app-text);
 }
 
-/* Unifica el tamaño de fuente de todos los campos de la app (inputs, textareas, selects
-   nativos) en 15px por defecto: antes cada componente traía su propia clase text-* de
-   Tailwind (text-xs, text-sm, text-base md:text-sm...) de forma inconsistente. Debe ir
-   ANTES de la regla de anti-zoom de abajo: en móvil ambas reglas empatan en especificidad
-   (selector de elemento + !important), así que gana la que aparece después en el CSS — y
-   necesitamos que sea la de 16px, no esta. */
-input, textarea, select {
-  font-size: 15px !important;
-}
-
 /* Evita el auto-zoom de Safari/Chrome en móvil: por debajo de 16px el navegador hace
    zoom automáticamente al enfocar cualquier campo. Se aplica solo por debajo del
    breakpoint `md` de Tailwind (768px) para no alterar el tamaño de texto en escritorio.
