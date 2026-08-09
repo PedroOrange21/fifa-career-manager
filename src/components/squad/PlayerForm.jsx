@@ -126,10 +126,22 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
   };
 
   const handlePhotoChange = async (e) => {
-    const file = e.target.files[0]; if (!file) return;
+    e.stopPropagation();
+    const input = e.target;
+    const file = input.files[0];
+    if (!file) return;
     setIsUploadingPhoto(true);
-    try { set({ photo: await resizeImageToDataUrl(file, 200, 0.8) }); }
-    finally { setIsUploadingPhoto(false); }
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, 200, 0.8);
+      set({ photo: dataUrl });
+    } catch (err) {
+      console.error(err);
+      setFormError('No se pudo procesar la foto. Inténtalo con otra imagen.');
+    } finally {
+      setIsUploadingPhoto(false);
+      // Permite volver a elegir el mismo archivo más tarde si el usuario lo desea.
+      input.value = '';
+    }
   };
 
   const validateStep = (s) => {
