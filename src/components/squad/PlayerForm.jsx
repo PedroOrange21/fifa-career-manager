@@ -2,12 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ShieldAlert, Camera, RefreshCcw, User, ChevronLeft, ChevronRight, Check, Globe2, Footprints } from 'lucide-react';
 import { ALL_POSITIONS } from '../../constants/positions';
-import { flagEmoji, findCountryByName, searchCountries } from '../../constants/countries';
+import { flagEmoji, detectCountry } from '../../constants/countries';
 import { formatValueInput, parseValue } from '../../utils/format';
 import { resizeImageToDataUrl } from '../../utils/image';
 import { getCardStyle } from '../../utils/cardStyle';
 import { useClubData } from '../../context/ClubDataContext';
-import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import { useUiChrome } from '../../context/UiChromeContext';
 
 const STEP_TITLES = ['Identidad', 'Atributos', 'Términos Económicos', 'Revisión Final'];
@@ -24,10 +23,6 @@ const FOOT_OPTIONS = [
 const FIELD_BASE = 'w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-black text-base md:text-sm text-fg placeholder:text-fg-faint';
 const FIELD_CLASS = `${FIELD_BASE} text-center`;
 const SELECT_CLASS = 'w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-center font-black text-base md:text-sm text-fg';
-
-// Evita el auto-zoom agresivo de iOS/Android: por debajo de 16px el navegador móvil
-// hace zoom al enfocar el campo. Al perder el foco, recuperamos la posición/escala original.
-const resetMobileViewport = () => window.scrollTo(0, 0);
 
 // Ningún campo de este asistente se envía con Enter: no hay <form>, así que Enter no
 // tendría efecto por defecto, pero lo bloqueamos explícitamente para que nunca dispare
@@ -101,27 +96,24 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [showFootMenu, setShowFootMenu] = useState(false);
-  const [showNatMenu, setShowNatMenu] = useState(false);
-  const [natMenuRect, setNatMenuRect] = useState(null);
+  const [footMenuRect, setFootMenuRect] = useState(null);
   const fileInputRef = useRef(null);
   const footMenuRef = useRef(null);
-  const natInputWrapRef = useRef(null);
-  const natDropdownRef = useRef(null);
-  const natInputRef = useRef(null);
-  useOnClickOutside(footMenuRef, () => setShowFootMenu(false), showFootMenu);
+  const footBtnRef = useRef(null);
+  const footDropdownRef = useRef(null);
   const backdropRef = usePreventBackdropTouch(true);
   const discardBackdropRef = usePreventBackdropTouch(showDiscardConfirm);
 
-  // El desplegable de nacionalidad se pinta con un portal (fuera de la tarjeta, que tiene
-  // overflow-hidden para mantener cabecera/pie estáticos) para que nunca quede recortado,
-  // sea cual sea la posición del campo dentro del paso. Por eso el "click fuera" necesita
-  // comprobar dos refs (el campo Y el propio portal) en vez de uno solo.
+  // El desplegable de Pierna se pinta con un portal (fuera de la tarjeta, que tiene
+  // overflow-hidden para mantener cabecera/pie estáticos) para que nunca quede recortado
+  // ni tapado por el pie de página, sea cual sea la posición del campo dentro del paso.
+  // Por eso el "click fuera" necesita comprobar dos refs (el botón Y el propio portal).
   useEffect(() => {
-    if (!showNatMenu) return;
+    if (!showFootMenu) return;
     const handler = (e) => {
-      if (natInputWrapRef.current?.contains(e.target)) return;
-      if (natDropdownRef.current?.contains(e.target)) return;
-      setShowNatMenu(false);
+      if (footMenuRef.current?.contains(e.target)) return;
+      if (footDropdownRef.current?.contains(e.target)) return;
+      setShowFootMenu(false);
     };
     document.addEventListener('mousedown', handler);
     document.addEventListener('touchstart', handler);
@@ -129,20 +121,22 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
       document.removeEventListener('mousedown', handler);
       document.removeEventListener('touchstart', handler);
     };
-  }, [showNatMenu]);
+  }, [showFootMenu]);
 
-  const selectedCountry = findCountryByName(form.nationality);
-  const natMatches = showNatMenu ? searchCountries(form.nationality) : [];
-  const openNatMenu = () => {
-    const rect = natInputRef.current?.getBoundingClientRect();
-    if (rect) setNatMenuRect({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-    setShowNatMenu(true);
+  const toggleFootMenu = () => {
+    if (showFootMenu) { setShowFootMenu(false); return; }
+    const rect = footBtnRef.current?.getBoundingClientRect();
+    if (rect) setFootMenuRect({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    setShowFootMenu(true);
   };
-  const selectNationality = (country) => {
-    set({ nationality: country.name });
-    setShowNatMenu(false);
-    natInputRef.current?.blur();
+  const selectFoot = (value) => {
+    set({ preferredFoot: value });
+    setShowFootMenu(false);
   };
+
+  // Detección automática de la nacionalidad mientras se escribe (sin desplegable): compara
+  // el texto contra un mapa de variantes/sinónimos y códigos habituales (ver countries.js).
+  const selectedCountry = detectCountry(form.nationality);
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
@@ -291,7 +285,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
             </button>
           </div>
 
-          <div onScroll={() => setShowNatMenu(false)} className="px-5 pt-4 flex-1 overflow-y-auto overscroll-contain no-scrollbar">
+          <div onScroll={() => setShowFootMenu(false)} className="px-5 pt-4 flex-1 overflow-y-auto overscroll-contain no-scrollbar">
             <div className="mb-4">
               <div className="flex items-center gap-1.5">
                 {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
@@ -337,7 +331,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       <input type="text" autoComplete="off" placeholder="Haaland" onKeyDown={blockEnterKey} className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={form.lastName} onChange={(e) => set({ lastName: e.target.value })} />
                     </div>
                   </div>
-                  <div className="space-y-1 relative" ref={natInputWrapRef}>
+                  <div className="space-y-1 relative">
                     <label className="text-[9px] font-black text-fg-muted ml-1">Nacionalidad</label>
                     <div className="relative">
                       {selectedCountry ? (
@@ -351,10 +345,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                         placeholder="Ej: Noruega"
                         onKeyDown={blockEnterKey}
                         className="w-full bg-well p-4 pl-11 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm"
-                        ref={natInputRef}
                         value={form.nationality}
-                        onChange={(e) => { set({ nationality: e.target.value }); openNatMenu(); }}
-                        onFocus={openNatMenu}
+                        onChange={(e) => set({ nationality: e.target.value })}
                       />
                     </div>
                   </div>
@@ -388,27 +380,18 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Media *</label>
-                      <input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="90" min="1" max="99" onBlur={resetMobileViewport} onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.rating} onChange={(e) => set({ rating: e.target.value })} />
+                      <input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="90" min="1" max="99" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.rating} onChange={(e) => set({ rating: e.target.value })} />
                     </div>
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Edad *</label>
-                      <input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="23" min="15" max="50" onBlur={resetMobileViewport} onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.age} onChange={(e) => set({ age: e.target.value })} />
+                      <input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="23" min="15" max="50" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.age} onChange={(e) => set({ age: e.target.value })} />
                     </div>
                     <div className="space-y-1 relative" ref={footMenuRef}>
                       <label className="text-[9px] font-black text-fg-muted ml-1">Pierna</label>
-                      <button type="button" onClick={() => setShowFootMenu((o) => !o)} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg touch-manipulation">
+                      <button ref={footBtnRef} type="button" onClick={toggleFootMenu} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg touch-manipulation">
                         {FOOT_OPTIONS.find((f) => f.value === form.preferredFoot)?.icon}
                         <span className="text-[8px] uppercase tracking-wide">{form.preferredFoot}</span>
                       </button>
-                      {showFootMenu && (
-                        <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[45] animate-in fade-in slide-in-from-top-2 duration-150 p-1">
-                          {FOOT_OPTIONS.map((opt) => (
-                            <button key={opt.value} type="button" onClick={() => { set({ preferredFoot: opt.value }); setShowFootMenu(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
-                              {opt.icon} {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </>
@@ -487,10 +470,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                         <span className="text-[10px] font-black uppercase mt-1 tracking-wider">{form.primaryPosition}</span>
                       </div>
                       {form.nationality && (
-                        <div className="flex items-center gap-1 bg-black/10 pl-1 pr-2 py-1 rounded-full max-w-[110px]">
-                          <span className="w-4 h-4 rounded-full bg-black/20 flex items-center justify-center text-[10px] leading-none shrink-0 overflow-hidden">{selectedCountry ? flagEmoji(selectedCountry.code) : '🌍'}</span>
-                          <span className="text-[8px] font-black uppercase truncate">{form.nationality}</span>
-                        </div>
+                        <span className="w-7 h-7 rounded-full bg-black/20 flex items-center justify-center text-sm leading-none shrink-0 overflow-hidden">{selectedCountry ? flagEmoji(selectedCountry.code) : '🌍'}</span>
                       )}
                     </div>
                     <div className="flex justify-center my-3">
@@ -537,19 +517,19 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
         </div>
       </div>
 
-      {/* Portal: el desplegable de nacionalidad se pinta fuera de la tarjeta (que tiene
-          overflow-hidden) para que nunca quede recortado, con posición fixed calculada a
-          partir del propio input. Se cierra automáticamente si el usuario hace scroll dentro
-          del paso, para no quedar desalineado del campo. */}
-      {showNatMenu && natMatches.length > 0 && natMenuRect && createPortal(
+      {/* Portal: el desplegable de Pierna se pinta fuera de la tarjeta (que tiene
+          overflow-hidden) para que nunca quede recortado ni tapado por el pie de página,
+          con posición fixed calculada a partir del propio botón. Se cierra automáticamente
+          en cuanto se elige una opción, y también si el usuario hace scroll dentro del paso. */}
+      {showFootMenu && footMenuRect && createPortal(
         <div
-          ref={natDropdownRef}
-          style={{ position: 'fixed', top: natMenuRect.top, left: natMenuRect.left, width: natMenuRect.width }}
-          className="bg-surface border border-border rounded-xl shadow-2xl overflow-y-auto max-h-48 no-scrollbar z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
+          ref={footDropdownRef}
+          style={{ position: 'fixed', top: footMenuRect.top, left: footMenuRect.left, width: footMenuRect.width }}
+          className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
         >
-          {natMatches.map((country) => (
-            <button key={country.code} type="button" onClick={() => selectNationality(country)} className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-bold text-fg-secondary hover:bg-well transition-all touch-manipulation">
-              <span className="text-base leading-none w-5 text-center shrink-0">{flagEmoji(country.code)}</span> {country.name}
+          {FOOT_OPTIONS.map((opt) => (
+            <button key={opt.value} type="button" onClick={() => selectFoot(opt.value)} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
+              {opt.icon} {opt.label}
             </button>
           ))}
         </div>,
