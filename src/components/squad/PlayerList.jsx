@@ -179,11 +179,20 @@ const SWIPE_MAX_DRAG = -280;
 // de movimiento y ya no cambia durante ese mismo toque. Un deslizamiento corto deja la fila
 // abierta (revela Editar/Eliminar); uno largo y continuo dispara onFullSwipe directamente,
 // que siempre debe abrir una confirmación antes de borrar nada.
+//
+// El efecto se suscribe UNA sola vez (deps []): en la lista de activos, "lineup"/"bench"
+// llegan como props nuevas del contexto en casi cada render, así que si "onFullSwipe" (una
+// función definida en línea por el padre) formara parte de las dependencias, el efecto se
+// desmontaría y volvería a montar los listeners nativos en mitad de un arrastre real,
+// cortando el gesto y obligando a soltar y volver a deslizar. Por eso la última versión de
+// onFullSwipe se guarda en un ref que el listener siempre lee "en caliente".
 function useSwipeReveal(onFullSwipe) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const rowRef = useRef(null);
   const offsetRef = useRef(0);
+  const onFullSwipeRef = useRef(onFullSwipe);
+  onFullSwipeRef.current = onFullSwipe;
 
   useEffect(() => {
     const el = rowRef.current;
@@ -215,7 +224,7 @@ function useSwipeReveal(onFullSwipe) {
         const final = offsetRef.current;
         if (final <= SWIPE_FULL_THRESHOLD) {
           offsetRef.current = 0; setOffset(0);
-          onFullSwipe();
+          onFullSwipeRef.current();
         } else if (final < -SWIPE_ACTION_WIDTH / 2) {
           offsetRef.current = -SWIPE_ACTION_WIDTH; setOffset(-SWIPE_ACTION_WIDTH);
         } else {
@@ -236,7 +245,7 @@ function useSwipeReveal(onFullSwipe) {
       el.removeEventListener('touchend', onEnd);
       el.removeEventListener('touchcancel', onEnd);
     };
-  }, [onFullSwipe]);
+  }, []);
 
   const close = () => { offsetRef.current = 0; setOffset(0); };
   return { rowRef, offset, dragging, close };

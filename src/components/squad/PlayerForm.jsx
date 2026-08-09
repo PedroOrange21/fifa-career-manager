@@ -57,6 +57,8 @@ const toFormState = (p) => {
     value: formatValueInput(String(p?.value || '')),
     loanDuration: p?.loanDuration || '1 Temporada',
     originClub: p?.originClub || '',
+    buyOption: formatValueInput(String(p?.buyOption || '')),
+    wagePercentage: p?.wagePercentage != null ? String(p.wagePercentage) : '',
     potential: p?.potential || '',
     wage: formatValueInput(String(p?.wage || '')),
     releaseClause: formatValueInput(String(p?.releaseClause || '')),
@@ -108,6 +110,16 @@ function ReviewRow({ label, active, onOpen, display, children }) {
 
 const REVIEW_INPUT_CLASS = 'w-full bg-well-strong p-2.5 rounded-lg outline-none border border-border-subtle focus:border-green-500 font-bold text-sm text-fg placeholder:text-fg-faint';
 const REVIEW_DONE_CLASS = 'mt-2 w-full py-2 rounded-lg bg-green-500/10 text-green-500 text-[9px] font-black uppercase touch-manipulation';
+
+// Cabecera de bloque para agrupar visualmente el resumen del Paso 4 en secciones.
+function SectionHeader({ emoji, title }) {
+  return (
+    <div className="w-full flex items-center gap-2 mt-5 mb-1 px-1 first:mt-0">
+      <span className="text-sm leading-none">{emoji}</span>
+      <span className="text-[10px] font-black uppercase tracking-widest text-fg-secondary">{title}</span>
+    </div>
+  );
+}
 
 export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onClose }) {
   const { addOrUpdatePlayer, deleteScout } = useClubData();
@@ -274,6 +286,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
         value: form.type === 'Comprado' ? parseValue(form.value) : 0,
         loanDuration: form.type === 'Cedido' ? form.loanDuration : null,
         originClub: form.type === 'Cedido' ? form.originClub.trim() : null,
+        buyOption: form.type === 'Cedido' ? (parseValue(form.buyOption) || null) : null,
+        wagePercentage: form.type === 'Cedido' && form.wagePercentage ? parseInt(form.wagePercentage) : null,
         transferStatus: 'Activo',
         wage: parseValue(form.wage),
         releaseClause: parseValue(form.releaseClause) || null,
@@ -301,7 +315,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
   const positionsPreview = [form.primaryPosition, ...form.secondaryPositions].filter(Boolean).join(' · ') || '—';
 
   const contractYearOptions = form.type === 'Cedido'
-    ? [{ value: '1', label: 'Cesión 1 Año (1 Temporada)' }, { value: '2', label: 'Cesión 2 Años (2 Temporadas)' }]
+    ? [{ value: '1', label: 'Cesión 1 temporada' }, { value: '2', label: 'Cesión 2 temporadas' }]
     : [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `${n} Año${n > 1 ? 's' : ''}` }));
 
   return (
@@ -482,12 +496,12 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1 relative">
-                      <label className="text-[9px] font-black text-fg-muted ml-1">Cláusula (€)</label>
-                      <input type="text" inputMode="numeric" placeholder="Ej: 150.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.releaseClause} onChange={formatMoneyField('releaseClause')} />
-                    </div>
-                    <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Años Contrato</label>
                       <Dropdown value={form.contractYears} options={contractYearOptions} onChange={(v) => set({ contractYears: v })} placeholder="Seleccionar" />
+                    </div>
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Cláusula (€)</label>
+                      <input type="text" inputMode="numeric" placeholder="Ej: 150.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.releaseClause} onChange={formatMoneyField('releaseClause')} />
                     </div>
                   </div>
                 </>
@@ -523,6 +537,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     <span className="text-[9px] font-black uppercase tracking-widest text-fg-faint">Revisión Final</span>
                     <span className="text-[8px] font-bold uppercase tracking-widest text-fg-faint">Toca un dato para editarlo</span>
                   </div>
+
+                  <SectionHeader emoji="👤" title="Datos Personales" />
                   <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
                     <div className="px-4 py-2.5 flex justify-between items-center gap-2">
                       <span className="text-[9px] font-black uppercase text-fg-muted">Foto</span>
@@ -553,36 +569,56 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
                     </ReviewRow>
 
-                    <ReviewRow label="Posición" active={editField === 'position'} onOpen={() => setEditField('position')} display={positionsPreview}>
-                      <div className="flex flex-wrap gap-1.5">
-                        {ALL_POSITIONS.map((pos) => (
-                          <button key={pos} type="button" onClick={() => selectPrimary(pos)} className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.primaryPosition === pos ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>
-                        ))}
-                      </div>
-                      <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
-                    </ReviewRow>
-
-                    <ReviewRow label="Media (OVR)" active={editField === 'rating'} onOpen={() => setEditField('rating')} display={form.rating || '—'}>
-                      <input autoFocus type="number" inputMode="numeric" min="1" max="99" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.rating} onChange={(e) => set({ rating: e.target.value })} />
-                    </ReviewRow>
-
                     <ReviewRow label="Edad" active={editField === 'age'} onOpen={() => setEditField('age')} display={form.age ? `${form.age} Años` : '—'}>
                       <input autoFocus type="number" inputMode="numeric" min="15" max="50" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.age} onChange={(e) => set({ age: e.target.value })} />
+                    </ReviewRow>
+                  </div>
+
+                  <SectionHeader emoji="⚽" title="Atributos Deportivos" />
+                  <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+                    <ReviewRow label="Media (OVR)" active={editField === 'rating'} onOpen={() => setEditField('rating')} display={form.rating || '—'}>
+                      <input autoFocus type="number" inputMode="numeric" min="1" max="99" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.rating} onChange={(e) => set({ rating: e.target.value })} />
                     </ReviewRow>
 
                     <ReviewRow label="Pierna" active={editField === 'foot'} onOpen={() => setEditField('foot')} display={form.preferredFoot}>
                       <Dropdown value={form.preferredFoot} options={FOOT_OPTIONS} onChange={(v) => { set({ preferredFoot: v }); setEditField(null); }} />
                     </ReviewRow>
 
-                    <ReviewRow label="Adquisición" active={editField === 'type'} onOpen={() => setEditField('type')} display={`${form.type}${form.type === 'Cedido' && form.originClub ? ` · ${form.originClub}` : ''}`}>
+                    {/* Edición de posiciones: principal y secundarias, ambas modificables desde
+                        la propia revisión final. */}
+                    <ReviewRow label="Posiciones" active={editField === 'position'} onOpen={() => setEditField('position')} display={positionsPreview}>
+                      <div className="space-y-2">
+                        <div>
+                          <span className="text-[8px] font-black uppercase text-fg-faint ml-0.5">Principal</span>
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {ALL_POSITIONS.map((pos) => (
+                              <button key={pos} type="button" onClick={() => selectPrimary(pos)} className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.primaryPosition === pos ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>
+                            ))}
+                          </div>
+                        </div>
+                        {form.primaryPosition && form.primaryPosition !== 'POR' && (
+                          <div>
+                            <span className="text-[8px] font-black uppercase text-fg-faint ml-0.5">Secundarias</span>
+                            <div className="flex flex-wrap gap-1.5 mt-1">
+                              {ALL_POSITIONS.filter((pos) => pos !== 'POR' && pos !== form.primaryPosition).map((pos) => (
+                                <button key={pos} type="button" onClick={() => toggleSecondary(pos)} className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.secondaryPositions.includes(pos) ? 'bg-green-500/80 text-black' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
+                    </ReviewRow>
+                  </div>
+
+                  <SectionHeader emoji="💰" title="Condiciones Económicas y Contratación" />
+                  <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+                    <ReviewRow label="Adquisición" active={editField === 'type'} onOpen={() => setEditField('type')} display={form.type}>
                       <div className="flex gap-2">
                         {['Cantera', 'Cedido', 'Comprado'].map((t) => (
                           <button key={t} type="button" onClick={() => set({ type: t, contractYears: '' })} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${form.type === t ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>{t}</button>
                         ))}
                       </div>
-                      {form.type === 'Cedido' && (
-                        <input type="text" placeholder="Club de origen" onKeyDown={blockEnterKey} className={`${REVIEW_INPUT_CLASS} mt-2`} value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} />
-                      )}
                       <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
                     </ReviewRow>
 
@@ -590,17 +626,50 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.marketValue} onChange={formatMoneyField('marketValue')} />
                     </ReviewRow>
 
-                    <ReviewRow label="Sueldo Anual (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
-                      <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
-                    </ReviewRow>
+                    {/* Campos dinámicos: cambian según el Tipo de Adquisición elegido arriba. */}
+                    {form.type === 'Comprado' && (
+                      <>
+                        <ReviewRow label="Precio de Compra (€)" active={editField === 'value'} onOpen={() => setEditField('value')} display={`${form.value || '0'} €`}>
+                          <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.value} onChange={formatMoneyField('value')} />
+                        </ReviewRow>
+                        <ReviewRow label="Sueldo Anual (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
+                          <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
+                        </ReviewRow>
+                        <ReviewRow label="Años Contrato" active={editField === 'contractYears'} onOpen={() => setEditField('contractYears')} display={form.contractYears ? `${form.contractYears} Años` : 'Sin definir'}>
+                          <Dropdown value={form.contractYears} options={contractYearOptions} onChange={(v) => { set({ contractYears: v }); setEditField(null); }} placeholder="Seleccionar" />
+                        </ReviewRow>
+                        <ReviewRow label="Cláusula (€)" active={editField === 'releaseClause'} onOpen={() => setEditField('releaseClause')} display={`${form.releaseClause || '0'} €`}>
+                          <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.releaseClause} onChange={formatMoneyField('releaseClause')} />
+                        </ReviewRow>
+                      </>
+                    )}
 
-                    <ReviewRow label="Cláusula (€)" active={editField === 'releaseClause'} onOpen={() => setEditField('releaseClause')} display={`${form.releaseClause || '0'} €`}>
-                      <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.releaseClause} onChange={formatMoneyField('releaseClause')} />
-                    </ReviewRow>
+                    {form.type === 'Cedido' && (
+                      <>
+                        <ReviewRow label="Club de Origen" active={editField === 'originClub'} onOpen={() => setEditField('originClub')} display={form.originClub || 'Sin definir'}>
+                          <input autoFocus type="text" placeholder="Ej: Real Madrid" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} />
+                        </ReviewRow>
+                        <ReviewRow label="Duración Cesión" active={editField === 'loanDuration'} onOpen={() => setEditField('loanDuration')} display={form.loanDuration}>
+                          <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => { set({ loanDuration: v }); setEditField(null); }} />
+                        </ReviewRow>
+                        <ReviewRow label="Opción de Compra (€)" active={editField === 'buyOption'} onOpen={() => setEditField('buyOption')} display={form.buyOption ? `${form.buyOption} €` : 'Sin opción de compra'}>
+                          <input autoFocus type="text" inputMode="numeric" placeholder="Ej: 40.000.000" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.buyOption} onChange={formatMoneyField('buyOption')} />
+                        </ReviewRow>
+                        <ReviewRow label="% Salario Pagado" active={editField === 'wagePercentage'} onOpen={() => setEditField('wagePercentage')} display={`${form.wagePercentage || 0}%`}>
+                          <div className="flex items-center gap-3">
+                            <input type="range" min="0" max="100" step="5" className="flex-1 accent-green-500" value={form.wagePercentage || 0} onChange={(e) => set({ wagePercentage: e.target.value })} />
+                            <span className="w-12 text-center font-black text-fg bg-well-strong rounded-lg py-1.5 text-xs shrink-0">{form.wagePercentage || 0}%</span>
+                          </div>
+                          <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
+                        </ReviewRow>
+                      </>
+                    )}
 
-                    <ReviewRow label="Años Contrato" active={editField === 'contractYears'} onOpen={() => setEditField('contractYears')} display={form.contractYears ? `${form.contractYears} Años` : 'Sin definir'}>
-                      <Dropdown value={form.contractYears} options={contractYearOptions} onChange={(v) => { set({ contractYears: v }); setEditField(null); }} placeholder="Seleccionar" />
-                    </ReviewRow>
+                    {form.type === 'Cantera' && (
+                      <ReviewRow label="Potencial (1-99)" active={editField === 'potential'} onOpen={() => setEditField('potential')} display={form.potential || 'Sin definir'}>
+                        <input autoFocus type="number" min="1" max="99" placeholder="Ej: 88" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.potential} onChange={(e) => set({ potential: e.target.value })} />
+                      </ReviewRow>
+                    )}
                   </div>
                 </div>
               )}
@@ -620,7 +689,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
             )}
             {step === TOTAL_STEPS && (
               <button type="button" disabled={isSubmitting} onClick={handleConfirm} className="flex-1 w-full py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-2 text-center hover:bg-green-400 transition-all disabled:opacity-50 touch-manipulation">
-                {isSubmitting ? 'Guardando...' : (<><Check size={16} className="shrink-0" /> <span>Confirmar Fichaje</span></>)}
+                {isSubmitting ? 'Guardando...' : (<><Check size={16} className="shrink-0" /> <span className="md:hidden">Confirmar</span><span className="hidden md:inline">Confirmar Fichaje</span></>)}
               </button>
             )}
           </footer>
