@@ -311,6 +311,8 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
   };
 
   const MORE_ACTIONS = [
+    { key: 'edit', icon: Edit2, label: 'Editar Jugador', onClick: () => onEdit(p) },
+    { key: 'delete', icon: Trash2, label: 'Eliminar Jugador', onClick: () => onDelete(p.id) },
     { key: 'transferible', icon: Tag, label: 'Añadir a Transferibles', onClick: onMarkTransferible },
     { key: 'cedible', icon: ArrowRightLeft, label: 'Añadir a Cedibles', onClick: onMarkCedible },
     { key: 'sell', icon: DollarSign, label: 'Vender Jugador', onClick: onSell },
@@ -365,16 +367,11 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           )}
         </div>
 
-        {/* Escritorio: nada de swipe (no hay touch), así que las mismas acciones se integran
-            al final de la fila, en el flujo normal (sin overlays ni superposiciones), y solo
-            se hacen visibles al pasar el cursor por encima de la fila. */}
-        <div className="hidden sm:flex flex-col items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button type="button" onClick={() => onDelete(p.id)} title="Borrar" className="w-7 h-7 flex items-center justify-center rounded-lg text-fg-faint hover:text-red-500 hover:bg-red-500/10 transition-colors touch-manipulation">
-            <Trash2 size={14} />
-          </button>
-          <button type="button" onClick={() => onEdit(p)} title="Editar" className="w-7 h-7 flex items-center justify-center rounded-lg text-fg-faint hover:text-green-500 hover:bg-green-500/10 transition-colors touch-manipulation">
-            <Edit2 size={14} />
-          </button>
+        {/* Escritorio: nada de swipe (no hay touch), así que todas las acciones (Editar,
+            Eliminar, Transferibles, Cedibles, Vender, Ceder) se agrupan en el único botón
+            "...", ahorrando espacio horizontal en la fila. Solo se hace visible al pasar el
+            cursor por encima de la fila. */}
+        <div className="hidden sm:block shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <button ref={moreBtnDesktopRef} type="button" onClick={toggleMore} title="Más opciones" className="w-7 h-7 flex items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong transition-colors touch-manipulation">
             <MoreHorizontal size={14} />
           </button>
