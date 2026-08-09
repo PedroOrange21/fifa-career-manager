@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Search, Edit2, Trash2, Shirt, Users, ArrowRightLeft, Tag, ShieldAlert, ArrowUpDown, Star, DollarSign, Calendar, ArrowDownAZ } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Plus, Search, Edit2, Trash2, Shirt, Users, ArrowRightLeft, Tag, ShieldAlert, ArrowUpDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue, formatLoanDuration } from '../../utils/format';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import PlayerForm from './PlayerForm';
 import ConfirmModal from '../common/ConfirmModal';
+import SellPlayerModal from '../economy/SellPlayerModal';
+import LoanOutModal from '../economy/LoanOutModal';
 
 // Escritorio (ratón real): el texto se revela con :hover y un solo clic abre el formulario.
 // Táctil: el primer toque despliega el texto (sin abrir) y el segundo lo confirma, igual que
@@ -24,7 +27,7 @@ const SORT_OPTIONS = [
 ];
 
 export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pendingPrefill, onConsumePendingPrefill }) {
-  const { players, lineup, bench, playerToDelete, setPlayerToDelete, confirmDeletePlayer } = useClubData();
+  const { players, lineup, bench, playerToDelete, setPlayerToDelete, confirmDeletePlayer, setPlayerTransferStatus } = useClubData();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('rating-desc');
   const [showForm, setShowForm] = useState(false);
@@ -32,6 +35,8 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [formPrefill, setFormPrefill] = useState(null);
   const [formSourceScoutId, setFormSourceScoutId] = useState(null);
   const [formInitialStep, setFormInitialStep] = useState(1);
+  const [sellingPlayer, setSellingPlayer] = useState(null);
+  const [loaningPlayer, setLoaningPlayer] = useState(null);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const sortMenuRef = useRef(null);
   useOnClickOutside(sortMenuRef, () => setShowSortMenu(false), showSortMenu);
@@ -136,7 +141,14 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
         {activePlayers.length === 0 && (<div className="p-16 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">{searchQuery ? 'No se encontraron jugadores' : 'Plantilla Vacía'}</div>)}
         {activePlayers.map((p) => (
-          <PlayerRow key={p.id} p={p} lineup={lineup} bench={bench} onEdit={openEditForm} onDelete={setPlayerToDelete} />
+          <PlayerRow
+            key={p.id} p={p} lineup={lineup} bench={bench}
+            onEdit={openEditForm} onDelete={setPlayerToDelete}
+            onMarkTransferible={() => setPlayerTransferStatus(p.id, 'Transferible')}
+            onMarkCedible={() => setPlayerTransferStatus(p.id, 'Cedible')}
+            onSell={() => setSellingPlayer(p)}
+            onLoan={() => setLoaningPlayer(p)}
+          />
         ))}
       </div>
 
@@ -152,6 +164,8 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       )}
 
       {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} sourceScoutId={formSourceScoutId} initialStep={formInitialStep} onClose={() => setShowForm(false)} />}
+      {sellingPlayer && <SellPlayerModal player={sellingPlayer} onClose={() => setSellingPlayer(null)} />}
+      {loaningPlayer && <LoanOutModal player={loaningPlayer} onClose={() => setLoaningPlayer(null)} />}
 
       {playerToDelete && (
         <ConfirmModal
@@ -166,8 +180,6 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
     </div>
   );
 }
-
-const SWIPE_ACTION_WIDTH = 128;
 
 // Gesto de deslizar compartido por las filas de la Plantilla (activas y cedidas). Usa un
 // listener nativo de touchmove con { passive: false } porque React registra los onTouchMove
@@ -188,7 +200,7 @@ const SWIPE_ACTION_WIDTH = 128;
 // desmontaría y volvería a montar los listeners nativos en mitad de un arrastre real,
 // cortando el gesto y obligando a soltar y volver a deslizar. Por eso la última versión de
 // onFullSwipe se guarda en un ref que el listener siempre lee "en caliente".
-function useSwipeReveal(onFullSwipe) {
+function useSwipeReveal(onFullSwipe, actionWidth = 128) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [pastThreshold, setPastThreshold] = useState(false);
@@ -196,6 +208,8 @@ function useSwipeReveal(onFullSwipe) {
   const offsetRef = useRef(0);
   const onFullSwipeRef = useRef(onFullSwipe);
   onFullSwipeRef.current = onFullSwipe;
+  const actionWidthRef = useRef(actionWidth);
+  actionWidthRef.current = actionWidth;
 
   useEffect(() => {
     const el = rowRef.current;
@@ -232,8 +246,8 @@ function useSwipeReveal(onFullSwipe) {
         if (final <= drag.threshold) {
           offsetRef.current = 0; setOffset(0);
           onFullSwipeRef.current();
-        } else if (final < -SWIPE_ACTION_WIDTH / 2) {
-          offsetRef.current = -SWIPE_ACTION_WIDTH; setOffset(-SWIPE_ACTION_WIDTH);
+        } else if (final < -actionWidthRef.current / 2) {
+          offsetRef.current = -actionWidthRef.current; setOffset(-actionWidthRef.current);
         } else {
           offsetRef.current = 0; setOffset(0);
         }
@@ -259,15 +273,51 @@ function useSwipeReveal(onFullSwipe) {
   return { rowRef, offset, dragging, pastThreshold, close };
 }
 
-function PlayerRow({ p, lineup, bench, onEdit, onDelete }) {
-  const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(() => onDelete(p.id));
+const ROW_ACTION_WIDTH = 192; // 3 botones de 64px (w-16) cada uno
+
+function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onMarkCedible, onSell, onLoan }) {
+  const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
+  const [showMore, setShowMore] = useState(false);
+  const [moreRect, setMoreRect] = useState(null);
+  const moreBtnRef = useRef(null);
+  const moreMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!showMore) return;
+    const handler = (e) => {
+      if (moreBtnRef.current?.contains(e.target)) return;
+      if (moreMenuRef.current?.contains(e.target)) return;
+      setShowMore(false);
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [showMore]);
+
+  const toggleMore = () => {
+    if (showMore) { setShowMore(false); return; }
+    const rect = moreBtnRef.current?.getBoundingClientRect();
+    if (rect) setMoreRect({ top: rect.bottom + 4, right: window.innerWidth - rect.right, width: 200 });
+    setShowMore(true);
+  };
+
+  const MORE_ACTIONS = [
+    { key: 'transferible', icon: Tag, label: 'Añadir a Transferibles', onClick: onMarkTransferible },
+    { key: 'cedible', icon: ArrowRightLeft, label: 'Añadir a Cedibles', onClick: onMarkCedible },
+    { key: 'sell', icon: DollarSign, label: 'Vender Jugador', onClick: onSell },
+    { key: 'loan', icon: Handshake, label: 'Ceder Jugador', onClick: onLoan },
+  ];
 
   return (
     <div className="relative overflow-hidden">
-      {/* Orden en el flex: Borrar primero (se revela último, más lejos) y Editar segundo
-          (se revela primero, justo a la derecha inmediata del jugador). El panel está
-          anclado a la derecha, así que el SEGUNDO hijo del flex queda más pegado al borde
-          del contenido y por tanto es el primero en asomar al deslizar. */}
+      {/* Orden en el flex: Borrar primero, Editar en el centro y "..." al final. El panel
+          está anclado a la derecha, así que el ÚLTIMO hijo del flex queda más pegado al
+          borde del contenido y por tanto es el primero en asomar al deslizar — de ahí que
+          "..." se revele antes que Editar, y este antes que Borrar, tal como se pidió
+          (de izquierda a derecha ya desplegado: Borrar · Editar · "..."). */}
       <div className="absolute inset-y-0 right-0 flex">
         <button type="button" onClick={() => { onDelete(p.id); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-red-500 text-white active:bg-red-400 touch-manipulation">
           <Trash2 size={18} />
@@ -276,6 +326,10 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete }) {
         <button type="button" onClick={() => { onEdit(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well text-fg-muted active:bg-well-strong touch-manipulation">
           <Edit2 size={18} />
           <span className="text-[8px] font-black uppercase">Editar</span>
+        </button>
+        <button ref={moreBtnRef} type="button" onClick={toggleMore} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
+          <MoreHorizontal size={18} />
+          <span className="text-[8px] font-black uppercase">Más</span>
         </button>
       </div>
       <div
@@ -312,6 +366,24 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete }) {
           </div>
         )}
       </div>
+
+      {/* Menú contextual del botón "...": mismo patrón de portal que el resto de la app
+          (fuera de cualquier overflow-hidden, posición fixed calculada desde el propio
+          botón), para que nunca quede recortado por la lista. */}
+      {showMore && moreRect && createPortal(
+        <div
+          ref={moreMenuRef}
+          style={{ position: 'fixed', top: moreRect.top, right: moreRect.right, width: moreRect.width }}
+          className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
+        >
+          {MORE_ACTIONS.map(({ key, icon: Icon, label, onClick }) => (
+            <button key={key} type="button" onClick={() => { onClick(); setShowMore(false); close(); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase text-fg-secondary hover:bg-well transition-all touch-manipulation">
+              <Icon size={14} className="shrink-0" /> {label}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

@@ -32,10 +32,13 @@ function FootIndicator({ variant, size = 14 }) {
   );
 }
 
+// "icon" (pequeño, w-2.5) se usa dentro de las listas de opciones del desplegable; "closedIcon"
+// (tamaño actual, w-3.5) se usa donde se muestra el valor ya seleccionado y fijo (el botón
+// cerrado y la ficha de revisión), para que no se vea reducido ahí.
 const FOOT_OPTIONS = [
-  { value: 'Diestro', label: 'Diestro', icon: <FootIndicator variant="Diestro" /> },
-  { value: 'Zurdo', label: 'Zurdo', icon: <FootIndicator variant="Zurdo" /> },
-  { value: 'Ambas', label: 'Ambas', icon: <FootIndicator variant="Ambas" /> },
+  { value: 'Diestro', label: 'Diestro', icon: <FootIndicator variant="Diestro" size={10} />, closedIcon: <FootIndicator variant="Diestro" /> },
+  { value: 'Zurdo', label: 'Zurdo', icon: <FootIndicator variant="Zurdo" size={10} />, closedIcon: <FootIndicator variant="Zurdo" /> },
+  { value: 'Ambas', label: 'Ambas', icon: <FootIndicator variant="Ambas" size={10} />, closedIcon: <FootIndicator variant="Ambas" /> },
 ];
 
 const LOAN_DURATION_OPTIONS = [
@@ -453,7 +456,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     <div className="space-y-1 relative" ref={footMenuRef}>
                       <label className="text-[9px] font-black text-fg-muted ml-1">Pierna</label>
                       <button ref={footBtnRef} type="button" onClick={toggleFootMenu} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg touch-manipulation">
-                        {FOOT_OPTIONS.find((f) => f.value === form.preferredFoot)?.icon}
+                        {FOOT_OPTIONS.find((f) => f.value === form.preferredFoot)?.closedIcon}
                         <span className="text-[8px] uppercase tracking-wide">{form.preferredFoot}</span>
                       </button>
                     </div>
