@@ -64,6 +64,24 @@ const toFormState = (p) => {
 const emptyPlayer = toFormState(null);
 const playerToFormState = toFormState;
 
+// Bloquea el "scroll chaining" hacia la página de fondo cuando el usuario arrastra sobre
+// el backdrop del modal (la zona sin contenido scrolleable, fuera de la tarjeta). Usa un
+// listener nativo con { passive: false } porque React registra los onTouchMove sintéticos
+// como pasivos por defecto y no deja llamar a preventDefault() desde la prop JSX. Solo actúa
+// si el toque empezó exactamente sobre el backdrop (e.target === el), nunca si empezó dentro
+// de la tarjeta, para no interferir con su scroll interno (overflow-y-auto propio).
+function usePreventBackdropTouch(active) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!active || !el) return;
+    const handleTouchMove = (e) => { if (e.target === el) e.preventDefault(); };
+    el.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', handleTouchMove);
+  }, [active]);
+  return ref;
+}
+
 export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onClose }) {
   const { addOrUpdatePlayer, deleteScout } = useClubData();
   const { hide: hideChrome, show: showChrome } = useUiChrome();
@@ -84,6 +102,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
   const fileInputRef = useRef(null);
   const footMenuRef = useRef(null);
   useOnClickOutside(footMenuRef, () => setShowFootMenu(false), showFootMenu);
+  const backdropRef = usePreventBackdropTouch(true);
+  const discardBackdropRef = usePreventBackdropTouch(showDiscardConfirm);
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
@@ -216,20 +236,23 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
   return (
     <>
-      {/* Pantalla aislada a pantalla completa: gestiona su propio scroll interno (overflow-y-auto
-          + overscroll-contain) sin tocar document.body. Bloquear el scroll del body con
-          position:fixed desplazaba las coordenadas táctiles en Safari iOS, haciendo que un
-          toque respondiera en un elemento distinto al que se veía en pantalla. */}
-      <div className="fixed inset-0 z-50 w-full h-[100dvh] bg-surface flex flex-col overflow-y-auto overscroll-contain">
-        <div className="w-full max-w-sm mx-auto flex flex-col min-h-full">
-          <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur-sm flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
+      {/* Backdrop: no tiene su propio scroll (no es contenido scrolleable), así que un
+          touchmove que empiece aquí se bloquea (usePreventBackdropTouch) para que no arrastre
+          la página de la plantilla que sigue debajo — sin tocar document.body en ningún
+          momento, para no desajustar las coordenadas táctiles en Safari iOS. */}
+      <div ref={backdropRef} className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 overscroll-contain">
+        {/* Tarjeta compacta: flex-col + overflow-hidden en el propio contenedor, para que
+            cabecera y pie queden completamente estáticos y solo el cuerpo central (flex-1
+            overflow-y-auto) haga scroll, incluso si el teclado se despliega en móvil. */}
+        <div className="bg-surface border border-border rounded-[32px] w-full max-w-sm shadow-2xl max-h-[90dvh] flex flex-col overflow-hidden">
+          <div className="shrink-0 bg-surface flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
             <h3 className="font-black italic text-green-500 text-sm uppercase">{editingPlayer ? 'Editar Jugador' : 'Fichar Jugador'}</h3>
             <button type="button" onClick={handleCloseClick} className="p-1 text-fg-faint hover:text-fg transition-colors touch-manipulation">
               <X size={18} />
             </button>
           </div>
 
-          <div className="px-5 pt-4 flex-1">
+          <div className="px-5 pt-4 flex-1 overflow-y-auto overscroll-contain no-scrollbar">
             <div className="mb-4">
               <div className="flex items-center gap-1.5">
                 {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
@@ -436,7 +459,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
             </div>
           </div>
 
-          <footer className="sticky bottom-0 z-10 bg-surface/95 backdrop-blur-sm border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+          <footer className="shrink-0 bg-surface border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
             {step > 1 && (
               <button type="button" onClick={goPrev} className="flex-1 py-4 rounded-xl bg-well-strong text-fg font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:brightness-125 transition-all touch-manipulation">
                 <ChevronLeft size={16} /> Anterior
@@ -456,10 +479,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
         </div>
       </div>
 
-      {/* Confirmación de descarte simple, sin bloqueo de scroll del body: se apoya en la
-          propia pantalla de Fichar Jugador (que ya no tiene scroll de fondo que proteger). */}
+      {/* Confirmación de descarte simple, sin bloqueo de scroll del body: su propio backdrop
+          usa el mismo guard de touchmove (discardBackdropRef) para no arrastrar la página
+          de fondo mientras está abierta. */}
       {showDiscardConfirm && (
-        <div className="fixed inset-0 bg-black/90 z-[250] flex items-center justify-center p-4">
+        <div ref={discardBackdropRef} className="fixed inset-0 bg-black/90 z-[250] flex items-center justify-center p-4 overscroll-contain">
           <div className="bg-surface border border-border p-6 rounded-[32px] w-full max-w-sm text-center shadow-2xl">
             <ShieldAlert className="text-red-500 mx-auto mb-4" size={40} />
             <h3 className="text-lg font-black uppercase italic mb-2 text-fg">¿Deseas salir?</h3>
