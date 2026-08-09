@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ShieldAlert, Camera, RefreshCcw, User, ChevronLeft, ChevronRight, Check, Globe2, Footprints } from 'lucide-react';
 import { ALL_POSITIONS } from '../../constants/positions';
+import { flagEmoji, findCountryByName, searchCountries } from '../../constants/countries';
 import { formatValueInput, parseValue } from '../../utils/format';
 import { resizeImageToDataUrl } from '../../utils/image';
 import { getCardStyle } from '../../utils/cardStyle';
@@ -99,11 +101,48 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [showFootMenu, setShowFootMenu] = useState(false);
+  const [showNatMenu, setShowNatMenu] = useState(false);
+  const [natMenuRect, setNatMenuRect] = useState(null);
   const fileInputRef = useRef(null);
   const footMenuRef = useRef(null);
+  const natInputWrapRef = useRef(null);
+  const natDropdownRef = useRef(null);
+  const natInputRef = useRef(null);
   useOnClickOutside(footMenuRef, () => setShowFootMenu(false), showFootMenu);
   const backdropRef = usePreventBackdropTouch(true);
   const discardBackdropRef = usePreventBackdropTouch(showDiscardConfirm);
+
+  // El desplegable de nacionalidad se pinta con un portal (fuera de la tarjeta, que tiene
+  // overflow-hidden para mantener cabecera/pie estáticos) para que nunca quede recortado,
+  // sea cual sea la posición del campo dentro del paso. Por eso el "click fuera" necesita
+  // comprobar dos refs (el campo Y el propio portal) en vez de uno solo.
+  useEffect(() => {
+    if (!showNatMenu) return;
+    const handler = (e) => {
+      if (natInputWrapRef.current?.contains(e.target)) return;
+      if (natDropdownRef.current?.contains(e.target)) return;
+      setShowNatMenu(false);
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [showNatMenu]);
+
+  const selectedCountry = findCountryByName(form.nationality);
+  const natMatches = showNatMenu ? searchCountries(form.nationality) : [];
+  const openNatMenu = () => {
+    const rect = natInputRef.current?.getBoundingClientRect();
+    if (rect) setNatMenuRect({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    setShowNatMenu(true);
+  };
+  const selectNationality = (country) => {
+    set({ nationality: country.name });
+    setShowNatMenu(false);
+    natInputRef.current?.blur();
+  };
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
@@ -252,7 +291,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
             </button>
           </div>
 
-          <div className="px-5 pt-4 flex-1 overflow-y-auto overscroll-contain no-scrollbar">
+          <div onScroll={() => setShowNatMenu(false)} className="px-5 pt-4 flex-1 overflow-y-auto overscroll-contain no-scrollbar">
             <div className="mb-4">
               <div className="flex items-center gap-1.5">
                 {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
@@ -298,11 +337,25 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       <input type="text" autoComplete="off" placeholder="Haaland" onKeyDown={blockEnterKey} className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={form.lastName} onChange={(e) => set({ lastName: e.target.value })} />
                     </div>
                   </div>
-                  <div className="space-y-1 relative">
+                  <div className="space-y-1 relative" ref={natInputWrapRef}>
                     <label className="text-[9px] font-black text-fg-muted ml-1">Nacionalidad</label>
                     <div className="relative">
-                      <Globe2 className="absolute left-4 top-1/2 -translate-y-1/2 text-fg-faint pointer-events-none" size={16} />
-                      <input type="text" placeholder="Ej: Noruega" onKeyDown={blockEnterKey} className="w-full bg-well p-4 pl-11 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={form.nationality} onChange={(e) => set({ nationality: e.target.value })} />
+                      {selectedCountry ? (
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base leading-none pointer-events-none">{flagEmoji(selectedCountry.code)}</span>
+                      ) : (
+                        <Globe2 className="absolute left-4 top-1/2 -translate-y-1/2 text-fg-faint pointer-events-none" size={16} />
+                      )}
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        placeholder="Ej: Noruega"
+                        onKeyDown={blockEnterKey}
+                        className="w-full bg-well p-4 pl-11 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm"
+                        ref={natInputRef}
+                        value={form.nationality}
+                        onChange={(e) => { set({ nationality: e.target.value }); openNatMenu(); }}
+                        onFocus={openNatMenu}
+                      />
                     </div>
                   </div>
                 </>
@@ -433,7 +486,12 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                         <span className="text-4xl font-black">{form.rating}</span>
                         <span className="text-[10px] font-black uppercase mt-1 tracking-wider">{form.primaryPosition}</span>
                       </div>
-                      {form.nationality && <span className="text-[8px] font-black uppercase bg-black/10 px-2 py-1 rounded-lg max-w-[70px] truncate text-right">{form.nationality}</span>}
+                      {form.nationality && (
+                        <div className="flex items-center gap-1 bg-black/10 pl-1 pr-2 py-1 rounded-full max-w-[110px]">
+                          <span className="w-4 h-4 rounded-full bg-black/20 flex items-center justify-center text-[10px] leading-none shrink-0 overflow-hidden">{selectedCountry ? flagEmoji(selectedCountry.code) : '🌍'}</span>
+                          <span className="text-[8px] font-black uppercase truncate">{form.nationality}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex justify-center my-3">
                       {form.photo ? (
@@ -478,6 +536,25 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
           </footer>
         </div>
       </div>
+
+      {/* Portal: el desplegable de nacionalidad se pinta fuera de la tarjeta (que tiene
+          overflow-hidden) para que nunca quede recortado, con posición fixed calculada a
+          partir del propio input. Se cierra automáticamente si el usuario hace scroll dentro
+          del paso, para no quedar desalineado del campo. */}
+      {showNatMenu && natMatches.length > 0 && natMenuRect && createPortal(
+        <div
+          ref={natDropdownRef}
+          style={{ position: 'fixed', top: natMenuRect.top, left: natMenuRect.left, width: natMenuRect.width }}
+          className="bg-surface border border-border rounded-xl shadow-2xl overflow-y-auto max-h-48 no-scrollbar z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
+        >
+          {natMatches.map((country) => (
+            <button key={country.code} type="button" onClick={() => selectNationality(country)} className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-bold text-fg-secondary hover:bg-well transition-all touch-manipulation">
+              <span className="text-base leading-none w-5 text-center shrink-0">{flagEmoji(country.code)}</span> {country.name}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
 
       {/* Confirmación de descarte simple, sin bloqueo de scroll del body: su propio backdrop
           usa el mismo guard de touchmove (discardBackdropRef) para no arrastrar la página
