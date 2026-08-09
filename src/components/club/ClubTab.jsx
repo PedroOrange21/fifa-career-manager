@@ -15,7 +15,7 @@ export default function ClubTab({
 }) {
   return (
     <div className="space-y-4 animate-in fade-in">
-      <div className="flex bg-surface p-1 rounded-2xl border border-border-subtle">
+      <div className="sticky top-[71px] md:top-[73px] z-30 flex bg-surface p-1 rounded-2xl border border-border-subtle shadow-lg">
         {SUB_TABS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setSubTab(id)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2 ${subTab === id ? (id === 'academy' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20' : 'bg-canvas text-fg shadow-sm border border-border-subtle') : 'text-fg-muted hover:text-fg-secondary'}`}>
             <Icon size={14} /> {label}

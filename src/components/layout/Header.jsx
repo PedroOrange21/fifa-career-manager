@@ -1,3 +1,4 @@
+import { Wallet } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { formatCurrency } from '../../utils/format';
 import ClubMenu from './ClubMenu';
@@ -16,10 +17,16 @@ export default function Header({ setActiveTab, onSwitchClub }) {
 
       <div className="flex items-center gap-4">
         {!hasNoClubs && activeClub && (
-          <div className="hidden md:flex flex-col items-end mr-2">
-            <span className="text-[9px] font-black uppercase text-fg-muted tracking-widest">Presupuesto</span>
-            <span className={`font-black text-sm ${transferBudget < 0 ? 'text-red-500' : 'text-green-500'}`}>{formatCurrency(transferBudget)}</span>
-          </div>
+          <>
+            <div className={`flex md:hidden items-center gap-1 px-2.5 py-1.5 rounded-lg bg-well border border-border-subtle shrink-0 ${transferBudget < 0 ? 'text-red-500' : 'text-green-500'}`}>
+              <Wallet size={11} className="shrink-0" />
+              <span className="font-black text-[11px] whitespace-nowrap">{formatCurrency(transferBudget)}</span>
+            </div>
+            <div className="hidden md:flex flex-col items-end mr-2">
+              <span className="text-[9px] font-black uppercase text-fg-muted tracking-widest">Presupuesto</span>
+              <span className={`font-black text-sm ${transferBudget < 0 ? 'text-red-500' : 'text-green-500'}`}>{formatCurrency(transferBudget)}</span>
+            </div>
+          </>
         )}
         <ClubMenu setActiveTab={setActiveTab} onSwitchClub={onSwitchClub} />
       </div>
