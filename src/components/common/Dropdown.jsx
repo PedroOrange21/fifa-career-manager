@@ -40,7 +40,7 @@ export default function Dropdown({ value, options, onChange, placeholder = 'Sele
     <div ref={wrapRef} className="relative">
       <button ref={btnRef} type="button" onClick={toggle} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg touch-manipulation">
         {selected?.icon}
-        <span className="text-[8px] uppercase tracking-wide truncate max-w-full px-1">{selected?.label ?? placeholder}</span>
+        <span className="text-sm uppercase tracking-wide truncate max-w-full px-1">{selected?.label ?? placeholder}</span>
       </button>
       {open && rect && createPortal(
         <div
@@ -49,7 +49,7 @@ export default function Dropdown({ value, options, onChange, placeholder = 'Sele
           className="bg-surface border border-border rounded-xl shadow-2xl overflow-y-auto max-h-56 no-scrollbar z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
         >
           {options.map((opt) => (
-            <button key={opt.value} type="button" onClick={() => { onChange(opt.value); setOpen(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${value === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
+            <button key={opt.value} type="button" onClick={() => { onChange(opt.value); setOpen(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2.5 rounded-lg text-sm font-black uppercase transition-all touch-manipulation ${value === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
               {opt.icon} {opt.label}
             </button>
           ))}

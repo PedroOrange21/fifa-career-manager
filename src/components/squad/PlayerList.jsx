@@ -5,7 +5,6 @@ import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue, formatLoanDuration } from '../../utils/format';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import PlayerForm from './PlayerForm';
-import PlayerInfoModal from './PlayerInfoModal';
 import ConfirmModal from '../common/ConfirmModal';
 
 // Escritorio (ratón real): el texto se revela con :hover y un solo clic abre el formulario.
@@ -32,7 +31,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [formPrefill, setFormPrefill] = useState(null);
   const [formSourceScoutId, setFormSourceScoutId] = useState(null);
-  const [infoPlayer, setInfoPlayer] = useState(null);
+  const [formInitialStep, setFormInitialStep] = useState(1);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const sortMenuRef = useRef(null);
   useOnClickOutside(sortMenuRef, () => setShowSortMenu(false), showSortMenu);
@@ -45,6 +44,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       setEditingPlayer(pendingEditPlayer);
       setFormPrefill(null);
       setFormSourceScoutId(null);
+      setFormInitialStep(4);
       setShowForm(true);
       onConsumePendingEdit();
     }
@@ -56,6 +56,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       setEditingPlayer(null);
       setFormPrefill(rest);
       setFormSourceScoutId(__scoutId || null);
+      setFormInitialStep(1);
       setShowForm(true);
       onConsumePendingPrefill();
     }
@@ -86,8 +87,10 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const activePlayers = filteredPlayers.filter((p) => p.transferStatus !== 'CedidoFuera');
   const loanedOutPlayers = filteredPlayers.filter((p) => p.transferStatus === 'CedidoFuera');
 
-  const openNewForm = () => { setEditingPlayer(null); setFormPrefill(null); setFormSourceScoutId(null); setShowForm(true); };
-  const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormSourceScoutId(null); setShowForm(true); setInfoPlayer(null); };
+  const openNewForm = () => { setEditingPlayer(null); setFormPrefill(null); setFormSourceScoutId(null); setFormInitialStep(1); setShowForm(true); };
+  // Editar desde la lista (activos o cedidos) abre directamente el Paso 4 con los datos
+  // precargados, sin pasar por el asistente paso a paso.
+  const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormSourceScoutId(null); setFormInitialStep(4); setShowForm(true); };
 
   const handleFicharClick = () => {
     if (HAS_HOVER) { openNewForm(); return; }
@@ -142,14 +145,13 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
           <div className="px-2 flex items-center gap-2 text-zinc-400"><ArrowRightLeft size={14} /><h3 className="text-xs font-black uppercase tracking-widest italic">Jugadores Cedidos a otros Clubes</h3></div>
           <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
             {loanedOutPlayers.map((p) => (
-              <LoanedPlayerRow key={p.id} p={p} onEdit={() => setInfoPlayer(p)} onDelete={() => setPlayerToDelete(p.id)} />
+              <LoanedPlayerRow key={p.id} p={p} onEdit={() => openEditForm(p)} onDelete={() => setPlayerToDelete(p.id)} />
             ))}
           </div>
         </div>
       )}
 
-      {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} sourceScoutId={formSourceScoutId} onClose={() => setShowForm(false)} />}
-      {infoPlayer && <PlayerInfoModal player={infoPlayer} infoSlot="uncalled" onClose={() => setInfoPlayer(null)} onEdit={openEditForm} onReplace={() => {}} />}
+      {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} sourceScoutId={formSourceScoutId} initialStep={formInitialStep} onClose={() => setShowForm(false)} />}
 
       {playerToDelete && (
         <ConfirmModal
@@ -166,19 +168,19 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
 }
 
 const SWIPE_ACTION_WIDTH = 128;
-// Deslizamiento largo y continuo: si se supera este umbral (más allá de la zona de revelado
-// de Editar/Eliminar), se dispara directamente la confirmación de borrado al soltar.
-const SWIPE_FULL_THRESHOLD = -220;
-const SWIPE_MAX_DRAG = -280;
 
 // Gesto de deslizar compartido por las filas de la Plantilla (activas y cedidas). Usa un
 // listener nativo de touchmove con { passive: false } porque React registra los onTouchMove
 // sintéticos como pasivos por defecto y no deja llamar a preventDefault() desde la prop JSX
 // (necesario aquí para bloquear el scroll vertical de la lista mientras se arrastra en
 // horizontal). El eje del gesto (horizontal vs vertical) se decide en los primeros píxeles
-// de movimiento y ya no cambia durante ese mismo toque. Un deslizamiento corto deja la fila
-// abierta (revela Editar/Eliminar); uno largo y continuo dispara onFullSwipe directamente,
-// que siempre debe abrir una confirmación antes de borrar nada.
+// de movimiento y ya no cambia durante ese mismo toque.
+//
+// Deslizamiento corto: deja la fila abierta (revela Editar/Eliminar). Deslizamiento largo
+// y continuo — más de la mitad del ancho de la propia fila (equivalente a la mitad de la
+// pantalla en esta lista a ancho completo) — tiñe toda la franja de rojo con "Borrar" en
+// tiempo real; si se suelta dentro de esa zona, dispara onFullSwipe (que siempre debe abrir
+// una confirmación antes de borrar nada).
 //
 // El efecto se suscribe UNA sola vez (deps []): en la lista de activos, "lineup"/"bench"
 // llegan como props nuevas del contexto en casi cada render, así que si "onFullSwipe" (una
@@ -189,6 +191,7 @@ const SWIPE_MAX_DRAG = -280;
 function useSwipeReveal(onFullSwipe) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [pastThreshold, setPastThreshold] = useState(false);
   const rowRef = useRef(null);
   const offsetRef = useRef(0);
   const onFullSwipeRef = useRef(onFullSwipe);
@@ -197,10 +200,13 @@ function useSwipeReveal(onFullSwipe) {
   useEffect(() => {
     const el = rowRef.current;
     if (!el) return;
-    const drag = { startX: 0, startY: 0, active: false, axis: null, startOffset: 0 };
+    const drag = { startX: 0, startY: 0, active: false, axis: null, startOffset: 0, threshold: -160, maxDrag: -240 };
     const onStart = (e) => {
       const t = e.touches[0];
       drag.startX = t.clientX; drag.startY = t.clientY; drag.active = true; drag.axis = null; drag.startOffset = offsetRef.current;
+      const width = el.getBoundingClientRect().width || 320;
+      drag.threshold = -(width * 0.5);
+      drag.maxDrag = drag.threshold - 80;
     };
     const onMove = (e) => {
       if (!drag.active) return;
@@ -214,15 +220,16 @@ function useSwipeReveal(onFullSwipe) {
       }
       if (drag.axis === 'x') {
         e.preventDefault();
-        const next = Math.max(SWIPE_MAX_DRAG, Math.min(0, drag.startOffset + dx));
+        const next = Math.max(drag.maxDrag, Math.min(0, drag.startOffset + dx));
         offsetRef.current = next;
         setOffset(next);
+        setPastThreshold(next <= drag.threshold);
       }
     };
     const onEnd = () => {
       if (drag.axis === 'x') {
         const final = offsetRef.current;
-        if (final <= SWIPE_FULL_THRESHOLD) {
+        if (final <= drag.threshold) {
           offsetRef.current = 0; setOffset(0);
           onFullSwipeRef.current();
         } else if (final < -SWIPE_ACTION_WIDTH / 2) {
@@ -234,6 +241,7 @@ function useSwipeReveal(onFullSwipe) {
       drag.active = false;
       drag.axis = null;
       setDragging(false);
+      setPastThreshold(false);
     };
     el.addEventListener('touchstart', onStart, { passive: true });
     el.addEventListener('touchmove', onMove, { passive: false });
@@ -248,22 +256,26 @@ function useSwipeReveal(onFullSwipe) {
   }, []);
 
   const close = () => { offsetRef.current = 0; setOffset(0); };
-  return { rowRef, offset, dragging, close };
+  return { rowRef, offset, dragging, pastThreshold, close };
 }
 
 function PlayerRow({ p, lineup, bench, onEdit, onDelete }) {
-  const { rowRef, offset, dragging, close } = useSwipeReveal(() => onDelete(p.id));
+  const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(() => onDelete(p.id));
 
   return (
     <div className="relative overflow-hidden">
+      {/* Orden en el flex: Borrar primero (se revela último, más lejos) y Editar segundo
+          (se revela primero, justo a la derecha inmediata del jugador). El panel está
+          anclado a la derecha, así que el SEGUNDO hijo del flex queda más pegado al borde
+          del contenido y por tanto es el primero en asomar al deslizar. */}
       <div className="absolute inset-y-0 right-0 flex">
-        <button type="button" onClick={() => { onEdit(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well text-fg-muted active:bg-well-strong touch-manipulation">
-          <Edit2 size={18} />
-          <span className="text-[8px] font-black uppercase">Editar</span>
-        </button>
         <button type="button" onClick={() => { onDelete(p.id); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-red-500 text-white active:bg-red-400 touch-manipulation">
           <Trash2 size={18} />
           <span className="text-[8px] font-black uppercase">Borrar</span>
+        </button>
+        <button type="button" onClick={() => { onEdit(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well text-fg-muted active:bg-well-strong touch-manipulation">
+          <Edit2 size={18} />
+          <span className="text-[8px] font-black uppercase">Editar</span>
         </button>
       </div>
       <div
@@ -292,27 +304,34 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete }) {
             </span>
           )}
         </div>
+        {/* Umbral de borrado continuo: al superar la mitad de la fila, toda la franja se
+            tiñe de rojo en tiempo real para anticipar que soltar aquí borra al jugador. */}
+        {pastThreshold && (
+          <div className="absolute inset-0 z-10 bg-red-500 flex items-center justify-center gap-2 text-white font-black uppercase text-sm">
+            <Trash2 size={18} /> Borrar
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 // Misma mecánica de deslizar que PlayerRow, aplicada también a los jugadores cedidos a otros
-// clubes: "Editar" aquí abre la ficha de información (no el formulario de edición completo),
-// igual que hacía el botón fijo que sustituye.
+// clubes: "Editar" abre directamente el Paso 4 del formulario, igual que en la lista de
+// activos, con el mismo orden de botones y el mismo aviso rojo de borrado continuo.
 function LoanedPlayerRow({ p, onEdit, onDelete }) {
-  const { rowRef, offset, dragging, close } = useSwipeReveal(onDelete);
+  const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(onDelete);
 
   return (
     <div className="relative overflow-hidden">
       <div className="absolute inset-y-0 right-0 flex">
-        <button type="button" onClick={() => { onEdit(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well text-fg-muted active:bg-well-strong touch-manipulation">
-          <Edit2 size={18} />
-          <span className="text-[8px] font-black uppercase">Ver</span>
-        </button>
         <button type="button" onClick={() => { onDelete(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-red-500 text-white active:bg-red-400 touch-manipulation">
           <Trash2 size={18} />
           <span className="text-[8px] font-black uppercase">Borrar</span>
+        </button>
+        <button type="button" onClick={() => { onEdit(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well text-fg-muted active:bg-well-strong touch-manipulation">
+          <Edit2 size={18} />
+          <span className="text-[8px] font-black uppercase">Editar</span>
         </button>
       </div>
       <div
@@ -325,6 +344,11 @@ function LoanedPlayerRow({ p, onEdit, onDelete }) {
           <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
           <div className="flex-1 min-w-0"><div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div><div className="text-[8px] md:text-[9px] text-zinc-500 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div><div className="flex flex-wrap items-center gap-1.5 mt-0.5"><span className="text-[8px] md:text-[9px] text-zinc-600 font-black bg-well px-2 py-0.5 rounded">Cedido</span>{p.loanDuration && (<span className="text-[8px] md:text-[9px] text-zinc-500 font-black bg-well px-2 py-0.5 rounded">{formatLoanDuration(p.loanDuration)}</span>)}</div></div>
         </div>
+        {pastThreshold && (
+          <div className="absolute inset-0 z-10 bg-red-500 flex items-center justify-center gap-2 text-white font-black uppercase text-sm">
+            <Trash2 size={18} /> Borrar
+          </div>
+        )}
       </div>
     </div>
   );

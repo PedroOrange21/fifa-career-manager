@@ -13,10 +13,24 @@ import Dropdown from '../common/Dropdown';
 const STEP_TITLES = ['Identidad', 'Atributos', 'Términos Económicos', 'Revisión Final'];
 const TOTAL_STEPS = STEP_TITLES.length;
 
+// Par de huellas que indica de un vistazo la pierna hábil: la huella del lado dominante se
+// destaca en blanco, la del otro lado queda atenuada en gris. "Ambas" destaca las dos.
+function FootIndicator({ variant, size = 16 }) {
+  const rightActive = variant === 'Diestro' || variant === 'Ambas';
+  const leftActive = variant === 'Zurdo' || variant === 'Ambas';
+  const dim = 'text-zinc-500 opacity-40';
+  return (
+    <span className="flex items-center -space-x-1">
+      <Footprints size={size} className={`scale-x-[-1] ${leftActive ? 'text-white' : dim}`} />
+      <Footprints size={size} className={rightActive ? 'text-white' : dim} />
+    </span>
+  );
+}
+
 const FOOT_OPTIONS = [
-  { value: 'Diestro', label: 'Diestro', icon: <Footprints size={16} /> },
-  { value: 'Zurdo', label: 'Zurdo', icon: <Footprints size={16} className="scale-x-[-1]" /> },
-  { value: 'Ambas', label: 'Ambas', icon: (<span className="flex items-center -space-x-1"><Footprints size={13} className="scale-x-[-1]" /><Footprints size={13} /></span>) },
+  { value: 'Diestro', label: 'Diestro', icon: <FootIndicator variant="Diestro" /> },
+  { value: 'Zurdo', label: 'Zurdo', icon: <FootIndicator variant="Zurdo" /> },
+  { value: 'Ambas', label: 'Ambas', icon: <FootIndicator variant="Ambas" /> },
 ];
 
 const LOAN_DURATION_OPTIONS = [
@@ -121,7 +135,7 @@ function SectionHeader({ emoji, title }) {
   );
 }
 
-export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onClose }) {
+export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onClose, initialStep = 1 }) {
   const { addOrUpdatePlayer, deleteScout } = useClubData();
   const { hide: hideChrome, show: showChrome } = useUiChrome();
   useEffect(() => {
@@ -132,7 +146,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
   const [form, setForm] = useState(() => toFormState(editingPlayer || prefill || null));
   const initialFormRef = useRef(form);
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(initialStep);
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -435,7 +449,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       <label className="text-[9px] font-black text-fg-muted ml-1">Pierna</label>
                       <button ref={footBtnRef} type="button" onClick={toggleFootMenu} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg touch-manipulation">
                         {FOOT_OPTIONS.find((f) => f.value === form.preferredFoot)?.icon}
-                        <span className="text-[8px] uppercase tracking-wide">{form.preferredFoot}</span>
+                        <span className="text-sm uppercase tracking-wide">{form.preferredFoot}</span>
                       </button>
                     </div>
                     <div className="space-y-1 relative">
@@ -611,7 +625,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     </ReviewRow>
                   </div>
 
-                  <SectionHeader emoji="💰" title="Condiciones Económicas y Contratación" />
+                  <SectionHeader emoji="💰" title="Economía" />
                   <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
                     <ReviewRow label="Adquisición" active={editField === 'type'} onOpen={() => setEditField('type')} display={form.type}>
                       <div className="flex gap-2">
@@ -707,7 +721,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
           className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
         >
           {FOOT_OPTIONS.map((opt) => (
-            <button key={opt.value} type="button" onClick={() => selectFoot(opt.value)} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
+            <button key={opt.value} type="button" onClick={() => selectFoot(opt.value)} className={`w-full flex items-center gap-2 px-2.5 py-2.5 rounded-lg text-sm font-black uppercase transition-all touch-manipulation ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
               {opt.icon} {opt.label}
             </button>
           ))}
