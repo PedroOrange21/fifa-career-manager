@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, ShieldAlert, Camera, RefreshCcw, User, ChevronLeft, ChevronRight, Check, Globe2, Footprints } from 'lucide-react';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { formatValueInput, parseValue } from '../../utils/format';
@@ -7,6 +7,7 @@ import { getCardStyle } from '../../utils/cardStyle';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
+import { useUiChrome } from '../../context/UiChromeContext';
 
 const STEP_TITLES = ['Identidad', 'Atributos', 'Términos Económicos', 'Revisión Final'];
 const TOTAL_STEPS = STEP_TITLES.length;
@@ -56,6 +57,12 @@ const playerToFormState = toFormState;
 export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onClose }) {
   useBodyScrollLock();
   const { addOrUpdatePlayer, deleteScout } = useClubData();
+  const { hide: hideChrome, show: showChrome } = useUiChrome();
+  useEffect(() => {
+    hideChrome();
+    return () => showChrome();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [form, setForm] = useState(() => toFormState(editingPlayer || prefill || null));
   const [step, setStep] = useState(1);
   const [formError, setFormError] = useState('');

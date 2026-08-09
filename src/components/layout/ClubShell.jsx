@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { RefreshCcw, Shield, ShieldAlert } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { ClubDataProvider } from '../../context/ClubDataContext';
+import { UiChromeContext } from '../../context/UiChromeContext';
 import Header from './Header';
 import BottomNav from './BottomNav';
 import ClubModal from '../clubs/ClubModal';
@@ -24,8 +25,13 @@ export default function ClubShell() {
   const [officeSubTab, setOfficeSubTab] = useState('finance');
   const [pendingEditPlayer, setPendingEditPlayer] = useState(null);
   const [pendingPrefill, setPendingPrefill] = useState(null);
+  const [chromeHiddenCount, setChromeHiddenCount] = useState(0);
 
   const hasNoClubs = clubs.length === 0 && !loadingClubs;
+  const chromeHidden = chromeHiddenCount > 0;
+  const hideChrome = useCallback(() => setChromeHiddenCount((c) => c + 1), []);
+  const showChrome = useCallback(() => setChromeHiddenCount((c) => Math.max(0, c - 1)), []);
+  const uiChromeValue = useMemo(() => ({ hide: hideChrome, show: showChrome }), [hideChrome, showChrome]);
 
   const requestEditPlayer = (player) => { setActiveTab('club'); setClubSubTab('squad'); setPendingEditPlayer(player); };
   const requestSignScout = (prefillData, scoutId) => { setActiveTab('club'); setClubSubTab('squad'); setPendingPrefill({ ...prefillData, __scoutId: scoutId }); };
@@ -36,8 +42,9 @@ export default function ClubShell() {
 
   return (
     <ClubDataProvider>
+      <UiChromeContext.Provider value={uiChromeValue}>
       <div className="min-h-screen bg-canvas text-fg flex flex-col overscroll-none" style={{ overscrollBehaviorY: 'none' }}>
-        <Header setActiveTab={setActiveTab} onSwitchClub={switchClub} onNavigateToFinance={goToFinance} />
+        {!chromeHidden && <Header setActiveTab={setActiveTab} onSwitchClub={switchClub} onNavigateToFinance={goToFinance} />}
 
         <main className="p-2 md:p-4 max-w-lg mx-auto flex flex-col flex-1 w-full relative z-10 pb-28 md:pb-32">
           {loadingClubs ? (
@@ -70,7 +77,7 @@ export default function ClubShell() {
           )}
         </main>
 
-        {!hasNoClubs && !loadingClubs && activeClubId && <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />}
+        {!chromeHidden && !hasNoClubs && !loadingClubs && activeClubId && <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />}
 
         {showClubModal && <ClubModal onFirstClubCreated={() => { setActiveTab('club'); setClubSubTab('squad'); setPendingPrefill({}); }} />}
         {editingClub && <ClubModal editingClub={editingClub} onClose={() => setEditingClub(null)} />}
@@ -89,6 +96,7 @@ export default function ClubShell() {
           />
         )}
       </div>
+      </UiChromeContext.Provider>
     </ClubDataProvider>
   );
 }
