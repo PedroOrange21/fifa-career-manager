@@ -368,15 +368,15 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
         {/* Escritorio: nada de swipe (no hay touch), así que las mismas acciones se integran
             al final de la fila, en el flujo normal (sin overlays ni superposiciones), y solo
             se hacen visibles al pasar el cursor por encima de la fila. */}
-        <div className="hidden sm:flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button type="button" onClick={() => onDelete(p.id)} title="Borrar" className="p-2 rounded-lg text-fg-faint hover:text-red-500 hover:bg-red-500/10 transition-colors touch-manipulation">
-            <Trash2 size={16} />
+        <div className="hidden sm:flex flex-col items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button type="button" onClick={() => onDelete(p.id)} title="Borrar" className="w-7 h-7 flex items-center justify-center rounded-lg text-fg-faint hover:text-red-500 hover:bg-red-500/10 transition-colors touch-manipulation">
+            <Trash2 size={14} />
           </button>
-          <button type="button" onClick={() => onEdit(p)} title="Editar" className="p-2 rounded-lg text-fg-faint hover:text-green-500 hover:bg-green-500/10 transition-colors touch-manipulation">
-            <Edit2 size={16} />
+          <button type="button" onClick={() => onEdit(p)} title="Editar" className="w-7 h-7 flex items-center justify-center rounded-lg text-fg-faint hover:text-green-500 hover:bg-green-500/10 transition-colors touch-manipulation">
+            <Edit2 size={14} />
           </button>
-          <button ref={moreBtnDesktopRef} type="button" onClick={toggleMore} title="Más opciones" className="p-2 rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong transition-colors touch-manipulation">
-            <MoreHorizontal size={16} />
+          <button ref={moreBtnDesktopRef} type="button" onClick={toggleMore} title="Más opciones" className="w-7 h-7 flex items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong transition-colors touch-manipulation">
+            <MoreHorizontal size={14} />
           </button>
         </div>
 
@@ -441,12 +441,12 @@ function LoanedPlayerRow({ p, onEdit, onDelete }) {
           <div className="flex-1 min-w-0"><div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div><div className="text-[8px] md:text-[9px] text-zinc-500 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div><div className="flex flex-wrap items-center gap-1.5 mt-0.5"><span className="text-[8px] md:text-[9px] text-zinc-600 font-black bg-well px-2 py-0.5 rounded">Cedido</span>{p.loanDuration && (<span className="text-[8px] md:text-[9px] text-zinc-500 font-black bg-well px-2 py-0.5 rounded">{formatLoanDuration(p.loanDuration)}</span>)}</div></div>
         </div>
 
-        <div className="hidden sm:flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button type="button" onClick={() => onDelete()} title="Borrar" className="p-2 rounded-lg text-zinc-500 hover:text-red-500 hover:bg-red-500/10 transition-colors touch-manipulation">
-            <Trash2 size={16} />
+        <div className="hidden sm:flex flex-col items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button type="button" onClick={() => onDelete()} title="Borrar" className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-red-500 hover:bg-red-500/10 transition-colors touch-manipulation">
+            <Trash2 size={14} />
           </button>
-          <button type="button" onClick={() => onEdit()} title="Editar" className="p-2 rounded-lg text-zinc-500 hover:text-fg hover:bg-well transition-colors touch-manipulation">
-            <Edit2 size={16} />
+          <button type="button" onClick={() => onEdit()} title="Editar" className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-fg hover:bg-well transition-colors touch-manipulation">
+            <Edit2 size={14} />
           </button>
         </div>
 
