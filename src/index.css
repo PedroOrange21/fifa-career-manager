@@ -63,6 +63,16 @@ input, textarea, select {
   color: var(--app-text);
 }
 
+/* Evita el auto-zoom de Safari/Chrome en móvil: por debajo de 16px el navegador hace
+   zoom automáticamente al enfocar cualquier campo. Se aplica solo por debajo del
+   breakpoint `md` de Tailwind (768px) para no alterar el tamaño de texto en escritorio.
+   !important es necesario para ganarle a las clases text-* de Tailwind de cada campo. */
+@media (max-width: 767px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,

@@ -8,6 +8,7 @@ import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import { useUiChrome } from '../../context/UiChromeContext';
+import ConfirmModal from '../common/ConfirmModal';
 
 const STEP_TITLES = ['Identidad', 'Atributos', 'Términos Económicos', 'Revisión Final'];
 const TOTAL_STEPS = STEP_TITLES.length;
@@ -64,10 +65,12 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [form, setForm] = useState(() => toFormState(editingPlayer || prefill || null));
+  const initialFormRef = useRef(form);
   const [step, setStep] = useState(1);
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [showFootMenu, setShowFootMenu] = useState(false);
   const fileInputRef = useRef(null);
   const footMenuRef = useRef(null);
@@ -177,6 +180,9 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
     }
   };
 
+  const isDirty = JSON.stringify(form) !== JSON.stringify(initialFormRef.current);
+  const requestClose = () => { if (isDirty) setShowDiscardConfirm(true); else onClose(); };
+
   const fullNamePreview = `${form.firstName.trim()}${form.lastName.trim() ? ` ${form.lastName.trim()}` : ''}` || 'Nuevo Jugador';
 
   const contractYearOptions = form.type === 'Cedido'
@@ -184,11 +190,12 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
     : [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `${n} Año${n > 1 ? 's' : ''}` }));
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
+    <>
+    <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={requestClose}>
       <div className="bg-surface border border-border rounded-[32px] w-full max-w-sm shadow-2xl relative my-auto max-h-[88vh] overflow-y-auto no-scrollbar overscroll-contain" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 z-20 bg-surface/95 backdrop-blur-sm flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
           <h3 className="font-black italic text-green-500 text-sm uppercase">{editingPlayer ? 'Editar Jugador' : 'Fichar Jugador'}</h3>
-          <button type="button" onClick={onClose} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
+          <button type="button" onClick={requestClose} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
         </div>
 
         <div className="px-5 pt-4">
@@ -333,6 +340,19 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
         </div>
       </div>
     </div>
+
+    {showDiscardConfirm && (
+      <ConfirmModal
+        icon={ShieldAlert}
+        title="¿Deseas salir?"
+        message="Se perderán los datos introducidos del jugador."
+        confirmLabel="Salir y Descartar"
+        confirmClassName="bg-red-500 text-black shadow-red-500/20 hover:bg-red-400"
+        onCancel={() => setShowDiscardConfirm(false)}
+        onConfirm={onClose}
+      />
+    )}
+    </>
   );
 }
 
