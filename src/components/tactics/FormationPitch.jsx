@@ -11,7 +11,7 @@ export default function FormationPitch({ dnd, onEmptySlotClick, onPlayerSlotClic
   const { draggedPlayer, handleDragStart, handleDragOver, handleDrop, handleTouchStartLocal, shouldSuppressClick } = dnd;
 
   return (
-    <div className="bg-[#1a2e1d] border-4 border-green-500/20 rounded-[32px] md:rounded-[48px] p-6 relative min-h-[550px] md:min-h-[620px] overflow-hidden shadow-inner">
+    <div className="bg-gradient-to-br from-green-500 to-emerald-600 dark:bg-none dark:bg-[#1a2e1d] border-4 border-green-500/20 rounded-[32px] md:rounded-[48px] p-6 relative min-h-[550px] md:min-h-[620px] overflow-hidden shadow-inner">
       <TacticsDropdown icon={LayoutDashboard} value={formation} options={Object.keys(FORMATIONS)} onChange={handleFormationChange} wrapperClassName="absolute top-3 right-4 z-30" />
       <div className="absolute inset-4 border-2 border-white/30 rounded-[28px] pointer-events-none"></div><div className="absolute top-1/2 left-0 right-0 h-0.5 bg-white/30 pointer-events-none"></div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 md:w-36 md:h-36 border-2 border-white/30 rounded-full pointer-events-none"></div><div className="absolute top-4 left-1/2 -translate-x-1/2 w-40 md:w-48 h-16 md:h-20 border-b-2 border-x-2 border-white/30 pointer-events-none"></div><div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-40 md:w-48 h-16 md:h-20 border-t-2 border-x-2 border-white/30 pointer-events-none"></div>
       {FORMATIONS[formation].map((slot, idx) => {

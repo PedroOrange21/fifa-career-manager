@@ -69,16 +69,23 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 button, a, [role="button"], input, select, textarea, label {
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: transparent !important;
 }
 button, a, [role="button"] {
-  outline: none;
+  outline: none !important;
 }
 button:focus, button:focus-visible,
 a:focus, a:focus-visible,
-[role="button"]:focus, [role="button"]:focus-visible {
-  outline: none;
-  box-shadow: none;
+[role="button"]:focus, [role="button"]:focus-visible,
+button:active, a:active, [role="button"]:active {
+  outline: none !important;
+  box-shadow: none !important;
+  /* Neutraliza las variables del "ring" de Tailwind (usa box-shadow por debajo),
+     por si alguna clase focus:ring-* quedase aplicada: sin esto, el halo blanco
+     podía seguir viéndose en modo oscuro aunque outline/box-shadow se pusieran a none. */
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-color: transparent !important;
 }
 
 input, textarea, select {
