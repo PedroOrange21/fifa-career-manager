@@ -279,6 +279,11 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
   const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
+  // En móvil, Editar/Eliminar ya se hacen con el swipe, así que el menú "..." solo suma las
+  // 4 acciones de mercado; en escritorio (sin swipe) el menú "..." es la única vía y por eso
+  // agrupa las 6, en el orden pedido. "moreContext" recuerda qué botón abrió el menú para
+  // decidir cuál de las dos listas mostrar.
+  const [moreContext, setMoreContext] = useState('desktop');
   // Dos botones "..." en el DOM (el del panel de swipe en móvil y el inline de escritorio,
   // ver más abajo): solo uno es visible/clicable según el ancho de pantalla, pero ambos
   // existen a la vez (ocultos por CSS, no por render condicional), así que hacen falta dos
@@ -303,21 +308,25 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
     };
   }, [showMore]);
 
-  const toggleMore = (e) => {
+  const toggleMore = (e, context) => {
     if (showMore) { setShowMore(false); return; }
     const rect = e.currentTarget.getBoundingClientRect();
     setMoreRect({ top: rect.bottom + 4, right: window.innerWidth - rect.right, width: 200 });
+    setMoreContext(context);
     setShowMore(true);
   };
 
-  const MORE_ACTIONS = [
-    { key: 'edit', icon: Edit2, label: 'Editar Jugador', onClick: () => onEdit(p) },
-    { key: 'delete', icon: Trash2, label: 'Eliminar Jugador', onClick: () => onDelete(p.id) },
+  const MARKET_ACTIONS = [
     { key: 'transferible', icon: Tag, label: 'Añadir a Transferibles', onClick: onMarkTransferible },
     { key: 'cedible', icon: ArrowRightLeft, label: 'Añadir a Cedibles', onClick: onMarkCedible },
     { key: 'sell', icon: DollarSign, label: 'Vender Jugador', onClick: onSell },
     { key: 'loan', icon: Handshake, label: 'Ceder Jugador', onClick: onLoan },
   ];
+  // Móvil: solo las 4 acciones de mercado (Editar/Eliminar van por swipe).
+  // Escritorio: las mismas 4 más Editar y Borrar al final, único punto de acceso a esas dos.
+  const MORE_ACTIONS = moreContext === 'mobile'
+    ? MARKET_ACTIONS
+    : [...MARKET_ACTIONS, { key: 'edit', icon: Edit2, label: 'Editar Jugador', onClick: () => onEdit(p) }, { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete(p.id) }];
 
   return (
     <div className="relative overflow-hidden">
@@ -335,7 +344,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           <Edit2 size={18} />
           <span className="text-[8px] font-black uppercase">Editar</span>
         </button>
-        <button ref={moreBtnMobileRef} type="button" onClick={toggleMore} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
+        <button ref={moreBtnMobileRef} type="button" onClick={(e) => toggleMore(e, 'mobile')} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
           <MoreHorizontal size={18} />
           <span className="text-[8px] font-black uppercase">Más</span>
         </button>
@@ -372,7 +381,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
             "...", ahorrando espacio horizontal en la fila. Solo se hace visible al pasar el
             cursor por encima de la fila. */}
         <div className="hidden sm:block shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button ref={moreBtnDesktopRef} type="button" onClick={toggleMore} title="Más opciones" className="w-7 h-7 flex items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong transition-colors touch-manipulation">
+          <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="w-7 h-7 flex items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong transition-colors touch-manipulation">
             <MoreHorizontal size={14} />
           </button>
         </div>
