@@ -5,10 +5,8 @@ import { formatValueInput, parseValue } from '../../utils/format';
 import { resizeImageToDataUrl } from '../../utils/image';
 import { getCardStyle } from '../../utils/cardStyle';
 import { useClubData } from '../../context/ClubDataContext';
-import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import { useUiChrome } from '../../context/UiChromeContext';
-import ConfirmModal from '../common/ConfirmModal';
 
 const STEP_TITLES = ['Identidad', 'Atributos', 'Términos Económicos', 'Revisión Final'];
 const TOTAL_STEPS = STEP_TITLES.length;
@@ -67,7 +65,6 @@ const emptyPlayer = toFormState(null);
 const playerToFormState = toFormState;
 
 export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onClose }) {
-  useBodyScrollLock();
   const { addOrUpdatePlayer, deleteScout } = useClubData();
   const { hide: hideChrome, show: showChrome } = useUiChrome();
   useEffect(() => {
@@ -90,14 +87,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
-  // --- Selección de posiciones: cada botón corta la propagación por su cuenta, no
-  // dependen de ningún manejador en un contenedor padre para quedar aislados. ---
-  const selectPrimary = (e, pos) => {
-    e.stopPropagation();
+  // --- Selección de posiciones: onClick directo, sin interceptar el evento. ---
+  const selectPrimary = (pos) => {
     set({ primaryPosition: pos, secondaryPositions: pos === 'POR' ? [] : form.secondaryPositions.filter((p) => p !== 'POR' && p !== pos) });
   };
-  const toggleSecondary = (e, pos) => {
-    e.stopPropagation();
+  const toggleSecondary = (pos) => {
     if (pos === form.primaryPosition || pos === 'POR' || form.primaryPosition === 'POR') return;
     set({ secondaryPositions: form.secondaryPositions.includes(pos) ? form.secondaryPositions.filter((p) => p !== pos) : [...form.secondaryPositions, pos] });
   };
@@ -126,7 +120,6 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
   };
 
   const handlePhotoChange = async (e) => {
-    e.stopPropagation();
     const input = e.target;
     const file = input.files[0];
     if (!file) return;
@@ -210,8 +203,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
   // --- Cierre: única y exclusivamente disparado por el botón X. ---
   const isDirty = JSON.stringify(form) !== JSON.stringify(initialFormRef.current);
-  const handleCloseClick = (e) => {
-    e.stopPropagation();
+  const handleCloseClick = () => {
     if (isDirty) setShowDiscardConfirm(true);
     else onClose();
   };
@@ -224,22 +216,20 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
   return (
     <>
-      {/* Fondo sin onClick a propósito: la alerta de salida solo puede activarse
-          desde el botón X, nunca por un toque accidental fuera de la tarjeta. */}
-      <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200 touch-manipulation">
-        <div
-          className="bg-surface border border-border rounded-[32px] w-full max-w-sm shadow-2xl relative my-auto max-h-[88dvh] overflow-y-auto no-scrollbar overscroll-contain touch-manipulation"
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={blockEnterKey}
-        >
-          <div className="sticky top-0 z-40 bg-surface/95 backdrop-blur-sm flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
+      {/* Pantalla aislada a pantalla completa: gestiona su propio scroll interno (overflow-y-auto
+          + overscroll-contain) sin tocar document.body. Bloquear el scroll del body con
+          position:fixed desplazaba las coordenadas táctiles en Safari iOS, haciendo que un
+          toque respondiera en un elemento distinto al que se veía en pantalla. */}
+      <div className="fixed inset-0 z-50 w-full h-[100dvh] bg-surface flex flex-col overflow-y-auto overscroll-contain">
+        <div className="w-full max-w-sm mx-auto flex flex-col min-h-full">
+          <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur-sm flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
             <h3 className="font-black italic text-green-500 text-sm uppercase">{editingPlayer ? 'Editar Jugador' : 'Fichar Jugador'}</h3>
-            <button type="button" onClick={handleCloseClick} className="relative z-50 p-1 text-fg-faint hover:text-fg transition-colors touch-manipulation">
+            <button type="button" onClick={handleCloseClick} className="p-1 text-fg-faint hover:text-fg transition-colors touch-manipulation">
               <X size={18} />
             </button>
           </div>
 
-          <div className="px-5 pt-4">
+          <div className="px-5 pt-4 flex-1">
             <div className="mb-4">
               <div className="flex items-center gap-1.5">
                 {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
@@ -260,7 +250,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
               {step === 1 && (
                 <>
                   <div className="flex flex-col items-center gap-2 mb-2">
-                    <div className="relative group cursor-pointer" onClick={(e) => { e.stopPropagation(); if (!isUploadingPhoto) fileInputRef.current?.click(); }}>
+                    <div className="relative group cursor-pointer" onClick={() => { if (!isUploadingPhoto) fileInputRef.current?.click(); }}>
                       {form.photo ? (
                         <img src={form.photo} alt="Foto" className="w-20 h-20 rounded-full border-2 border-border object-cover shadow-lg" />
                       ) : (
@@ -301,7 +291,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     <label className="text-[9px] font-black text-fg-muted ml-1">Posición Principal *</label>
                     <div className="flex flex-wrap gap-1.5 p-2 bg-well rounded-xl border border-border-subtle">
                       {ALL_POSITIONS.map((pos) => (
-                        <button key={pos} type="button" onClick={(e) => selectPrimary(e, pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.primaryPosition === pos ? 'bg-green-500 text-black shadow-lg shadow-green-500/30' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>
+                        <button key={pos} type="button" onClick={() => selectPrimary(pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.primaryPosition === pos ? 'bg-green-500 text-black shadow-lg shadow-green-500/30' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>
                           {pos}
                         </button>
                       ))}
@@ -312,7 +302,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       <label className="text-[9px] font-black text-fg-muted ml-1">Posiciones Secundarias</label>
                       <div className="flex flex-wrap gap-1.5 p-2 bg-well rounded-xl border border-border-subtle">
                         {ALL_POSITIONS.filter((pos) => pos !== 'POR' && pos !== form.primaryPosition).map((pos) => (
-                          <button key={pos} type="button" onClick={(e) => toggleSecondary(e, pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.secondaryPositions.includes(pos) ? 'bg-green-500/80 text-black shadow-lg shadow-green-500/20' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>
+                          <button key={pos} type="button" onClick={() => toggleSecondary(pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.secondaryPositions.includes(pos) ? 'bg-green-500/80 text-black shadow-lg shadow-green-500/20' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>
                             {pos}
                           </button>
                         ))}
@@ -330,14 +320,14 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     </div>
                     <div className="space-y-1 relative" ref={footMenuRef}>
                       <label className="text-[9px] font-black text-fg-muted ml-1">Pierna</label>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setShowFootMenu((o) => !o); }} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg touch-manipulation">
+                      <button type="button" onClick={() => setShowFootMenu((o) => !o)} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg touch-manipulation">
                         {FOOT_OPTIONS.find((f) => f.value === form.preferredFoot)?.icon}
                         <span className="text-[8px] uppercase tracking-wide">{form.preferredFoot}</span>
                       </button>
                       {showFootMenu && (
                         <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[45] animate-in fade-in slide-in-from-top-2 duration-150 p-1">
                           {FOOT_OPTIONS.map((opt) => (
-                            <button key={opt.value} type="button" onClick={(e) => { e.stopPropagation(); set({ preferredFoot: opt.value }); setShowFootMenu(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
+                            <button key={opt.value} type="button" onClick={() => { set({ preferredFoot: opt.value }); setShowFootMenu(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
                               {opt.icon} {opt.label}
                             </button>
                           ))}
@@ -353,9 +343,9 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                   <div className="space-y-1 relative">
                     <label className="text-[9px] font-black text-fg-muted ml-1">Tipo de Adquisición</label>
                     <div className="flex gap-2">
-                      <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Cantera', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Cantera' ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cantera</button>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Cedido', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cedido</button>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Comprado', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Comprado' ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Comprado</button>
+                      <button type="button" onClick={() => set({ type: 'Cantera', contractYears: '' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Cantera' ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cantera</button>
+                      <button type="button" onClick={() => set({ type: 'Cedido', contractYears: '' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cedido</button>
+                      <button type="button" onClick={() => set({ type: 'Comprado', contractYears: '' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Comprado' ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Comprado</button>
                     </div>
                   </div>
                   {form.type === 'Cantera' && (
@@ -446,7 +436,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
             </div>
           </div>
 
-          <div className="sticky bottom-0 z-40 bg-surface/95 backdrop-blur-sm border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+          <footer className="sticky bottom-0 z-10 bg-surface/95 backdrop-blur-sm border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
             {step > 1 && (
               <button type="button" onClick={goPrev} className="flex-1 py-4 rounded-xl bg-well-strong text-fg font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:brightness-125 transition-all touch-manipulation">
                 <ChevronLeft size={16} /> Anterior
@@ -462,21 +452,24 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                 {isSubmitting ? 'Guardando...' : (<><Check size={16} /> Confirmar Fichaje</>)}
               </button>
             )}
-          </div>
+          </footer>
         </div>
       </div>
 
+      {/* Confirmación de descarte simple, sin bloqueo de scroll del body: se apoya en la
+          propia pantalla de Fichar Jugador (que ya no tiene scroll de fondo que proteger). */}
       {showDiscardConfirm && (
-        <ConfirmModal
-          icon={ShieldAlert}
-          title="¿Deseas salir?"
-          message="Se perderán los datos introducidos del jugador."
-          confirmLabel="Salir y Descartar"
-          confirmClassName="bg-red-500 text-black shadow-red-500/20 hover:bg-red-400"
-          zIndexClassName="z-[250]"
-          onCancel={() => setShowDiscardConfirm(false)}
-          onConfirm={onClose}
-        />
+        <div className="fixed inset-0 bg-black/90 z-[250] flex items-center justify-center p-4">
+          <div className="bg-surface border border-border p-6 rounded-[32px] w-full max-w-sm text-center shadow-2xl">
+            <ShieldAlert className="text-red-500 mx-auto mb-4" size={40} />
+            <h3 className="text-lg font-black uppercase italic mb-2 text-fg">¿Deseas salir?</h3>
+            <p className="text-[10px] text-fg-muted mb-6 font-bold uppercase tracking-widest">Se perderán los datos introducidos del jugador.</p>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setShowDiscardConfirm(false)} className="flex-1 py-4 rounded-2xl bg-well text-fg-muted font-black uppercase text-[10px] hover:bg-well-strong transition-all touch-manipulation">Cancelar</button>
+              <button type="button" onClick={onClose} className="flex-1 py-4 rounded-2xl bg-red-500 text-black font-black uppercase text-[10px] shadow-lg shadow-red-500/20 hover:bg-red-400 transition-all touch-manipulation">Salir y Descartar</button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
