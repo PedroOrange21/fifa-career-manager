@@ -1,14 +1,25 @@
 import { useRef, useState } from 'react';
-import { X, ShieldAlert, Camera, RefreshCcw, User, ChevronLeft, ChevronRight, Check, Globe2 } from 'lucide-react';
+import { X, ShieldAlert, Camera, RefreshCcw, User, ChevronLeft, ChevronRight, Check, Globe2, Footprints } from 'lucide-react';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { formatValueInput, parseValue } from '../../utils/format';
 import { resizeImageToDataUrl } from '../../utils/image';
 import { getCardStyle } from '../../utils/cardStyle';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 
 const STEP_TITLES = ['Identidad', 'Atributos', 'Términos Económicos', 'Revisión Final'];
 const TOTAL_STEPS = STEP_TITLES.length;
+
+const FOOT_OPTIONS = [
+  { value: 'Diestro', label: 'Diestro', icon: <Footprints size={16} /> },
+  { value: 'Zurdo', label: 'Zurdo', icon: <Footprints size={16} className="scale-x-[-1]" /> },
+  { value: 'Ambas', label: 'Ambas', icon: (<span className="flex items-center -space-x-1"><Footprints size={13} className="scale-x-[-1]" /><Footprints size={13} /></span>) },
+];
+
+// Evita el auto-zoom agresivo de iOS/Android: por debajo de 16px el navegador móvil
+// hace zoom al enfocar el campo. Al perder el foco, recuperamos la posición/escala original.
+const resetMobileViewport = () => window.scrollTo(0, 0);
 
 const splitName = (fullName) => {
   const parts = (fullName || '').trim().split(/\s+/).filter(Boolean);
@@ -50,7 +61,10 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [showFootMenu, setShowFootMenu] = useState(false);
   const fileInputRef = useRef(null);
+  const footMenuRef = useRef(null);
+  useOnClickOutside(footMenuRef, () => setShowFootMenu(false), showFootMenu);
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
@@ -221,9 +235,24 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                 </div>
               )}
               <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Media *</label><input type="number" required placeholder="90" min="1" max="99" className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg placeholder:text-fg-faint" value={form.rating} onChange={(e) => set({ rating: e.target.value })} /></div>
-                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Edad *</label><input type="number" required placeholder="23" min="15" max="50" className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg placeholder:text-fg-faint" value={form.age} onChange={(e) => set({ age: e.target.value })} /></div>
-                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Pierna</label><select className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg" value={form.preferredFoot} onChange={(e) => set({ preferredFoot: e.target.value })}><option value="Diestro">Diestro</option><option value="Zurdo">Zurdo</option><option value="Ambas">Ambas</option></select></div>
+                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Media *</label><input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="90" min="1" max="99" onBlur={resetMobileViewport} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-base text-fg placeholder:text-fg-faint" value={form.rating} onChange={(e) => set({ rating: e.target.value })} /></div>
+                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Edad *</label><input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="23" min="15" max="50" onBlur={resetMobileViewport} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-base text-fg placeholder:text-fg-faint" value={form.age} onChange={(e) => set({ age: e.target.value })} /></div>
+                <div className="space-y-1 relative" ref={footMenuRef}>
+                  <label className="text-[9px] font-black text-fg-muted ml-1">Pierna</label>
+                  <button type="button" onClick={() => setShowFootMenu((o) => !o)} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg">
+                    {FOOT_OPTIONS.find((f) => f.value === form.preferredFoot)?.icon}
+                    <span className="text-[8px] uppercase tracking-wide">{form.preferredFoot}</span>
+                  </button>
+                  {showFootMenu && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-30 animate-in fade-in slide-in-from-top-2 duration-150 p-1">
+                      {FOOT_OPTIONS.map((opt) => (
+                        <button key={opt.value} type="button" onClick={() => { set({ preferredFoot: opt.value }); setShowFootMenu(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
+                          {opt.icon} {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </>
           )}
