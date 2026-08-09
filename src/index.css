@@ -59,6 +59,17 @@ body {
   color: var(--app-text);
 }
 
+/* Elimina el destello/resaltado blanco o gris que Chrome/Safari en móvil dibujan
+   fugazmente sobre botones y enlaces al tocarlos (y el anillo azul de :focus al
+   pulsar), causante del "parpadeo" al alternar entre subpestañas. */
+button, a {
+  -webkit-tap-highlight-color: transparent;
+}
+button:focus,
+button:focus-visible {
+  outline: none;
+}
+
 input, textarea, select {
   color: var(--app-text);
 }
