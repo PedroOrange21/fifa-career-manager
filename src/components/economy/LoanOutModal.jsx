@@ -2,8 +2,13 @@ import { useState } from 'react';
 import { X, ArrowRightLeft } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import Dropdown from '../common/Dropdown';
 
-const LOAN_DURATIONS = ['6 Meses', '1 Temporada', '2 Temporadas'];
+const LOAN_DURATION_OPTIONS = [
+  { value: '6 Meses', label: '6 Meses' },
+  { value: '1 Temporada', label: '1 Temporada' },
+  { value: '2 Temporadas', label: '2 Temporadas' },
+];
 
 export default function LoanOutModal({ player, onClose }) {
   useBodyScrollLock();
@@ -35,9 +40,7 @@ export default function LoanOutModal({ player, onClose }) {
           </div>
           <div className="space-y-1">
             <label className="text-[9px] font-black text-fg-muted ml-1">Duración de la Cesión</label>
-            <select className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle font-black text-base md:text-xs text-fg" value={duration} onChange={(e) => setDuration(e.target.value)}>
-              {LOAN_DURATIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
+            <Dropdown value={duration} options={LOAN_DURATION_OPTIONS} onChange={setDuration} />
           </div>
           <div className="space-y-1">
             <label className="text-[9px] font-black text-fg-muted ml-1">% Salario Pagado por Nuestro Club</label>

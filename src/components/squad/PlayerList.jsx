@@ -142,13 +142,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
           <div className="px-2 flex items-center gap-2 text-zinc-400"><ArrowRightLeft size={14} /><h3 className="text-xs font-black uppercase tracking-widest italic">Jugadores Cedidos a otros Clubes</h3></div>
           <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
             {loanedOutPlayers.map((p) => (
-              <div key={p.id} className="p-3 md:p-4 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-                  <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
-                  <div className="flex-1 min-w-0"><div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div><div className="text-[8px] md:text-[9px] text-zinc-500 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div><div className="flex flex-wrap items-center gap-1.5 mt-0.5"><span className="text-[8px] md:text-[9px] text-zinc-600 font-black bg-well px-2 py-0.5 rounded">Cedido</span>{p.loanDuration && (<span className="text-[8px] md:text-[9px] text-zinc-500 font-black bg-well px-2 py-0.5 rounded">{formatLoanDuration(p.loanDuration)}</span>)}</div></div>
-                </div>
-                <div className="flex items-center gap-2"><button onClick={() => setInfoPlayer(p)} className="p-1.5 md:p-2 text-zinc-500 hover:text-fg transition-colors bg-well rounded-xl"><Edit2 size={14} /></button><button onClick={() => setPlayerToDelete(p.id)} className="p-1.5 md:p-2 text-zinc-500 hover:text-red-500 transition-colors bg-well rounded-xl"><Trash2 size={14} /></button></div>
-              </div>
+              <LoanedPlayerRow key={p.id} p={p} onEdit={() => setInfoPlayer(p)} onDelete={() => setPlayerToDelete(p.id)} />
             ))}
           </div>
         </div>
@@ -160,8 +154,9 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       {playerToDelete && (
         <ConfirmModal
           icon={ShieldAlert}
-          title="¿Borrar Jugador?"
-          message="Esta acción es irreversible y se quitará de tus tácticas."
+          title="Eliminar Jugador"
+          message="¿Estás seguro de que deseas eliminar este jugador?"
+          confirmLabel="Eliminar"
           onCancel={() => setPlayerToDelete(null)}
           onConfirm={confirmDeletePlayer}
         />
@@ -171,14 +166,20 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
 }
 
 const SWIPE_ACTION_WIDTH = 128;
+// Deslizamiento largo y continuo: si se supera este umbral (más allá de la zona de revelado
+// de Editar/Eliminar), se dispara directamente la confirmación de borrado al soltar.
+const SWIPE_FULL_THRESHOLD = -220;
+const SWIPE_MAX_DRAG = -280;
 
-// Fila de jugador con deslizar-para-revelar (Editar/Eliminar) nativo por táctil. Se usa un
+// Gesto de deslizar compartido por las filas de la Plantilla (activas y cedidas). Usa un
 // listener nativo de touchmove con { passive: false } porque React registra los onTouchMove
 // sintéticos como pasivos por defecto y no deja llamar a preventDefault() desde la prop JSX
 // (necesario aquí para bloquear el scroll vertical de la lista mientras se arrastra en
 // horizontal). El eje del gesto (horizontal vs vertical) se decide en los primeros píxeles
-// de movimiento y ya no cambia durante ese mismo toque.
-function PlayerRow({ p, lineup, bench, onEdit, onDelete }) {
+// de movimiento y ya no cambia durante ese mismo toque. Un deslizamiento corto deja la fila
+// abierta (revela Editar/Eliminar); uno largo y continuo dispara onFullSwipe directamente,
+// que siempre debe abrir una confirmación antes de borrar nada.
+function useSwipeReveal(onFullSwipe) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const rowRef = useRef(null);
@@ -204,16 +205,22 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete }) {
       }
       if (drag.axis === 'x') {
         e.preventDefault();
-        const next = Math.max(-SWIPE_ACTION_WIDTH, Math.min(0, drag.startOffset + dx));
+        const next = Math.max(SWIPE_MAX_DRAG, Math.min(0, drag.startOffset + dx));
         offsetRef.current = next;
         setOffset(next);
       }
     };
     const onEnd = () => {
       if (drag.axis === 'x') {
-        const next = offsetRef.current < -SWIPE_ACTION_WIDTH / 2 ? -SWIPE_ACTION_WIDTH : 0;
-        offsetRef.current = next;
-        setOffset(next);
+        const final = offsetRef.current;
+        if (final <= SWIPE_FULL_THRESHOLD) {
+          offsetRef.current = 0; setOffset(0);
+          onFullSwipe();
+        } else if (final < -SWIPE_ACTION_WIDTH / 2) {
+          offsetRef.current = -SWIPE_ACTION_WIDTH; setOffset(-SWIPE_ACTION_WIDTH);
+        } else {
+          offsetRef.current = 0; setOffset(0);
+        }
       }
       drag.active = false;
       drag.axis = null;
@@ -229,9 +236,14 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete }) {
       el.removeEventListener('touchend', onEnd);
       el.removeEventListener('touchcancel', onEnd);
     };
-  }, []);
+  }, [onFullSwipe]);
 
   const close = () => { offsetRef.current = 0; setOffset(0); };
+  return { rowRef, offset, dragging, close };
+}
+
+function PlayerRow({ p, lineup, bench, onEdit, onDelete }) {
+  const { rowRef, offset, dragging, close } = useSwipeReveal(() => onDelete(p.id));
 
   return (
     <div className="relative overflow-hidden">
@@ -247,7 +259,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete }) {
       </div>
       <div
         ref={rowRef}
-        onClick={() => { if (offsetRef.current < 0) close(); }}
+        onClick={() => { if (offset < 0) close(); }}
         style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
         className="relative bg-surface p-3 md:p-4 flex items-center justify-between hover:bg-well/50 transition-colors gap-4 touch-pan-y"
       >
@@ -270,6 +282,39 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete }) {
               {p.type}
             </span>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Misma mecánica de deslizar que PlayerRow, aplicada también a los jugadores cedidos a otros
+// clubes: "Editar" aquí abre la ficha de información (no el formulario de edición completo),
+// igual que hacía el botón fijo que sustituye.
+function LoanedPlayerRow({ p, onEdit, onDelete }) {
+  const { rowRef, offset, dragging, close } = useSwipeReveal(onDelete);
+
+  return (
+    <div className="relative overflow-hidden">
+      <div className="absolute inset-y-0 right-0 flex">
+        <button type="button" onClick={() => { onEdit(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well text-fg-muted active:bg-well-strong touch-manipulation">
+          <Edit2 size={18} />
+          <span className="text-[8px] font-black uppercase">Ver</span>
+        </button>
+        <button type="button" onClick={() => { onDelete(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-red-500 text-white active:bg-red-400 touch-manipulation">
+          <Trash2 size={18} />
+          <span className="text-[8px] font-black uppercase">Borrar</span>
+        </button>
+      </div>
+      <div
+        ref={rowRef}
+        onClick={() => { if (offset < 0) close(); }}
+        style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
+        className="relative bg-surface p-3 md:p-4 flex items-center justify-between gap-4 touch-pan-y"
+      >
+        <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+          <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
+          <div className="flex-1 min-w-0"><div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div><div className="text-[8px] md:text-[9px] text-zinc-500 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div><div className="flex flex-wrap items-center gap-1.5 mt-0.5"><span className="text-[8px] md:text-[9px] text-zinc-600 font-black bg-well px-2 py-0.5 rounded">Cedido</span>{p.loanDuration && (<span className="text-[8px] md:text-[9px] text-zinc-500 font-black bg-well px-2 py-0.5 rounded">{formatLoanDuration(p.loanDuration)}</span>)}</div></div>
         </div>
       </div>
     </div>

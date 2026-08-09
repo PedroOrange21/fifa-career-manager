@@ -8,6 +8,7 @@ import { resizeImageToDataUrl } from '../../utils/image';
 import { getCardStyle } from '../../utils/cardStyle';
 import { useClubData } from '../../context/ClubDataContext';
 import { useUiChrome } from '../../context/UiChromeContext';
+import Dropdown from '../common/Dropdown';
 
 const STEP_TITLES = ['Identidad', 'Atributos', 'Términos Económicos', 'Revisión Final'];
 const TOTAL_STEPS = STEP_TITLES.length;
@@ -18,11 +19,16 @@ const FOOT_OPTIONS = [
   { value: 'Ambas', label: 'Ambas', icon: (<span className="flex items-center -space-x-1"><Footprints size={13} className="scale-x-[-1]" /><Footprints size={13} /></span>) },
 ];
 
+const LOAN_DURATION_OPTIONS = [
+  { value: '6 Meses', label: '6 Meses' },
+  { value: '1 Temporada', label: '1 Temporada' },
+  { value: '2 Temporadas', label: '2 Temporadas' },
+];
+
 // Campos de texto/número compactos, uniformes en toda la tarjeta: 16px (text-base) en
 // móvil para evitar el auto-zoom de Safari/Chrome, algo más compactos en escritorio.
 const FIELD_BASE = 'w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-black text-base md:text-sm text-fg placeholder:text-fg-faint';
 const FIELD_CLASS = `${FIELD_BASE} text-center`;
-const SELECT_CLASS = 'w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-center font-black text-base md:text-sm text-fg';
 
 // Ningún campo de este asistente se envía con Enter: no hay <form>, así que Enter no
 // tendría efecto por defecto, pero lo bloqueamos explícitamente para que nunca dispare
@@ -79,6 +85,30 @@ function usePreventBackdropTouch(active) {
   return ref;
 }
 
+// Fila de edición del resumen (Paso 4): muestra el valor + lápiz, y al pulsar despliega el
+// control de edición en el sitio, sin salir de la pantalla. Definido fuera de PlayerForm
+// (identidad estable entre renders) para no perder el foco de los inputs internos en cada
+// pulsación de tecla, algo que ocurriría si se declarase dentro del cuerpo del componente.
+function ReviewRow({ label, active, onOpen, display, children }) {
+  return (
+    <div className="px-4 py-2.5">
+      <div className="flex justify-between items-center gap-2">
+        <span className="text-[9px] font-black uppercase text-fg-muted shrink-0">{label}</span>
+        {!active && (
+          <button type="button" onClick={onOpen} className="flex items-center gap-1.5 min-w-0 touch-manipulation">
+            <span className="text-xs font-black text-fg truncate">{display}</span>
+            <Pencil size={10} className="text-fg-faint shrink-0" />
+          </button>
+        )}
+      </div>
+      {active && <div className="mt-2">{children}</div>}
+    </div>
+  );
+}
+
+const REVIEW_INPUT_CLASS = 'w-full bg-well-strong p-2.5 rounded-lg outline-none border border-border-subtle focus:border-green-500 font-bold text-sm text-fg placeholder:text-fg-faint';
+const REVIEW_DONE_CLASS = 'mt-2 w-full py-2 rounded-lg bg-green-500/10 text-green-500 text-[9px] font-black uppercase touch-manipulation';
+
 export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onClose }) {
   const { addOrUpdatePlayer, deleteScout } = useClubData();
   const { hide: hideChrome, show: showChrome } = useUiChrome();
@@ -97,12 +127,18 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [showFootMenu, setShowFootMenu] = useState(false);
   const [footMenuRect, setFootMenuRect] = useState(null);
+  const [editField, setEditField] = useState(null);
   const fileInputRef = useRef(null);
+  const reviewFileInputRef = useRef(null);
   const footMenuRef = useRef(null);
   const footBtnRef = useRef(null);
   const footDropdownRef = useRef(null);
   const backdropRef = usePreventBackdropTouch(true);
   const discardBackdropRef = usePreventBackdropTouch(showDiscardConfirm);
+
+  // Evita quedarse "atascado" en modo edición de un campo del resumen si el usuario sale
+  // del Paso 4 y vuelve a entrar más tarde.
+  useEffect(() => { setEditField(null); }, [step]);
 
   // El desplegable de Pierna se pinta con un portal (fuera de la tarjeta, que tiene
   // overflow-hidden para mantener cabecera/pie estáticos) para que nunca quede recortado
@@ -262,6 +298,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
   };
 
   const fullNamePreview = `${form.firstName.trim()}${form.lastName.trim() ? ` ${form.lastName.trim()}` : ''}` || 'Nuevo Jugador';
+  const positionsPreview = [form.primaryPosition, ...form.secondaryPositions].filter(Boolean).join(' · ') || '—';
 
   const contractYearOptions = form.type === 'Cedido'
     ? [{ value: '1', label: 'Cesión 1 Año (1 Temporada)' }, { value: '2', label: 'Cesión 2 Años (2 Temporadas)' }]
@@ -377,7 +414,16 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       </div>
                     </div>
                   )}
+                  {/* Orden fijo: Pierna (izquierda) · Media (centro) · Edad (derecha), mismo
+                      tamaño y alineación para las tres columnas. */}
                   <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1 relative" ref={footMenuRef}>
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Pierna</label>
+                      <button ref={footBtnRef} type="button" onClick={toggleFootMenu} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg touch-manipulation">
+                        {FOOT_OPTIONS.find((f) => f.value === form.preferredFoot)?.icon}
+                        <span className="text-[8px] uppercase tracking-wide">{form.preferredFoot}</span>
+                      </button>
+                    </div>
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Media *</label>
                       <input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="90" min="1" max="99" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.rating} onChange={(e) => set({ rating: e.target.value })} />
@@ -385,13 +431,6 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Edad *</label>
                       <input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="23" min="15" max="50" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.age} onChange={(e) => set({ age: e.target.value })} />
-                    </div>
-                    <div className="space-y-1 relative" ref={footMenuRef}>
-                      <label className="text-[9px] font-black text-fg-muted ml-1">Pierna</label>
-                      <button ref={footBtnRef} type="button" onClick={toggleFootMenu} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg touch-manipulation">
-                        {FOOT_OPTIONS.find((f) => f.value === form.preferredFoot)?.icon}
-                        <span className="text-[8px] uppercase tracking-wide">{form.preferredFoot}</span>
-                      </button>
                     </div>
                   </div>
                 </>
@@ -423,11 +462,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">Duración Cesión</label>
-                        <select className={SELECT_CLASS} value={form.loanDuration} onChange={(e) => set({ loanDuration: e.target.value })}>
-                          <option value="6 Meses">6 Meses</option>
-                          <option value="1 Temporada">1 Temporada</option>
-                          <option value="2 Temporadas">2 Temporadas</option>
-                        </select>
+                        <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => set({ loanDuration: v })} />
                       </div>
                       <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">Club de Origen *</label>
@@ -452,10 +487,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     </div>
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Años Contrato</label>
-                      <select className={SELECT_CLASS} value={form.contractYears} onChange={(e) => set({ contractYears: e.target.value })}>
-                        <option value="">Seleccionar</option>
-                        {contractYearOptions.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
-                      </select>
+                      <Dropdown value={form.contractYears} options={contractYearOptions} onChange={(v) => set({ contractYears: v })} placeholder="Seleccionar" />
                     </div>
                   </div>
                 </>
@@ -463,15 +495,10 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
               {step === 4 && (
                 <div className="flex flex-col items-center">
+                  {/* Carta = vista previa en vivo de los mismos datos de "form", sin controles
+                      propios: toda la edición ocurre en la lista de abajo, así que la carta
+                      se actualiza sola en cuanto se cambia cualquier campo. */}
                   <div className={`relative w-52 rounded-[28px] p-5 shadow-2xl border-2 border-black/10 ${getCardStyle(parseInt(form.rating) || 0)}`}>
-                    {/* Edición rápida: cada pulsación lleva de vuelta al paso donde vive ese
-                        dato, sin perder lo ya rellenado en el resto del asistente. */}
-                    <button type="button" onClick={() => { setFormError(''); setStep(1); }} title="Editar identidad" className="absolute -top-2 -left-2 z-10 bg-well border border-border-subtle text-fg-muted rounded-full p-1.5 shadow-lg active:scale-90 transition-all touch-manipulation">
-                      <Pencil size={12} />
-                    </button>
-                    <button type="button" onClick={() => { setFormError(''); setStep(2); }} title="Editar atributos" className="absolute -top-2 -right-2 z-10 bg-well border border-border-subtle text-fg-muted rounded-full p-1.5 shadow-lg active:scale-90 transition-all touch-manipulation">
-                      <Pencil size={12} />
-                    </button>
                     <div className="flex items-start justify-between">
                       <div className="flex flex-col items-center leading-none">
                         <span className="text-4xl font-black">{form.rating}</span>
@@ -493,18 +520,87 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                   </div>
 
                   <div className="w-full flex justify-between items-center mt-4 mb-1 px-1">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-fg-faint">Detalles</span>
-                    <button type="button" onClick={() => { setFormError(''); setStep(3); }} className="flex items-center gap-1 text-[9px] font-black uppercase text-green-500 touch-manipulation">
-                      <Pencil size={10} /> Editar
-                    </button>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-fg-faint">Revisión Final</span>
+                    <span className="text-[8px] font-bold uppercase tracking-widest text-fg-faint">Toca un dato para editarlo</span>
                   </div>
                   <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
-                    <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Edad</span><span className="text-xs font-black text-fg">{form.age} Años</span></div>
-                    <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Adquisición</span><span className="text-xs font-black text-fg">{form.type}{form.type === 'Cedido' && form.originClub ? ` · ${form.originClub}` : ''}</span></div>
-                    <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Valor de Mercado</span><span className="text-xs font-black text-green-500">{form.marketValue || '0'} €</span></div>
-                    {form.wage && <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Sueldo Anual</span><span className="text-xs font-black text-fg">{form.wage} €</span></div>}
-                    {form.releaseClause && <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Cláusula</span><span className="text-xs font-black text-fg">{form.releaseClause} €</span></div>}
-                    {form.contractYears && <div className="flex justify-between px-4 py-2.5"><span className="text-[9px] font-black uppercase text-fg-muted">Contrato</span><span className="text-xs font-black text-fg">{form.contractYears} Años</span></div>}
+                    <div className="px-4 py-2.5 flex justify-between items-center gap-2">
+                      <span className="text-[9px] font-black uppercase text-fg-muted">Foto</span>
+                      <button type="button" onClick={() => { if (!isUploadingPhoto) reviewFileInputRef.current?.click(); }} disabled={isUploadingPhoto} className="flex items-center gap-1.5 touch-manipulation">
+                        <span className="text-xs font-black text-fg">{isUploadingPhoto ? 'Subiendo...' : form.photo ? 'Cambiar' : 'Añadir'}</span>
+                        <Pencil size={10} className="text-fg-faint shrink-0" />
+                      </button>
+                      <input type="file" accept="image/*" ref={reviewFileInputRef} className="hidden" onChange={handlePhotoChange} />
+                    </div>
+
+                    <ReviewRow label="Nombre" active={editField === 'name'} onOpen={() => setEditField('name')} display={fullNamePreview}>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input autoFocus type="text" placeholder="Nombre" onKeyDown={blockEnterKey} className={REVIEW_INPUT_CLASS} value={form.firstName} onChange={(e) => set({ firstName: e.target.value })} />
+                        <input type="text" placeholder="Apellido" onKeyDown={blockEnterKey} className={REVIEW_INPUT_CLASS} value={form.lastName} onChange={(e) => set({ lastName: e.target.value })} />
+                      </div>
+                      <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
+                    </ReviewRow>
+
+                    <ReviewRow label="Nacionalidad" active={editField === 'nationality'} onOpen={() => setEditField('nationality')} display={form.nationality || 'Sin definir'}>
+                      <div className="relative">
+                        {selectedCountry ? (
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm leading-none pointer-events-none">{flagEmoji(selectedCountry.code)}</span>
+                        ) : (
+                          <Globe2 className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-faint pointer-events-none" size={14} />
+                        )}
+                        <input autoFocus type="text" placeholder="Ej: Noruega" onKeyDown={blockEnterKey} className={`${REVIEW_INPUT_CLASS} pl-8`} value={form.nationality} onChange={(e) => set({ nationality: e.target.value })} />
+                      </div>
+                      <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
+                    </ReviewRow>
+
+                    <ReviewRow label="Posición" active={editField === 'position'} onOpen={() => setEditField('position')} display={positionsPreview}>
+                      <div className="flex flex-wrap gap-1.5">
+                        {ALL_POSITIONS.map((pos) => (
+                          <button key={pos} type="button" onClick={() => selectPrimary(pos)} className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${form.primaryPosition === pos ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>
+                        ))}
+                      </div>
+                      <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
+                    </ReviewRow>
+
+                    <ReviewRow label="Media (OVR)" active={editField === 'rating'} onOpen={() => setEditField('rating')} display={form.rating || '—'}>
+                      <input autoFocus type="number" inputMode="numeric" min="1" max="99" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.rating} onChange={(e) => set({ rating: e.target.value })} />
+                    </ReviewRow>
+
+                    <ReviewRow label="Edad" active={editField === 'age'} onOpen={() => setEditField('age')} display={form.age ? `${form.age} Años` : '—'}>
+                      <input autoFocus type="number" inputMode="numeric" min="15" max="50" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.age} onChange={(e) => set({ age: e.target.value })} />
+                    </ReviewRow>
+
+                    <ReviewRow label="Pierna" active={editField === 'foot'} onOpen={() => setEditField('foot')} display={form.preferredFoot}>
+                      <Dropdown value={form.preferredFoot} options={FOOT_OPTIONS} onChange={(v) => { set({ preferredFoot: v }); setEditField(null); }} />
+                    </ReviewRow>
+
+                    <ReviewRow label="Adquisición" active={editField === 'type'} onOpen={() => setEditField('type')} display={`${form.type}${form.type === 'Cedido' && form.originClub ? ` · ${form.originClub}` : ''}`}>
+                      <div className="flex gap-2">
+                        {['Cantera', 'Cedido', 'Comprado'].map((t) => (
+                          <button key={t} type="button" onClick={() => set({ type: t, contractYears: '' })} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${form.type === t ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>{t}</button>
+                        ))}
+                      </div>
+                      {form.type === 'Cedido' && (
+                        <input type="text" placeholder="Club de origen" onKeyDown={blockEnterKey} className={`${REVIEW_INPUT_CLASS} mt-2`} value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} />
+                      )}
+                      <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
+                    </ReviewRow>
+
+                    <ReviewRow label="Valor de Mercado (€)" active={editField === 'marketValue'} onOpen={() => setEditField('marketValue')} display={`${form.marketValue || '0'} €`}>
+                      <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.marketValue} onChange={formatMoneyField('marketValue')} />
+                    </ReviewRow>
+
+                    <ReviewRow label="Sueldo Anual (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
+                      <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
+                    </ReviewRow>
+
+                    <ReviewRow label="Cláusula (€)" active={editField === 'releaseClause'} onOpen={() => setEditField('releaseClause')} display={`${form.releaseClause || '0'} €`}>
+                      <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.releaseClause} onChange={formatMoneyField('releaseClause')} />
+                    </ReviewRow>
+
+                    <ReviewRow label="Años Contrato" active={editField === 'contractYears'} onOpen={() => setEditField('contractYears')} display={form.contractYears ? `${form.contractYears} Años` : 'Sin definir'}>
+                      <Dropdown value={form.contractYears} options={contractYearOptions} onChange={(v) => { set({ contractYears: v }); setEditField(null); }} placeholder="Seleccionar" />
+                    </ReviewRow>
                   </div>
                 </div>
               )}
@@ -523,7 +619,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
               </button>
             )}
             {step === TOTAL_STEPS && (
-              <button type="button" disabled={isSubmitting} onClick={handleConfirm} className="flex-1 w-full py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-2 hover:bg-green-400 transition-all disabled:opacity-50 touch-manipulation">
+              <button type="button" disabled={isSubmitting} onClick={handleConfirm} className="flex-1 w-full py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-2 text-center hover:bg-green-400 transition-all disabled:opacity-50 touch-manipulation">
                 {isSubmitting ? 'Guardando...' : (<><Check size={16} className="shrink-0" /> <span>Confirmar Fichaje</span></>)}
               </button>
             )}
