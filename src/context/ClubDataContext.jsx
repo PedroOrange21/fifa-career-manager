@@ -320,6 +320,17 @@ export function ClubDataProvider({ children }) {
     await setDoc(tacticsDoc(user.uid, activeClubId), { savedFormations: newSaved }, { merge: true });
   };
 
+  // Sobrescribe la táctica guardada actualmente activa con la alineación/plantilla en curso
+  // (a diferencia de saveCurrentFormation, que siempre añade una entrada nueva). Se usa desde
+  // el botón "Guardar Cambios" que aparece cuando el once/banquillo/no convocados se separan
+  // de lo que había guardado bajo ese nombre.
+  const updateActiveTactic = async () => {
+    if (!user || !activeClubId || !activeTacticName) return;
+    const newSaved = savedFormations.map((f) => (f.name === activeTacticName ? { ...f, formation, lineup, bench } : f));
+    setSavedFormations(newSaved);
+    await setDoc(tacticsDoc(user.uid, activeClubId), { savedFormations: newSaved }, { merge: true });
+  };
+
   const renameSavedFormation = async (oldName, newName) => {
     if (!user || !activeClubId || !newName.trim() || oldName === newName.trim()) return;
     const trimmed = newName.trim();
@@ -362,7 +373,7 @@ export function ClubDataProvider({ children }) {
     scoutToDelete, setScoutToDelete,
     addOrUpdatePlayer, confirmDeletePlayer, removePlayerFromTactic, sellPlayer, cedePlayer,
     saveTactics, clearTactics, clearLineup, clearBench, handleFormationChange, executeMove, assignPlayerToSlot,
-    saveCurrentFormation, confirmDeleteFormation, renameSavedFormation, loadSavedFormation, setPlayerTransferStatus,
+    saveCurrentFormation, updateActiveTactic, confirmDeleteFormation, renameSavedFormation, loadSavedFormation, setPlayerTransferStatus,
     addOrUpdateScout, confirmDeleteScout, deleteScout, updateYouthRating, saveMatch, endSeason,
   };
 

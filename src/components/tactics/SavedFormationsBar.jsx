@@ -6,7 +6,8 @@ import TacticsDropdown from './TacticsDropdown';
 
 export default function SavedFormationsBar() {
   const {
-    savedFormations, saveCurrentFormation, activeTacticName,
+    savedFormations, saveCurrentFormation, updateActiveTactic, activeTacticName,
+    formation, lineup, bench,
     loadSavedFormation, formationToDelete, setFormationToDelete, confirmDeleteFormation, renameSavedFormation,
   } = useClubData();
   const [newFormationName, setNewFormationName] = useState('');
@@ -18,6 +19,11 @@ export default function SavedFormationsBar() {
     saveCurrentFormation(newFormationName);
     setNewFormationName('');
   };
+
+  // ¿La táctica activa (once/banquillo/no convocados) se separó de lo que hay guardado bajo
+  // ese nombre? Si no hay ninguna táctica activa (nunca se guardó, o se vació), no aplica.
+  const activePreset = activeTacticName ? savedFormations.find((f) => f.name === activeTacticName) : null;
+  const hasPendingChanges = !!activePreset && JSON.stringify({ formation, lineup, bench }) !== JSON.stringify({ formation: activePreset.formation, lineup: activePreset.lineup, bench: activePreset.bench || {} });
 
   const handleLoadSelect = (name) => {
     const f = savedFormations.find((sf) => sf.name === name);
@@ -38,10 +44,20 @@ export default function SavedFormationsBar() {
   return (
     <div className="flex flex-col gap-3 md:gap-4 mb-2">
       <div className="bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl flex items-center gap-2">
-        <input type="text" placeholder="Nombre de la táctica..." className="flex-1 min-w-0 h-9 bg-well px-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-sm font-bold text-fg placeholder:text-fg-faint" value={newFormationName} onChange={(e) => setNewFormationName(e.target.value)} />
-        <button onClick={handleSave} title="Guardar táctica" className="shrink-0 h-9 w-9 flex items-center justify-center bg-green-500 text-black rounded-xl shadow-lg shadow-green-500/20 active:scale-95 transition-all hover:bg-green-400">
-          <Save size={14} />
-        </button>
+        {hasPendingChanges ? (
+          // Estado modificado: el botón se expande hacia la izquierda, ocupando también el
+          // hueco del campo de nombre, para avisar con un texto destacado y guardar en un toque.
+          <button onClick={updateActiveTactic} title="Guardar cambios de la táctica" className="flex-1 min-w-0 h-9 flex items-center justify-center gap-2 bg-green-500 text-black rounded-xl shadow-lg shadow-green-500/20 active:scale-95 transition-all hover:bg-green-400 font-black uppercase text-xs animate-in fade-in slide-in-from-right-4 duration-200">
+            <Save size={14} className="shrink-0" /> Guardar Cambios
+          </button>
+        ) : (
+          <>
+            <input type="text" placeholder="Nombre de la táctica..." className="flex-1 min-w-0 h-9 bg-well px-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-xs font-bold text-fg placeholder:text-fg-faint" value={newFormationName} onChange={(e) => setNewFormationName(e.target.value)} />
+            <button onClick={handleSave} title="Guardar táctica" className="shrink-0 h-9 w-9 flex items-center justify-center bg-green-500 text-black rounded-xl shadow-lg shadow-green-500/20 active:scale-95 transition-all hover:bg-green-400">
+              <Save size={14} />
+            </button>
+          </>
+        )}
         <TacticsDropdown
           icon={Users}
           value={selectedName}
