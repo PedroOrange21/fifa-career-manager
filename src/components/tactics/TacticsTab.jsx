@@ -59,7 +59,10 @@ export default function TacticsTab({ onNavigateToScouting }) {
         />
       )}
 
-      {editingPlayer && <PlayerForm editingPlayer={editingPlayer} onClose={() => setEditingPlayer(null)} />}
+      {/* Editar desde Táctica (titular, banquillo o no convocados) va directo al Paso 4
+          con los datos precargados, igual que "Editar" en la Plantilla — sin pasar por
+          los pasos 1-3 del asistente. */}
+      {editingPlayer && <PlayerForm editingPlayer={editingPlayer} initialStep={4} onClose={() => setEditingPlayer(null)} />}
     </div>
   );
 }

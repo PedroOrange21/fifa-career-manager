@@ -279,13 +279,19 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
   const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
-  const moreBtnRef = useRef(null);
+  // Dos botones "..." en el DOM (el del panel de swipe en móvil y el inline de escritorio,
+  // ver más abajo): solo uno es visible/clicable según el ancho de pantalla, pero ambos
+  // existen a la vez (ocultos por CSS, no por render condicional), así que hacen falta dos
+  // refs para que el "click fuera" no confunda el botón que abrió el menú con un clic externo.
+  const moreBtnMobileRef = useRef(null);
+  const moreBtnDesktopRef = useRef(null);
   const moreMenuRef = useRef(null);
 
   useEffect(() => {
     if (!showMore) return;
     const handler = (e) => {
-      if (moreBtnRef.current?.contains(e.target)) return;
+      if (moreBtnMobileRef.current?.contains(e.target)) return;
+      if (moreBtnDesktopRef.current?.contains(e.target)) return;
       if (moreMenuRef.current?.contains(e.target)) return;
       setShowMore(false);
     };
@@ -297,10 +303,10 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
     };
   }, [showMore]);
 
-  const toggleMore = () => {
+  const toggleMore = (e) => {
     if (showMore) { setShowMore(false); return; }
-    const rect = moreBtnRef.current?.getBoundingClientRect();
-    if (rect) setMoreRect({ top: rect.bottom + 4, right: window.innerWidth - rect.right, width: 200 });
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMoreRect({ top: rect.bottom + 4, right: window.innerWidth - rect.right, width: 200 });
     setShowMore(true);
   };
 
@@ -313,12 +319,12 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
 
   return (
     <div className="relative overflow-hidden">
-      {/* Orden en el flex: Borrar primero, Editar en el centro y "..." al final. El panel
-          está anclado a la derecha, así que el ÚLTIMO hijo del flex queda más pegado al
-          borde del contenido y por tanto es el primero en asomar al deslizar — de ahí que
-          "..." se revele antes que Editar, y este antes que Borrar, tal como se pidió
-          (de izquierda a derecha ya desplegado: Borrar · Editar · "..."). */}
-      <div className="absolute inset-y-0 right-0 flex">
+      {/* Panel de swipe: solo en móvil (sm:hidden). Orden en el flex: Borrar primero, Editar
+          en el centro y "..." al final. El panel está anclado a la derecha, así que el
+          ÚLTIMO hijo del flex queda más pegado al borde del contenido y por tanto es el
+          primero en asomar al deslizar — de ahí que "..." se revele antes que Editar, y
+          este antes que Borrar (de izquierda a derecha ya desplegado: Borrar · Editar · "..."). */}
+      <div className="absolute inset-y-0 right-0 flex sm:hidden">
         <button type="button" onClick={() => { onDelete(p.id); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-red-500 text-white active:bg-red-400 touch-manipulation">
           <Trash2 size={18} />
           <span className="text-[8px] font-black uppercase">Borrar</span>
@@ -327,7 +333,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           <Edit2 size={18} />
           <span className="text-[8px] font-black uppercase">Editar</span>
         </button>
-        <button ref={moreBtnRef} type="button" onClick={toggleMore} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
+        <button ref={moreBtnMobileRef} type="button" onClick={toggleMore} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
           <MoreHorizontal size={18} />
           <span className="text-[8px] font-black uppercase">Más</span>
         </button>
@@ -336,7 +342,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
         ref={rowRef}
         onClick={() => { if (offset < 0) close(); }}
         style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
-        className="relative bg-surface p-3 md:p-4 flex items-center justify-between hover:bg-well/50 transition-colors gap-4 touch-pan-y"
+        className="relative bg-surface p-3 md:p-4 flex items-center justify-between hover:bg-well/50 transition-colors gap-4 touch-pan-y group"
       >
         <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
           <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
@@ -358,10 +364,28 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
             </span>
           )}
         </div>
-        {/* Umbral de borrado continuo: al superar la mitad de la fila, toda la franja se
-            tiñe de rojo en tiempo real para anticipar que soltar aquí borra al jugador. */}
+
+        {/* Escritorio: nada de swipe (no hay touch), así que las mismas acciones se integran
+            al final de la fila, en el flujo normal (sin overlays ni superposiciones), y solo
+            se hacen visibles al pasar el cursor por encima de la fila. */}
+        <div className="hidden sm:flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button type="button" onClick={() => onDelete(p.id)} title="Borrar" className="p-2 rounded-lg text-fg-faint hover:text-red-500 hover:bg-red-500/10 transition-colors touch-manipulation">
+            <Trash2 size={16} />
+          </button>
+          <button type="button" onClick={() => onEdit(p)} title="Editar" className="p-2 rounded-lg text-fg-faint hover:text-green-500 hover:bg-green-500/10 transition-colors touch-manipulation">
+            <Edit2 size={16} />
+          </button>
+          <button ref={moreBtnDesktopRef} type="button" onClick={toggleMore} title="Más opciones" className="p-2 rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong transition-colors touch-manipulation">
+            <MoreHorizontal size={16} />
+          </button>
+        </div>
+
+        {/* Umbral de borrado continuo (solo móvil): al superar la mitad de la fila, toda la
+            franja se tiñe de rojo en tiempo real para anticipar que soltar aquí borra al
+            jugador. En escritorio "offset" nunca se mueve (no hay gesto táctil), así que esto
+            nunca se activa igualmente, pero se oculta por CSS para no dejarlo ambiguo. */}
         {pastThreshold && (
-          <div className="absolute inset-0 z-10 bg-red-500 flex items-center justify-center gap-2 text-white font-black uppercase text-sm">
+          <div className="absolute inset-0 z-10 bg-red-500 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden">
             <Trash2 size={18} /> Borrar
           </div>
         )}
@@ -396,7 +420,7 @@ function LoanedPlayerRow({ p, onEdit, onDelete }) {
 
   return (
     <div className="relative overflow-hidden">
-      <div className="absolute inset-y-0 right-0 flex">
+      <div className="absolute inset-y-0 right-0 flex sm:hidden">
         <button type="button" onClick={() => { onDelete(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-red-500 text-white active:bg-red-400 touch-manipulation">
           <Trash2 size={18} />
           <span className="text-[8px] font-black uppercase">Borrar</span>
@@ -410,14 +434,24 @@ function LoanedPlayerRow({ p, onEdit, onDelete }) {
         ref={rowRef}
         onClick={() => { if (offset < 0) close(); }}
         style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
-        className="relative bg-surface p-3 md:p-4 flex items-center justify-between gap-4 touch-pan-y"
+        className="relative bg-surface p-3 md:p-4 flex items-center justify-between gap-4 touch-pan-y group"
       >
         <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
           <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
           <div className="flex-1 min-w-0"><div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div><div className="text-[8px] md:text-[9px] text-zinc-500 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div><div className="flex flex-wrap items-center gap-1.5 mt-0.5"><span className="text-[8px] md:text-[9px] text-zinc-600 font-black bg-well px-2 py-0.5 rounded">Cedido</span>{p.loanDuration && (<span className="text-[8px] md:text-[9px] text-zinc-500 font-black bg-well px-2 py-0.5 rounded">{formatLoanDuration(p.loanDuration)}</span>)}</div></div>
         </div>
+
+        <div className="hidden sm:flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button type="button" onClick={() => onDelete()} title="Borrar" className="p-2 rounded-lg text-zinc-500 hover:text-red-500 hover:bg-red-500/10 transition-colors touch-manipulation">
+            <Trash2 size={16} />
+          </button>
+          <button type="button" onClick={() => onEdit()} title="Editar" className="p-2 rounded-lg text-zinc-500 hover:text-fg hover:bg-well transition-colors touch-manipulation">
+            <Edit2 size={16} />
+          </button>
+        </div>
+
         {pastThreshold && (
-          <div className="absolute inset-0 z-10 bg-red-500 flex items-center justify-center gap-2 text-white font-black uppercase text-sm">
+          <div className="absolute inset-0 z-10 bg-red-500 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden">
             <Trash2 size={18} /> Borrar
           </div>
         )}
