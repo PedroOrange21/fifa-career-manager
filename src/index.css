@@ -59,15 +59,26 @@ body {
   color: var(--app-text);
 }
 
-/* Elimina el destello/resaltado blanco o gris que Chrome/Safari en móvil dibujan
-   fugazmente sobre botones y enlaces al tocarlos (y el anillo azul de :focus al
-   pulsar), causante del "parpadeo" al alternar entre subpestañas. */
-button, a {
+/* Elimina el destello/resaltado (tap highlight) blanco o gris que Chrome/Safari en
+   móvil dibujan fugazmente sobre cualquier elemento interactivo al tocarlo, y el
+   anillo/contorno de :focus, causantes del "parpadeo" al alternar entre subpestañas.
+   Se fija en <html> como base (por si algún navegador lo hereda) y explícitamente en
+   cada tipo de elemento interactivo, ya que -webkit-tap-highlight-color no siempre
+   se hereda de forma fiable entre navegadores. */
+html {
   -webkit-tap-highlight-color: transparent;
 }
-button:focus,
-button:focus-visible {
+button, a, [role="button"], input, select, textarea, label {
+  -webkit-tap-highlight-color: transparent;
+}
+button, a, [role="button"] {
   outline: none;
+}
+button:focus, button:focus-visible,
+a:focus, a:focus-visible,
+[role="button"]:focus, [role="button"]:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 input, textarea, select {
