@@ -23,6 +23,13 @@ export const abbreviateValue = (val) => {
   return val + ' €';
 };
 
+export const abbreviateName = (name) => {
+  if (!name) return '';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return parts[0] || '';
+  return `${parts[0]} ${parts.slice(1).map((p) => `${p.charAt(0).toUpperCase()}.`).join(' ')}`;
+};
+
 export const formatLoanDuration = (duration) => {
   if (duration === '1 Temporada') return '1T';
   if (duration === '2 Temporadas') return '2T';
