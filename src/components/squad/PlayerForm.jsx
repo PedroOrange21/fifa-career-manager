@@ -78,10 +78,12 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
-  const selectPrimary = (pos) => {
+  const selectPrimary = (e, pos) => {
+    e.stopPropagation();
     set({ primaryPosition: pos, secondaryPositions: pos === 'POR' ? [] : form.secondaryPositions.filter((p) => p !== 'POR' && p !== pos) });
   };
-  const toggleSecondary = (pos) => {
+  const toggleSecondary = (e, pos) => {
+    e.stopPropagation();
     if (pos === form.primaryPosition || pos === 'POR' || form.primaryPosition === 'POR') return;
     set({ secondaryPositions: form.secondaryPositions.includes(pos) ? form.secondaryPositions.filter((p) => p !== pos) : [...form.secondaryPositions, pos] });
   };
@@ -237,14 +239,14 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
               <div className="space-y-1">
                 <label className="text-[9px] font-black text-fg-muted ml-1">Posición Principal *</label>
                 <div className="flex flex-wrap gap-1.5 p-2 bg-well rounded-xl border border-border-subtle">
-                  {ALL_POSITIONS.map((pos) => (<button key={pos} type="button" onClick={() => selectPrimary(pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${form.primaryPosition === pos ? 'bg-green-500 text-black shadow-lg shadow-green-500/30' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>))}
+                  {ALL_POSITIONS.map((pos) => (<button key={pos} type="button" onClick={(e) => selectPrimary(e, pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${form.primaryPosition === pos ? 'bg-green-500 text-black shadow-lg shadow-green-500/30' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>))}
                 </div>
               </div>
               {form.primaryPosition && form.primaryPosition !== 'POR' && (
                 <div className="space-y-1">
                   <label className="text-[9px] font-black text-fg-muted ml-1">Posiciones Secundarias</label>
                   <div className="flex flex-wrap gap-1.5 p-2 bg-well rounded-xl border border-border-subtle">
-                    {ALL_POSITIONS.filter((pos) => pos !== 'POR' && pos !== form.primaryPosition).map((pos) => (<button key={pos} type="button" onClick={() => toggleSecondary(pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${form.secondaryPositions.includes(pos) ? 'bg-green-500/80 text-black shadow-lg shadow-green-500/20' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>))}
+                    {ALL_POSITIONS.filter((pos) => pos !== 'POR' && pos !== form.primaryPosition).map((pos) => (<button key={pos} type="button" onClick={(e) => toggleSecondary(e, pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${form.secondaryPositions.includes(pos) ? 'bg-green-500/80 text-black shadow-lg shadow-green-500/20' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>))}
                   </div>
                 </div>
               )}
@@ -253,14 +255,14 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                 <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Edad *</label><input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="23" min="15" max="50" onBlur={resetMobileViewport} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-base text-fg placeholder:text-fg-faint" value={form.age} onChange={(e) => set({ age: e.target.value })} /></div>
                 <div className="space-y-1 relative" ref={footMenuRef}>
                   <label className="text-[9px] font-black text-fg-muted ml-1">Pierna</label>
-                  <button type="button" onClick={() => setShowFootMenu((o) => !o)} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg">
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setShowFootMenu((o) => !o); }} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg">
                     {FOOT_OPTIONS.find((f) => f.value === form.preferredFoot)?.icon}
                     <span className="text-[8px] uppercase tracking-wide">{form.preferredFoot}</span>
                   </button>
                   {showFootMenu && (
                     <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-30 animate-in fade-in slide-in-from-top-2 duration-150 p-1">
                       {FOOT_OPTIONS.map((opt) => (
-                        <button key={opt.value} type="button" onClick={() => { set({ preferredFoot: opt.value }); setShowFootMenu(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
+                        <button key={opt.value} type="button" onClick={(e) => { e.stopPropagation(); set({ preferredFoot: opt.value }); setShowFootMenu(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
                           {opt.icon} {opt.label}
                         </button>
                       ))}
@@ -276,9 +278,9 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
               <div className="space-y-1">
                 <label className="text-[9px] font-black text-fg-muted ml-1">Tipo de Adquisición</label>
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => set({ type: 'Cantera', contractYears: '' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Cantera' ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cantera</button>
-                  <button type="button" onClick={() => set({ type: 'Cedido', contractYears: '' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cedido</button>
-                  <button type="button" onClick={() => set({ type: 'Comprado', contractYears: '' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Comprado' ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Comprado</button>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Cantera', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Cantera' ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cantera</button>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Cedido', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cedido</button>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); set({ type: 'Comprado', contractYears: '' }); }} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Comprado' ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Comprado</button>
                 </div>
               </div>
               {form.type === 'Cantera' && (<div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Potencial (1-99)</label><input type="number" min="1" max="99" placeholder="Ej: 88" className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg placeholder:text-fg-faint" value={form.potential} onChange={(e) => set({ potential: e.target.value })} /></div>)}
@@ -348,6 +350,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
         message="Se perderán los datos introducidos del jugador."
         confirmLabel="Salir y Descartar"
         confirmClassName="bg-red-500 text-black shadow-red-500/20 hover:bg-red-400"
+        zIndexClassName="z-[250]"
         onCancel={() => setShowDiscardConfirm(false)}
         onConfirm={onClose}
       />
