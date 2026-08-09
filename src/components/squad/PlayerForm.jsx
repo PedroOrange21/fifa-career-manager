@@ -62,6 +62,30 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
     set({ secondaryPositions: form.secondaryPositions.includes(pos) ? form.secondaryPositions.filter((p) => p !== pos) : [...form.secondaryPositions, pos] });
   };
 
+  // Formatea los campos monetarios (puntos de miles) sin que el cursor salte al final del
+  // texto al editar un dígito en medio del número, que es lo que hacía que campos como la
+  // Cláusula pareciesen "bloqueados" al escribir o corregir un valor ya introducido.
+  const formatMoneyField = (field) => (e) => {
+    const input = e.target;
+    const raw = input.value;
+    const cursorPos = input.selectionStart ?? raw.length;
+    const digitsBeforeCursor = raw.slice(0, cursorPos).replace(/\D/g, '').length;
+    const formatted = formatValueInput(raw);
+    set({ [field]: formatted });
+    requestAnimationFrame(() => {
+      if (!input.isConnected) return;
+      let seen = 0; let pos = formatted.length;
+      if (digitsBeforeCursor === 0) { pos = 0; }
+      else {
+        for (let i = 0; i < formatted.length; i++) {
+          if (/\d/.test(formatted[i])) seen++;
+          if (seen === digitsBeforeCursor) { pos = i + 1; break; }
+        }
+      }
+      try { input.setSelectionRange(pos, pos); } catch (err) { /* input puede haber perdido el foco */ }
+    });
+  };
+
   const handlePhotoChange = async (e) => {
     const file = e.target.files[0]; if (!file) return;
     setIsUploadingPhoto(true);
@@ -134,6 +158,10 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
   const fullNamePreview = `${form.firstName.trim()}${form.lastName.trim() ? ` ${form.lastName.trim()}` : ''}` || 'Nuevo Jugador';
 
+  const contractYearOptions = form.type === 'Cedido'
+    ? [{ value: '1', label: 'Cesión 1 Año (1 Temporada)' }, { value: '2', label: 'Cesión 2 Años (2 Temporadas)' }]
+    : [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `${n} Año${n > 1 ? 's' : ''}` }));
+
   return (
     <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
       <div className="bg-surface border border-border rounded-[32px] w-full max-w-sm shadow-2xl relative my-auto max-h-[88vh] overflow-y-auto no-scrollbar overscroll-contain" onClick={(e) => e.stopPropagation()}>
@@ -205,24 +233,30 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
               <div className="space-y-1">
                 <label className="text-[9px] font-black text-fg-muted ml-1">Tipo de Adquisición</label>
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => set({ type: 'Cantera' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Cantera' ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cantera</button>
-                  <button type="button" onClick={() => set({ type: 'Cedido' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cedido</button>
-                  <button type="button" onClick={() => set({ type: 'Comprado' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Comprado' ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Comprado</button>
+                  <button type="button" onClick={() => set({ type: 'Cantera', contractYears: '' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Cantera' ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cantera</button>
+                  <button type="button" onClick={() => set({ type: 'Cedido', contractYears: '' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cedido</button>
+                  <button type="button" onClick={() => set({ type: 'Comprado', contractYears: '' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${form.type === 'Comprado' ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Comprado</button>
                 </div>
               </div>
               {form.type === 'Cantera' && (<div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Potencial (1-99)</label><input type="number" min="1" max="99" placeholder="Ej: 88" className="w-full h-14 bg-well rounded-xl outline-none border border-border-subtle text-center font-black text-xl text-fg placeholder:text-fg-faint" value={form.potential} onChange={(e) => set({ potential: e.target.value })} /></div>)}
-              {form.type === 'Comprado' && (<div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Precio de Compra (€) *</label><input type="text" required placeholder="Ej: 50.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-lg text-fg placeholder:text-fg-faint" value={form.value} onChange={(e) => set({ value: formatValueInput(e.target.value) })} /></div>)}
+              {form.type === 'Comprado' && (<div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Precio de Compra (€) *</label><input type="text" inputMode="numeric" required placeholder="Ej: 50.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-lg text-fg placeholder:text-fg-faint" value={form.value} onChange={formatMoneyField('value')} /></div>)}
               {form.type === 'Cedido' && (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Duración Cesión</label><select className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle font-black text-base md:text-xs text-fg" value={form.loanDuration} onChange={(e) => set({ loanDuration: e.target.value })}><option value="6 Meses">6 Meses</option><option value="1 Temporada">1 Temporada</option><option value="2 Temporadas">2 Temporadas</option></select></div>
                   <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Club de Origen *</label><input type="text" required placeholder="Ej: Real Madrid" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle font-bold text-base md:text-sm text-fg placeholder:text-fg-faint" value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} /></div>
                 </div>
               )}
-              <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Valor de Mercado (€) *</label><input type="text" required placeholder="Ej: 80.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-lg text-fg placeholder:text-fg-faint" value={form.marketValue} onChange={(e) => set({ marketValue: formatValueInput(e.target.value) })} /></div>
-              <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Anual (€)</label><input type="text" placeholder="Ej: 5.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-lg text-fg placeholder:text-fg-faint" value={form.wage} onChange={(e) => set({ wage: formatValueInput(e.target.value) })} /></div>
+              <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Valor de Mercado (€) *</label><input type="text" inputMode="numeric" required placeholder="Ej: 80.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-lg text-fg placeholder:text-fg-faint" value={form.marketValue} onChange={formatMoneyField('marketValue')} /></div>
+              <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Anual (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 5.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-lg text-fg placeholder:text-fg-faint" value={form.wage} onChange={formatMoneyField('wage')} /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Cláusula (€)</label><input type="text" placeholder="Ej: 150.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg placeholder:text-fg-faint" value={form.releaseClause} onChange={(e) => set({ releaseClause: formatValueInput(e.target.value) })} /></div>
-                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Años Contrato</label><input type="number" min="0" max="10" placeholder="Ej: 4" className="w-full h-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg placeholder:text-fg-faint" value={form.contractYears} onChange={(e) => set({ contractYears: e.target.value })} /></div>
+                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Cláusula (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 150.000.000" className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg placeholder:text-fg-faint" value={form.releaseClause} onChange={formatMoneyField('releaseClause')} /></div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-fg-muted ml-1">Años Contrato</label>
+                  <select className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-sm text-fg" value={form.contractYears} onChange={(e) => set({ contractYears: e.target.value })}>
+                    <option value="">Seleccionar</option>
+                    {contractYearOptions.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+                  </select>
+                </div>
               </div>
             </>
           )}
