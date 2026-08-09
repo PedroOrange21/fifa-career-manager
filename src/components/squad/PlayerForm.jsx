@@ -323,7 +323,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                         <span className="text-[8px] uppercase tracking-wide">{form.preferredFoot}</span>
                       </button>
                       {showFootMenu && (
-                        <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-20 animate-in fade-in slide-in-from-top-2 duration-150 p-1">
+                        <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[45] animate-in fade-in slide-in-from-top-2 duration-150 p-1">
                           {FOOT_OPTIONS.map((opt) => (
                             <button key={opt.value} type="button" onClick={(e) => { e.stopPropagation(); set({ preferredFoot: opt.value }); setShowFootMenu(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
                               {opt.icon} {opt.label}
