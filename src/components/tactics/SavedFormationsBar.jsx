@@ -52,10 +52,7 @@ export default function SavedFormationsBar() {
           </button>
         ) : (
           <>
-            {/* Mismo estilo exacto que el disparador del desplegable de equipos guardados de
-                al lado (TacticsDropdown con triggerClassName="h-9 px-3"), para que ambos
-                controles se vean como una sola pieza homogénea. */}
-            <input type="text" placeholder="Nombre de la táctica..." className="flex-1 min-w-0 h-9 px-3 rounded-full bg-black/40 text-white/80 placeholder:text-white/50 backdrop-blur-sm outline-none focus:bg-black/60 transition-all text-[10px] font-black uppercase tracking-wider" value={newFormationName} onChange={(e) => setNewFormationName(e.target.value)} />
+            <input type="text" placeholder="Nombre de la táctica..." className="flex-1 min-w-0 h-9 bg-well px-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-xs font-bold text-fg placeholder:text-fg-faint" value={newFormationName} onChange={(e) => setNewFormationName(e.target.value)} />
             <button onClick={handleSave} title="Guardar táctica" className="shrink-0 h-9 w-9 flex items-center justify-center bg-green-500 text-black rounded-xl shadow-lg shadow-green-500/20 active:scale-95 transition-all hover:bg-green-400">
               <Save size={14} />
             </button>
