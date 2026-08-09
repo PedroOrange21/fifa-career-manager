@@ -8,6 +8,11 @@ import PlayerForm from './PlayerForm';
 import PlayerInfoModal from './PlayerInfoModal';
 import ConfirmModal from '../common/ConfirmModal';
 
+// Escritorio (ratón real): el texto se revela con :hover y un solo clic abre el formulario.
+// Táctil: el primer toque despliega el texto (sin abrir) y el segundo lo confirma, igual que
+// los botones "Vaciar" de la pizarra táctica.
+const HAS_HOVER = typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
 const SORT_OPTIONS = [
   { id: 'rating-desc', label: 'Mayor Media', icon: Star },
   { id: 'rating-asc', label: 'Menor Media', icon: Star },
@@ -31,6 +36,9 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [showSortMenu, setShowSortMenu] = useState(false);
   const sortMenuRef = useRef(null);
   useOnClickOutside(sortMenuRef, () => setShowSortMenu(false), showSortMenu);
+  const [ficharConfirming, setFicharConfirming] = useState(false);
+  const ficharRef = useRef(null);
+  useOnClickOutside(ficharRef, () => setFicharConfirming(false), ficharConfirming);
 
   useEffect(() => {
     if (pendingEditPlayer) {
@@ -81,6 +89,12 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const openNewForm = () => { setEditingPlayer(null); setFormPrefill(null); setFormSourceScoutId(null); setShowForm(true); };
   const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormSourceScoutId(null); setShowForm(true); setInfoPlayer(null); };
 
+  const handleFicharClick = () => {
+    if (HAS_HOVER) { openNewForm(); return; }
+    if (ficharConfirming) { openNewForm(); setFicharConfirming(false); }
+    else { setFicharConfirming(true); }
+  };
+
   return (
     <div className="space-y-4 animate-in fade-in">
       <div className="bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl flex items-center gap-2">
@@ -88,9 +102,14 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-faint" size={14} />
           <input type="text" placeholder="Buscar jugador..." className="w-full h-9 bg-well pl-9 pr-3 rounded-xl border border-border-subtle outline-none focus:border-green-500 text-sm font-bold text-fg placeholder:text-fg-faint" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
         </div>
-        <button onClick={openNewForm} className="shrink-0 h-9 px-3 bg-green-500 text-black rounded-xl font-black uppercase text-[10px] shadow-lg shadow-green-500/20 active:scale-95 transition-all flex items-center gap-1.5 hover:bg-green-400">
-          <Plus size={14} /> <span className="hidden sm:inline">Fichar</span>
-        </button>
+        <div ref={ficharRef} className="group/fichar shrink-0">
+          <button type="button" onClick={handleFicharClick} title="Fichar Jugador" className={`flex items-center h-9 pl-3 pr-3 rounded-xl font-black uppercase text-[10px] shadow-lg shadow-green-500/20 transition-colors duration-300 active:scale-95 ${ficharConfirming ? 'bg-green-400 text-black' : 'bg-green-500 text-black hover:bg-green-400'}`}>
+            <Plus size={14} className="shrink-0" />
+            <span className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${ficharConfirming ? 'max-w-[120px] ml-1.5' : 'max-w-0 ml-0 group-hover/fichar:max-w-[120px] group-hover/fichar:ml-1.5'}`}>
+              Fichar Jugador
+            </span>
+          </button>
+        </div>
         <div className="relative shrink-0" ref={sortMenuRef}>
           <button onClick={() => setShowSortMenu((o) => !o)} className={`h-9 w-9 flex items-center justify-center rounded-xl border transition-all ${showSortMenu ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:text-fg'}`} title="Ordenar">
             <ArrowUpDown size={16} />
