@@ -197,9 +197,9 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
         activarse desde el botón X, nunca desde un toque accidental fuera de la tarjeta. */}
     <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="bg-surface border border-border rounded-[32px] w-full max-w-sm shadow-2xl relative my-auto max-h-[88vh] overflow-y-auto no-scrollbar overscroll-contain">
-        <div className="sticky top-0 z-20 bg-surface/95 backdrop-blur-sm flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
+        <div className="sticky top-0 z-40 bg-surface/95 backdrop-blur-sm flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
           <h3 className="font-black italic text-green-500 text-sm uppercase">{editingPlayer ? 'Editar Jugador' : 'Fichar Jugador'}</h3>
-          <button type="button" onClick={requestClose} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); requestClose(); }} className="relative z-50 p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
         </div>
 
         <div className="px-5 pt-4">
@@ -238,14 +238,14 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
           {step === 2 && (
             <>
-              <div className="space-y-1">
+              <div className="space-y-1 relative">
                 <label className="text-[9px] font-black text-fg-muted ml-1">Posición Principal *</label>
                 <div className="flex flex-wrap gap-1.5 p-2 bg-well rounded-xl border border-border-subtle">
                   {ALL_POSITIONS.map((pos) => (<button key={pos} type="button" onClick={(e) => selectPrimary(e, pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${form.primaryPosition === pos ? 'bg-green-500 text-black shadow-lg shadow-green-500/30' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>))}
                 </div>
               </div>
               {form.primaryPosition && form.primaryPosition !== 'POR' && (
-                <div className="space-y-1">
+                <div className="space-y-1 relative">
                   <label className="text-[9px] font-black text-fg-muted ml-1">Posiciones Secundarias</label>
                   <div className="flex flex-wrap gap-1.5 p-2 bg-well rounded-xl border border-border-subtle">
                     {ALL_POSITIONS.filter((pos) => pos !== 'POR' && pos !== form.primaryPosition).map((pos) => (<button key={pos} type="button" onClick={(e) => toggleSecondary(e, pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${form.secondaryPositions.includes(pos) ? 'bg-green-500/80 text-black shadow-lg shadow-green-500/20' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>))}
@@ -253,8 +253,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                 </div>
               )}
               <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Media *</label><input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="90" min="1" max="99" onBlur={resetMobileViewport} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-base text-fg placeholder:text-fg-faint" value={form.rating} onChange={(e) => set({ rating: e.target.value })} /></div>
-                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Edad *</label><input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="23" min="15" max="50" onBlur={resetMobileViewport} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-base text-fg placeholder:text-fg-faint" value={form.age} onChange={(e) => set({ age: e.target.value })} /></div>
+                <div className="space-y-1 relative"><label className="text-[9px] font-black text-fg-muted ml-1">Media *</label><input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="90" min="1" max="99" onBlur={resetMobileViewport} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-base text-fg placeholder:text-fg-faint" value={form.rating} onChange={(e) => set({ rating: e.target.value })} /></div>
+                <div className="space-y-1 relative"><label className="text-[9px] font-black text-fg-muted ml-1">Edad *</label><input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="23" min="15" max="50" onBlur={resetMobileViewport} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-base text-fg placeholder:text-fg-faint" value={form.age} onChange={(e) => set({ age: e.target.value })} /></div>
                 <div className="space-y-1 relative" ref={footMenuRef}>
                   <label className="text-[9px] font-black text-fg-muted ml-1">Pierna</label>
                   <button type="button" onClick={(e) => { e.stopPropagation(); setShowFootMenu((o) => !o); }} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg">
@@ -262,7 +262,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     <span className="text-[8px] uppercase tracking-wide">{form.preferredFoot}</span>
                   </button>
                   {showFootMenu && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-30 animate-in fade-in slide-in-from-top-2 duration-150 p-1">
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-20 animate-in fade-in slide-in-from-top-2 duration-150 p-1">
                       {FOOT_OPTIONS.map((opt) => (
                         <button key={opt.value} type="button" onClick={(e) => { e.stopPropagation(); set({ preferredFoot: opt.value }); setShowFootMenu(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${form.preferredFoot === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
                           {opt.icon} {opt.label}
@@ -337,7 +337,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
           </div>
         </div>
 
-        <div className="sticky bottom-0 z-20 bg-surface/95 backdrop-blur-sm border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+        <div className="sticky bottom-0 z-40 bg-surface/95 backdrop-blur-sm border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
           {step > 1 && (<button type="button" onClick={goPrev} className="flex-1 py-4 rounded-xl bg-well-strong text-fg font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:brightness-125 transition-all"><ChevronLeft size={16} /> Anterior</button>)}
           {step < TOTAL_STEPS && (<button type="button" onClick={goNext} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all">Siguiente <ChevronRight size={16} /></button>)}
           {step === TOTAL_STEPS && (<button type="button" disabled={isSubmitting} onClick={handleConfirm} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all disabled:opacity-50">{isSubmitting ? 'Guardando...' : (<><Check size={16} /> Confirmar Fichaje</>)}</button>)}
