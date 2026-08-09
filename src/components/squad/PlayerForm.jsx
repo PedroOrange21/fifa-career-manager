@@ -193,8 +193,10 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
   return (
     <>
-    <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={requestClose}>
-      <div className="bg-surface border border-border rounded-[32px] w-full max-w-sm shadow-2xl relative my-auto max-h-[88vh] overflow-y-auto no-scrollbar overscroll-contain" onClick={(e) => e.stopPropagation()}>
+    {/* Sin onClick en el fondo a propósito: la alerta de salida solo debe poder
+        activarse desde el botón X, nunca desde un toque accidental fuera de la tarjeta. */}
+    <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="bg-surface border border-border rounded-[32px] w-full max-w-sm shadow-2xl relative my-auto max-h-[88vh] overflow-y-auto no-scrollbar overscroll-contain">
         <div className="sticky top-0 z-20 bg-surface/95 backdrop-blur-sm flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
           <h3 className="font-black italic text-green-500 text-sm uppercase">{editingPlayer ? 'Editar Jugador' : 'Fichar Jugador'}</h3>
           <button type="button" onClick={requestClose} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
@@ -224,7 +226,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                 <span className="text-[9px] text-fg-faint font-black uppercase tracking-widest">Foto / Avatar (opcional)</span>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Nombre *</label><input type="text" required autoFocus autoComplete="off" placeholder="Erling" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={form.firstName} onChange={(e) => set({ firstName: e.target.value })} /></div>
+                <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Nombre *</label><input type="text" required autoComplete="off" placeholder="Erling" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={form.firstName} onChange={(e) => set({ firstName: e.target.value })} /></div>
                 <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Apellido</label><input type="text" autoComplete="off" placeholder="Haaland" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={form.lastName} onChange={(e) => set({ lastName: e.target.value })} /></div>
               </div>
               <div className="space-y-1">
