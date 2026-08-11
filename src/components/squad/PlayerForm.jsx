@@ -85,6 +85,15 @@ const toFormState = (p) => {
     wage: formatValueInput(String(p?.wage || '')),
     releaseClause: formatValueInput(String(p?.releaseClause || '')),
     contractYears: p?.contractYears || '',
+    // No editables por el asistente en sí (transferStatus se cambia desde la Plantilla/Táctica,
+    // no aquí), pero deben conservarse al guardar: si no se incluyeran en el payload de
+    // handleConfirm, cualquier edición desde el Paso 4 resetearía en silencio a un jugador
+    // Cedible/Transferible/CedidoFuera de vuelta a "Activo".
+    transferStatus: p?.transferStatus || 'Activo',
+    // Respaldo por compatibilidad: algunos jugadores cedidos fuera solo tienen "loanDuration"
+    // (dato antiguo) en vez de outboundLoan.duration (el campo real que rellena cedePlayer),
+    // igual que ya contempla la lista de Plantilla al mostrar este mismo dato.
+    outboundLoan: p?.outboundLoan || (p?.loanDuration ? { duration: p.loanDuration } : null),
   };
 };
 
@@ -203,6 +212,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
     set({ preferredFoot: value });
     setShowFootMenu(false);
   };
+  const setOutboundDuration = (value) => set({ outboundLoan: { ...(form.outboundLoan || {}), duration: value } });
 
   // Detección automática de la nacionalidad mientras se escribe (sin desplegable): compara
   // el texto contra un mapa de variantes/sinónimos y códigos habituales (ver countries.js).
@@ -310,7 +320,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
         originClub: form.type === 'Cedido' ? form.originClub.trim() : null,
         buyOption: form.type === 'Cedido' ? (parseValue(form.buyOption) || null) : null,
         wagePercentage: form.type === 'Cedido' && form.wagePercentage ? parseInt(form.wagePercentage) : null,
-        transferStatus: 'Activo',
+        // Conserva el estado de mercado real del jugador (Activo/Cedible/Transferible/
+        // CedidoFuera): antes se pisaba siempre con 'Activo', lo que sacaba en silencio a un
+        // jugador cedido fuera de esa lista con solo editarlo desde el Paso 4.
+        transferStatus: form.transferStatus,
+        outboundLoan: form.transferStatus === 'CedidoFuera' ? form.outboundLoan : null,
         wage: parseValue(form.wage),
         releaseClause: parseValue(form.releaseClause) || null,
         contractYears: form.contractYears ? parseInt(form.contractYears) : null,
@@ -693,6 +707,21 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       </ReviewRow>
                     )}
                   </div>
+
+                  {/* Solo aparece al editar un jugador que está actualmente cedido a otro
+                      club (transferStatus === 'CedidoFuera'): permite ajustar la duración de
+                      esa cesión saliente sin tener que ir a la Plantilla. Al final de la
+                      ficha, como pide el diseño. */}
+                  {form.transferStatus === 'CedidoFuera' && (
+                    <>
+                      <SectionHeader emoji="🔄" title="Cesión" />
+                      <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+                        <ReviewRow label="Duración de la Cesión" active={editField === 'outboundDuration'} onOpen={() => setEditField('outboundDuration')} display={form.outboundLoan?.duration || 'Sin definir'}>
+                          <Dropdown value={form.outboundLoan?.duration} options={LOAN_DURATION_OPTIONS} onChange={(v) => { setOutboundDuration(v); setEditField(null); }} placeholder="Seleccionar" />
+                        </ReviewRow>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
