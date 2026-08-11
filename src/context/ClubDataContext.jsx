@@ -178,7 +178,7 @@ export function ClubDataProvider({ children }) {
   };
 
   const sellPlayer = async (player, salePrice) => {
-    if (!user || !activeClubId || !player) return;
+    if (!user || !activeClubId || !player || player.type === 'Cedido') return;
     await deleteDoc(playerDoc(user.uid, activeClubId, player.id));
     removePlayerFromTactic(player.id);
     adjustBudget(salePrice);
@@ -186,7 +186,7 @@ export function ClubDataProvider({ children }) {
   };
 
   const cedePlayer = async (player, { destinationClub, duration, wagePercentage }) => {
-    if (!user || !activeClubId || !player) return;
+    if (!user || !activeClubId || !player || player.type === 'Cedido') return;
     await updateDoc(playerDoc(user.uid, activeClubId, player.id), {
       transferStatus: 'CedidoFuera',
       outboundLoan: { destinationClub, duration, wagePercentage },
@@ -281,7 +281,9 @@ export function ClubDataProvider({ children }) {
       if (target === 'forLoan') newStatus = 'Cedible';
       if (target === 'forSale') newStatus = 'Transferible';
       if (target === 'loanedOut') newStatus = 'CedidoFuera';
-      updateDoc(playerDoc(user.uid, activeClubId, playerId), { transferStatus: newStatus });
+      if (newStatus === 'Activo' || player.type !== 'Cedido') {
+        updateDoc(playerDoc(user.uid, activeClubId, playerId), { transferStatus: newStatus });
+      }
     }
 
     if (displacedPlayerId && !isUncalledZone(source)) {
@@ -357,6 +359,10 @@ export function ClubDataProvider({ children }) {
   };
 
   const setPlayerTransferStatus = async (playerId, status) => {
+    if (status !== 'Activo') {
+      const player = players.find((p) => p.id === playerId);
+      if (player?.type === 'Cedido') return;
+    }
     await updateDoc(playerDoc(user.uid, activeClubId, playerId), { transferStatus: status });
     if (status === 'CedidoFuera') removePlayerFromTactic(playerId);
   };

@@ -214,6 +214,15 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
   };
   const setOutboundDuration = (value) => set({ outboundLoan: { ...(form.outboundLoan || {}), duration: value } });
 
+  // Un jugador cedido a nuestro club (type 'Cedido') no nos pertenece: si el usuario cambia
+  // el tipo de adquisición a 'Cedido' se limpia cualquier estado de mercado previo (no puede
+  // quedar marcado como Transferible/Cedible/CedidoFuera de un club que no es el suyo).
+  const selectAcquisitionType = (t) => {
+    const patch = { type: t, contractYears: '' };
+    if (t === 'Cedido') { patch.transferStatus = 'Activo'; patch.outboundLoan = null; }
+    set(patch);
+  };
+
   // Detección automática de la nacionalidad mientras se escribe (sin desplegable): compara
   // el texto contra un mapa de variantes/sinónimos y códigos habituales (ver countries.js).
   const selectedCountry = detectCountry(form.nationality);
@@ -491,9 +500,9 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                   <div className="space-y-1 relative">
                     <label className="text-[9px] font-black text-fg-muted ml-1">Tipo de Adquisición</label>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => set({ type: 'Cantera', contractYears: '' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Cantera' ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cantera</button>
-                      <button type="button" onClick={() => set({ type: 'Cedido', contractYears: '' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cedido</button>
-                      <button type="button" onClick={() => set({ type: 'Comprado', contractYears: '' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Comprado' ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Comprado</button>
+                      <button type="button" onClick={() => selectAcquisitionType('Cantera')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Cantera' ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cantera</button>
+                      <button type="button" onClick={() => selectAcquisitionType('Cedido')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cedido</button>
+                      <button type="button" onClick={() => selectAcquisitionType('Comprado')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Comprado' ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Comprado</button>
                     </div>
                   </div>
                   {form.type === 'Cantera' && (
@@ -652,7 +661,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     <ReviewRow label="Adquisición" active={editField === 'type'} onOpen={() => setEditField('type')} display={form.type}>
                       <div className="flex gap-2">
                         {['Cantera', 'Cedido', 'Comprado'].map((t) => (
-                          <button key={t} type="button" onClick={() => set({ type: t, contractYears: '' })} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${form.type === t ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>{t}</button>
+                          <button key={t} type="button" onClick={() => selectAcquisitionType(t)} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${form.type === t ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>{t}</button>
                         ))}
                       </div>
                       <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>

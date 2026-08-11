@@ -28,8 +28,8 @@ export default function OperationsTab({ onRequestEditPlayer }) {
   const [loaningPlayer, setLoaningPlayer] = useState(null);
   const [addingStatus, setAddingStatus] = useState(null);
 
-  const forSale = players.filter((p) => p.transferStatus === 'Transferible').sort((a, b) => b.rating - a.rating);
-  const forLoan = players.filter((p) => p.transferStatus === 'Cedible').sort((a, b) => b.rating - a.rating);
+  const forSale = players.filter((p) => p.transferStatus === 'Transferible' && p.type !== 'Cedido').sort((a, b) => b.rating - a.rating);
+  const forLoan = players.filter((p) => p.transferStatus === 'Cedible' && p.type !== 'Cedido').sort((a, b) => b.rating - a.rating);
   const loanedOut = players.filter((p) => p.transferStatus === 'CedidoFuera').sort((a, b) => b.rating - a.rating);
 
   const openInfo = (player, slot) => { setSelectedPlayerInfo(player); setInfoSlot(slot); };

@@ -35,9 +35,13 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
   const emptyBenchIdx = [0, 1, 2, 3, 4, 5, 6, 7, 8].find((i) => !bench[i]);
   const canSendToBench = current.transferStatus !== 'CedidoFuera' && !isUncalledZone(infoSlot) && !String(infoSlot).startsWith('bench-') && emptyBenchIdx !== undefined;
 
+  // Un jugador cedido a nuestro club (type 'Cedido') no es propiedad del club: nunca puede
+  // venderse, cederse ni marcarse como transferible/cedible.
+  const isIncomingLoan = current.type === 'Cedido';
+
   // Contexto genérico (Plantilla / Mercado): un único grid con todas las acciones.
   const actions = [{ key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit(current), color: 'blue' }];
-  if (current.transferStatus !== 'CedidoFuera') actions.push({ key: 'sell', icon: Tag, label: 'Vender', onClick: () => setShowSellModal(true), color: 'red' });
+  if (current.transferStatus !== 'CedidoFuera' && !isIncomingLoan) actions.push({ key: 'sell', icon: Tag, label: 'Vender', onClick: () => setShowSellModal(true), color: 'red' });
   if (canSendToBench) actions.push({ key: 'bench', icon: Armchair, label: 'Al Banquillo', onClick: () => { assignPlayerToSlot(`bench-${emptyBenchIdx}`, current.id); onClose(); }, color: 'yellow' });
   if (!isUncalledZone(infoSlot)) {
     actions.push({ key: 'replace', icon: RefreshCcw, label: 'Reemplazar', onClick: () => onReplace(infoSlot), color: 'neutral' });
@@ -54,13 +58,13 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
   ];
 
   const marketActions = [
-    { key: 'transferible', icon: Tag, label: 'Mandar a Transferibles', onClick: () => changeStatus('Transferible'), color: 'red', active: current.transferStatus === 'Transferible' },
-    { key: 'cedible', icon: ArrowRightLeft, label: 'Mandar a Cedibles', onClick: () => changeStatus('Cedible'), color: 'yellow', active: current.transferStatus === 'Cedible' },
+    { key: 'transferible', icon: Tag, label: 'Mandar a Transferibles', onClick: () => changeStatus('Transferible'), color: 'red', active: current.transferStatus === 'Transferible', disabled: isIncomingLoan },
+    { key: 'cedible', icon: ArrowRightLeft, label: 'Mandar a Cedibles', onClick: () => changeStatus('Cedible'), color: 'yellow', active: current.transferStatus === 'Cedible', disabled: isIncomingLoan },
   ];
 
   const directMarketActions = [
-    { key: 'sell', icon: Tag, label: 'Vender Jugador', onClick: () => setShowSellModal(true), color: 'red', disabled: current.transferStatus === 'CedidoFuera' },
-    { key: 'loan', icon: ArrowRightLeft, label: 'Ceder Jugador', onClick: () => setShowLoanModal(true), color: 'yellow', disabled: current.transferStatus === 'CedidoFuera' },
+    { key: 'sell', icon: Tag, label: 'Vender Jugador', onClick: () => setShowSellModal(true), color: 'red', disabled: current.transferStatus === 'CedidoFuera' || isIncomingLoan },
+    { key: 'loan', icon: ArrowRightLeft, label: 'Ceder Jugador', onClick: () => setShowLoanModal(true), color: 'yellow', disabled: current.transferStatus === 'CedidoFuera' || isIncomingLoan },
   ];
 
   return (
@@ -87,9 +91,9 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
             <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted block">Estado de Mercado</span>
             <div className="grid grid-cols-2 gap-2">
               <button type="button" onClick={() => changeStatus('Activo')} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${current.transferStatus === 'Activo' || !current.transferStatus ? 'bg-green-500 text-black border-green-500' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Activo</button>
-              <button type="button" onClick={() => changeStatus('Cedible')} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${current.transferStatus === 'Cedible' ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Cedible</button>
-              <button type="button" onClick={() => changeStatus('Transferible')} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${current.transferStatus === 'Transferible' ? 'bg-red-500 text-black border-red-500' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Venta</button>
-              <button type="button" onClick={() => changeStatus('CedidoFuera')} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${current.transferStatus === 'CedidoFuera' ? 'bg-zinc-600 text-white border-zinc-600' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Cedido Fuera</button>
+              <button type="button" onClick={() => changeStatus('Cedible')} disabled={isIncomingLoan} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${isIncomingLoan ? 'opacity-40 pointer-events-none bg-transparent border-border text-fg-faint' : current.transferStatus === 'Cedible' ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Cedible</button>
+              <button type="button" onClick={() => changeStatus('Transferible')} disabled={isIncomingLoan} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${isIncomingLoan ? 'opacity-40 pointer-events-none bg-transparent border-border text-fg-faint' : current.transferStatus === 'Transferible' ? 'bg-red-500 text-black border-red-500' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Venta</button>
+              <button type="button" onClick={() => changeStatus('CedidoFuera')} disabled={isIncomingLoan} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${isIncomingLoan ? 'opacity-40 pointer-events-none bg-transparent border-border text-fg-faint' : current.transferStatus === 'CedidoFuera' ? 'bg-zinc-600 text-white border-zinc-600' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Cedido Fuera</button>
             </div>
           </div>
         )}
@@ -104,8 +108,8 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
               ))}
             </div>
             <div className="grid grid-cols-2 gap-2 mt-2">
-              {marketActions.map(({ key, icon: Icon, label, onClick, color, active }) => (
-                <button key={key} onClick={onClick} className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-black uppercase text-[9px] transition-all border ${active ? ACTIVE_STYLES[color] : ACTION_STYLES[color]}`}>
+              {marketActions.map(({ key, icon: Icon, label, onClick, color, active, disabled }) => (
+                <button key={key} onClick={onClick} disabled={disabled} className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-black uppercase text-[9px] transition-all border ${disabled ? 'opacity-40 pointer-events-none bg-well-strong text-fg-faint border-transparent' : active ? ACTIVE_STYLES[color] : ACTION_STYLES[color]}`}>
                   <Icon size={16} /> {label}
                 </button>
               ))}

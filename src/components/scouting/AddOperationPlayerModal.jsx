@@ -10,7 +10,7 @@ export default function AddOperationPlayerModal({ status, title, onClose }) {
   const [search, setSearch] = useState('');
 
   const eligible = players
-    .filter((p) => p.transferStatus !== status && p.transferStatus !== 'CedidoFuera')
+    .filter((p) => p.transferStatus !== status && p.transferStatus !== 'CedidoFuera' && p.type !== 'Cedido')
     .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => b.rating - a.rating);
 
