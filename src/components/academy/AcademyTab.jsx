@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TrendingUp, Sprout, ShieldCheck, ArrowUpCircle } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
+import { useUiChrome } from '../../context/UiChromeContext';
 import { getCardStyle } from '../../utils/cardStyle';
 import ConfirmModal from '../common/ConfirmModal';
 import UpdateRatingModal from './UpdateRatingModal';
@@ -33,18 +34,22 @@ function YouthPlayerRow({ p, promoted, onUpdate, onPromote }) {
       <div className="flex items-center gap-3 md:gap-4">
         <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
         <div className="flex-1 min-w-0">
-          <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white flex items-center gap-2">
-            {p.name}
-            {promoted && <span className="shrink-0 flex items-center gap-1 text-[7px] md:text-[8px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20"><ShieldCheck size={10} /> Primer Equipo</span>}
-          </div>
-          <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest">{p.positions?.join(' · ')} · {p.age} Años</div>
+          <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div>
+          <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest">{promoted ? p.positions?.join(' · ') : `${p.positions?.join(' · ')} · ${p.age} Años`}</div>
           <PotentialBar rating={p.rating} potential={p.potential} />
         </div>
-        {p.potential ? <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 shrink-0">Pot. {p.potential}</span> : null}
+        {promoted ? (
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            <span className="text-[8px] text-fg-faint font-black uppercase tracking-widest">{p.age} Años</span>
+            {p.potential ? <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Pot. {p.potential}</span> : null}
+          </div>
+        ) : (
+          p.potential ? <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 shrink-0">Pot. {p.potential}</span> : null
+        )}
       </div>
       <EvolutionTimeline history={p.evolutionHistory} />
       <div className="flex gap-2 mt-1">
-        <button onClick={() => onUpdate(p)} className="flex-1 py-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 font-black uppercase text-[10px] hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/20"><TrendingUp size={14} /> Actualizar Valoración</button>
+        <button onClick={() => onUpdate(p)} className="flex-1 py-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 font-black uppercase text-[10px] hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/20"><TrendingUp size={14} /> Actualizar Media</button>
         {!promoted && (
           <button onClick={() => onPromote(p)} className="flex-1 py-2.5 rounded-xl bg-blue-500/10 text-blue-400 font-black uppercase text-[10px] hover:bg-blue-500/20 transition-all flex items-center justify-center gap-2 border border-blue-500/20"><ArrowUpCircle size={14} /> Subir al Primer Equipo</button>
         )}
@@ -55,8 +60,18 @@ function YouthPlayerRow({ p, promoted, onUpdate, onPromote }) {
 
 export default function AcademyTab() {
   const { players, lineup, bench, assignPlayerToSlot } = useClubData();
+  const { hide: hideChrome, show: showChrome } = useUiChrome();
   const [updatingPlayer, setUpdatingPlayer] = useState(null);
   const [promotingPlayer, setPromotingPlayer] = useState(null);
+
+  // Confirmación de ascenso a pantalla limpia: oculta cabecera y barra de navegación
+  // inferior mientras el modal está abierto, igual que hace PlayerForm en su wizard.
+  useEffect(() => {
+    if (!promotingPlayer) return;
+    hideChrome();
+    return () => showChrome();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promotingPlayer]);
 
   const isPromoted = (p) => Object.values(lineup).includes(p.id) || Object.values(bench).includes(p.id);
 
