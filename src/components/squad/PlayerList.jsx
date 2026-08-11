@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ArrowUpDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ArrowUpDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap, ArrowDownToLine } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue, formatLoanDuration } from '../../utils/format';
@@ -377,10 +377,12 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
             importar qué combinación le toque a cada fila. */}
         <div className="flex flex-col items-end gap-2 shrink-0">
           {Object.values(lineup).includes(p.id) ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-green-500/20 text-green-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-green-500/20"><Shirt size={12} className="shrink-0" /> <span className="hidden sm:inline">Titular</span><span className="sm:hidden">11</span></span>) : Object.values(bench).includes(p.id) ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-blue-500/20 text-blue-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-blue-500/20"><Armchair size={12} className="shrink-0" /> <span className="hidden sm:inline">Banquillo</span><span className="sm:hidden">Banq</span></span>) : p.transferStatus === 'Cedible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} className="shrink-0" /> Cedible</span>) : p.transferStatus === 'Transferible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-red-500/20 text-red-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-red-500/20"><Tag size={12} className="shrink-0" /> Venta</span>) : null}
-          {p.type && (
-            <span className={`text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center px-2 md:px-3 py-1 rounded-lg font-black uppercase tracking-widest border ${p.type === 'Cantera' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' : p.type === 'Cedido' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20' : 'bg-blue-500/20 text-blue-400 border-blue-500/20'}`}>
-              {p.type === 'Cantera' && <GraduationCap size={12} className="shrink-0" />}
-              {p.type === 'Cedido' && <ArrowDownToLine size={12} className="shrink-0" />}
+          {/* "Comprado" (jugador propiedad del club) no aporta información nueva junto al
+              resto de badges de estado, así que no se muestra ninguna etiqueta para ese caso
+              — solo Cantera y Cedido, que sí distinguen procedencias relevantes. */}
+          {p.type && p.type !== 'Comprado' && (
+            <span className={`text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center px-2 md:px-3 py-1 rounded-lg font-black uppercase tracking-widest border ${p.type === 'Cantera' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20'}`}>
+              {p.type === 'Cantera' ? <GraduationCap size={12} className="shrink-0" /> : <ArrowDownToLine size={12} className="shrink-0" />}
               {p.type}
             </span>
           )}
@@ -488,7 +490,20 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall }) {
       >
         <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
           <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
-          <div className="flex-1 min-w-0"><div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div><div className="text-[8px] md:text-[9px] text-zinc-500 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div><div className="flex flex-wrap items-center gap-1.5 mt-0.5"><span className="text-[8px] md:text-[9px] flex items-center gap-1 text-zinc-600 font-black bg-well px-2 py-0.5 rounded"><ArrowUpFromLine size={10} className="shrink-0" /> Cedido</span>{p.loanDuration && (<span className="text-[8px] md:text-[9px] text-zinc-500 font-black bg-well px-2 py-0.5 rounded">{formatLoanDuration(p.loanDuration)}</span>)}</div></div>
+          <div className="flex-1 min-w-0"><div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div><div className="text-[8px] md:text-[9px] text-zinc-500 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div></div>
+        </div>
+
+        {/* Texto claro y completo de la duración, a la derecha del todo de la casilla —
+            sustituye el formato comprimido anterior (icono + "6M"). La duración real de la
+            cesión saliente vive en outboundLoan.duration (así la guarda cedePlayer); se
+            conserva "loanDuration" como respaldo por compatibilidad con datos antiguos. */}
+        <div className="shrink-0 text-right">
+          <span className="text-[9px] md:text-[10px] text-zinc-500 font-black uppercase tracking-wide whitespace-nowrap">
+            {(() => {
+              const duration = p.outboundLoan?.duration || p.loanDuration;
+              return duration ? `Cedido ${duration.toLowerCase()}` : 'Cedido';
+            })()}
+          </span>
         </div>
 
         <div className="hidden sm:block shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
