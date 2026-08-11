@@ -43,7 +43,7 @@ export default function PickingSlotModal({ pickingSlot, onClose, onNavigateToSco
   const showEmptyState = !isBenchSlot && !currentSlotOccupied && availableCount === 0;
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-[100] p-4 md:p-6 flex flex-col animate-in fade-in duration-200" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/95 z-[150] p-4 md:p-6 flex flex-col animate-in fade-in duration-200" onClick={onClose}>
       <div className="bg-surface border border-border p-6 rounded-[32px] w-full max-w-sm mx-auto shadow-2xl relative my-auto flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6"><div><h2 className="text-xl md:text-2xl font-black uppercase italic tracking-tighter text-fg">Colocar Jugador</h2><p className="text-[9px] md:text-[10px] text-green-500 font-black uppercase tracking-widest">Alineación: {isBenchSlot ? 'Banquillo' : slotData?.pos}</p></div><button onClick={onClose} className="p-3 bg-well rounded-full hover:bg-well-strong transition-all text-fg-muted hover:text-fg"><X size={20} /></button></div>
         <div className="overflow-y-auto space-y-2 max-h-[60vh] pr-1 no-scrollbar">

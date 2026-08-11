@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useUiChrome } from '../../context/UiChromeContext';
 import { useDragAndDrop } from '../../hooks/useDragAndDrop';
@@ -27,7 +27,10 @@ export default function TacticsTab({ onNavigateToScouting }) {
 
   // Ficha del jugador a pantalla limpia: oculta cabecera y barra de navegación mientras
   // está abierta, igual que el resto de modales de pantalla completa de la app.
-  useEffect(() => {
+  // useLayoutEffect (no useEffect) a propósito: se ejecuta de forma síncrona antes de que
+  // el navegador pinte el fotograma, así que cabecera/nav desaparecen en el mismo pintado
+  // en que aparece el modal, sin un frame intermedio donde ambos convivan en pantalla.
+  useLayoutEffect(() => {
     if (!selectedPlayerInfo) return;
     hideChrome();
     return () => showChrome();
@@ -37,7 +40,7 @@ export default function TacticsTab({ onNavigateToScouting }) {
   // Modal "Colocar Jugador" también a pantalla limpia. chromeHiddenCount es un contador,
   // así que se apila sin conflicto con el hide de la ficha del jugador (p. ej. al pulsar
   // "Reemplazar", que cierra la ficha y abre este modal en el mismo render).
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (pickingSlot === null) return;
     hideChrome();
     return () => showChrome();
