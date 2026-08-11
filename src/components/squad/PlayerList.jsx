@@ -502,7 +502,7 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall }) {
             conserva "loanDuration" como respaldo por compatibilidad con datos antiguos.
             En móvil se apila en dos líneas ("Cedido" arriba, duración abajo); en escritorio
             (md:) se une en una sola línea, con más espacio horizontal disponible. */}
-        <div className="shrink-0 text-right flex flex-col md:flex-row md:items-center md:gap-1">
+        <div className="shrink-0 text-right flex flex-col md:flex-row md:items-center md:gap-1 mr-3 md:mr-4">
           <span className="text-[9px] md:text-[10px] text-zinc-500 font-black uppercase tracking-wide whitespace-nowrap">Cedido</span>
           {(p.outboundLoan?.duration || p.loanDuration) && (
             <span className="text-[9px] md:text-[10px] text-zinc-500 font-black uppercase tracking-wide whitespace-nowrap">
