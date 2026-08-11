@@ -13,11 +13,31 @@ export default function SavedFormationsBar() {
   const [newFormationName, setNewFormationName] = useState('');
   const [renaming, setRenaming] = useState(null);
   const [renameValue, setRenameValue] = useState('');
+  const [showSaveChoice, setShowSaveChoice] = useState(false);
+  const [saveMode, setSaveMode] = useState('current');
+  const [newTacticNameForSave, setNewTacticNameForSave] = useState('');
 
   const handleSave = () => {
     if (!newFormationName.trim()) return;
     saveCurrentFormation(newFormationName);
     setNewFormationName('');
+  };
+
+  const openSaveChoice = () => { setSaveMode('current'); setNewTacticNameForSave(''); setShowSaveChoice(true); };
+
+  const confirmSaveChoice = async () => {
+    if (saveMode === 'new') {
+      const trimmed = newTacticNameForSave.trim();
+      if (!trimmed) return;
+      await saveCurrentFormation(trimmed);
+      // Deja la formación recién creada como activa (misma lógica que al cargar un equipo
+      // guardado), para que el desplegable la refleje y "Guardar Cambios" no reaparezca
+      // de inmediato al coincidir ya con lo guardado.
+      loadSavedFormation({ name: trimmed, formation, lineup, bench });
+    } else {
+      await updateActiveTactic();
+    }
+    setShowSaveChoice(false);
   };
 
   // ¿La táctica activa (once/banquillo/no convocados) se separó de lo que hay guardado bajo
@@ -47,7 +67,7 @@ export default function SavedFormationsBar() {
         {hasPendingChanges ? (
           // Estado modificado: el botón se expande hacia la izquierda, ocupando también el
           // hueco del campo de nombre, para avisar con un texto destacado y guardar en un toque.
-          <button onClick={updateActiveTactic} title="Guardar cambios de la táctica" className="flex-1 min-w-0 h-9 flex items-center justify-center gap-2 bg-green-500 text-black rounded-xl shadow-lg shadow-green-500/20 active:scale-95 transition-all hover:bg-green-400 font-black uppercase text-xs animate-in fade-in slide-in-from-right-4 duration-200">
+          <button onClick={openSaveChoice} title="Guardar cambios de la táctica" className="flex-1 min-w-0 h-9 flex items-center justify-center gap-2 bg-green-500 text-black rounded-xl shadow-lg shadow-green-500/20 active:scale-95 transition-all hover:bg-green-400 font-black uppercase text-xs animate-in fade-in slide-in-from-right-4 duration-200">
             <Save size={14} className="shrink-0" /> Guardar Cambios
           </button>
         ) : (
@@ -97,6 +117,36 @@ export default function SavedFormationsBar() {
             <input type="text" autoFocus required placeholder="Nombre de la táctica..." className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold text-fg placeholder:text-fg-faint text-base md:text-sm" value={renameValue} onChange={(e) => setRenameValue(e.target.value)} />
             <button type="submit" className="w-full bg-green-500 text-black p-4 rounded-xl font-black uppercase text-xs tracking-wider mt-6 hover:bg-green-400 transition-all">Guardar Cambios</button>
           </form>
+        </div>
+      )}
+
+      {showSaveChoice && (
+        <div className="fixed inset-0 bg-black/95 z-[160] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setShowSaveChoice(false)}>
+          <div className="bg-surface border border-border p-6 rounded-[32px] w-full max-w-sm shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-black italic text-green-500 text-sm uppercase flex items-center gap-2"><Save size={16} /> Guardar Cambios</h3>
+              <button type="button" onClick={() => setShowSaveChoice(false)} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
+            </div>
+
+            <div className="space-y-2 mb-4">
+              <button type="button" onClick={() => setSaveMode('current')} className={`w-full p-4 rounded-2xl border text-left transition-all ${saveMode === 'current' ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:bg-well-strong'}`}>
+                <div className="font-black uppercase text-xs">Guardar en {activeTacticName}</div>
+                <div className="text-[9px] font-bold mt-0.5 opacity-70 uppercase tracking-widest">Actualiza esta formación existente</div>
+              </button>
+              <button type="button" onClick={() => setSaveMode('new')} className={`w-full p-4 rounded-2xl border text-left transition-all ${saveMode === 'new' ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:bg-well-strong'}`}>
+                <div className="font-black uppercase text-xs">Guardar como Nueva Formación</div>
+                <div className="text-[9px] font-bold mt-0.5 opacity-70 uppercase tracking-widest">Crea un equipo independiente</div>
+              </button>
+            </div>
+
+            {saveMode === 'new' && (
+              <input type="text" autoFocus placeholder="Nombre de la nueva táctica..." className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold text-fg placeholder:text-fg-faint text-base md:text-sm mb-4" value={newTacticNameForSave} onChange={(e) => setNewTacticNameForSave(e.target.value)} />
+            )}
+
+            <button type="button" onClick={confirmSaveChoice} disabled={saveMode === 'new' && !newTacticNameForSave.trim()} className="w-full bg-green-500 text-black p-4 rounded-2xl font-black uppercase text-xs tracking-wider hover:bg-green-400 transition-all disabled:opacity-40 disabled:pointer-events-none">
+              {saveMode === 'current' ? `Guardar en ${activeTacticName}` : 'Guardar Nueva Formación'}
+            </button>
+          </div>
         </div>
       )}
     </div>

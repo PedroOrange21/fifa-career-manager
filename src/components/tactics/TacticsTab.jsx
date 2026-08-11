@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useClubData } from '../../context/ClubDataContext';
+import { useUiChrome } from '../../context/UiChromeContext';
 import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { getCardStyle } from '../../utils/cardStyle';
 import SavedFormationsBar from './SavedFormationsBar';
@@ -15,12 +16,23 @@ export default function TacticsTab({ onNavigateToScouting }) {
   const dnd = useDragAndDrop({ players, executeMove });
   const { floatingDrag } = dnd;
 
+  const { hide: hideChrome, show: showChrome } = useUiChrome();
+
   const [pickingSlot, setPickingSlot] = useState(null);
   const [selectedPlayerInfo, setSelectedPlayerInfo] = useState(null);
   const [infoSlot, setInfoSlot] = useState(null);
   const [editingPlayer, setEditingPlayer] = useState(null);
 
   const openInfo = (player, slot) => { setSelectedPlayerInfo(player); setInfoSlot(slot); };
+
+  // Ficha del jugador a pantalla limpia: oculta cabecera y barra de navegación mientras
+  // está abierta, igual que el resto de modales de pantalla completa de la app.
+  useEffect(() => {
+    if (!selectedPlayerInfo) return;
+    hideChrome();
+    return () => showChrome();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlayerInfo]);
 
   return (
     <div className="space-y-4 animate-in fade-in">
