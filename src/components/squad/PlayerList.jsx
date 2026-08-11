@@ -157,7 +157,11 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
           <div className="px-2 flex items-center gap-2 text-zinc-400"><ArrowRightLeft size={14} /><h3 className="text-xs font-black uppercase tracking-widest italic">Jugadores Cedidos a otros Clubes</h3></div>
           <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
             {loanedOutPlayers.map((p) => (
-              <LoanedPlayerRow key={p.id} p={p} onEdit={() => openEditForm(p)} onDelete={() => setPlayerToDelete(p.id)} />
+              <LoanedPlayerRow
+                key={p.id} p={p}
+                onEdit={() => openEditForm(p)} onDelete={() => setPlayerToDelete(p.id)}
+                onRecall={() => setPlayerTransferStatus(p.id, 'Activo')}
+              />
             ))}
           </div>
         </div>
@@ -367,10 +371,14 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
             </div>
           </div>
         </div>
+        {/* Ancho mínimo homogéneo (min-w-[104px] + justify-center) en las dos etiquetas de
+            estado, para que "Titular", "Banquillo", "Cedible", "Venta", "Comprado", "Cedido"
+            y "Cantera" ocupen siempre el mismo espacio y la columna quede simétrica sin
+            importar qué combinación le toque a cada fila. */}
         <div className="flex flex-col items-end gap-2 shrink-0">
-          {Object.values(lineup).includes(p.id) ? (<span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-green-500/20 text-green-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-green-500/20"><Shirt size={12} /> <span className="hidden sm:inline">Titular</span><span className="sm:hidden">11</span></span>) : Object.values(bench).includes(p.id) ? (<span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-blue-500/20 text-blue-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-blue-500/20"><Users size={12} /> <span className="hidden sm:inline">Banquillo</span><span className="sm:hidden">Banq</span></span>) : p.transferStatus === 'Cedible' ? (<span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} /> Cedible</span>) : p.transferStatus === 'Transferible' ? (<span className="text-[8px] md:text-[9px] flex items-center gap-1.5 bg-red-500/20 text-red-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-red-500/20"><Tag size={12} /> Venta</span>) : null}
+          {Object.values(lineup).includes(p.id) ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-green-500/20 text-green-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-green-500/20"><Shirt size={12} className="shrink-0" /> <span className="hidden sm:inline">Titular</span><span className="sm:hidden">11</span></span>) : Object.values(bench).includes(p.id) ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-blue-500/20 text-blue-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-blue-500/20"><Users size={12} className="shrink-0" /> <span className="hidden sm:inline">Banquillo</span><span className="sm:hidden">Banq</span></span>) : p.transferStatus === 'Cedible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} className="shrink-0" /> Cedible</span>) : p.transferStatus === 'Transferible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-red-500/20 text-red-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-red-500/20"><Tag size={12} className="shrink-0" /> Venta</span>) : null}
           {p.type && (
-            <span className={`text-[8px] md:text-[9px] px-2 md:px-3 py-1 rounded-lg font-black uppercase tracking-widest border ${p.type === 'Cantera' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' : p.type === 'Cedido' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20' : 'bg-blue-500/20 text-blue-400 border-blue-500/20'}`}>
+            <span className={`text-[8px] md:text-[9px] flex items-center justify-center min-w-[104px] text-center px-2 md:px-3 py-1 rounded-lg font-black uppercase tracking-widest border ${p.type === 'Cantera' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' : p.type === 'Cedido' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20' : 'bg-blue-500/20 text-blue-400 border-blue-500/20'}`}>
               {p.type}
             </span>
           )}
@@ -420,9 +428,43 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
 
 // Misma mecánica de deslizar que PlayerRow, aplicada también a los jugadores cedidos a otros
 // clubes: "Editar" abre directamente el Paso 4 del formulario, igual que en la lista de
-// activos, con el mismo orden de botones y el mismo aviso rojo de borrado continuo.
-function LoanedPlayerRow({ p, onEdit, onDelete }) {
+// activos, con el mismo orden de botones y el mismo aviso rojo de borrado continuo. En
+// escritorio, en vez de dos botones sueltos, se agrupan en un único "..." con las acciones
+// propias de un jugador cedido fuera (Recuperar, Editar, Borrar).
+function LoanedPlayerRow({ p, onEdit, onDelete, onRecall }) {
   const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(onDelete);
+  const [showMore, setShowMore] = useState(false);
+  const [moreRect, setMoreRect] = useState(null);
+  const moreBtnRef = useRef(null);
+  const moreMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!showMore) return;
+    const handler = (e) => {
+      if (moreBtnRef.current?.contains(e.target)) return;
+      if (moreMenuRef.current?.contains(e.target)) return;
+      setShowMore(false);
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [showMore]);
+
+  const toggleMore = (e) => {
+    if (showMore) { setShowMore(false); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMoreRect({ top: rect.bottom + 4, right: window.innerWidth - rect.right, width: 200 });
+    setShowMore(true);
+  };
+
+  const MORE_ACTIONS = [
+    { key: 'recall', icon: ArrowRightLeft, label: 'Recuperar al Club', onClick: onRecall },
+    { key: 'edit', icon: Edit2, label: 'Editar Jugador', onClick: () => onEdit() },
+    { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete() },
+  ];
 
   return (
     <div className="relative overflow-hidden">
@@ -447,12 +489,9 @@ function LoanedPlayerRow({ p, onEdit, onDelete }) {
           <div className="flex-1 min-w-0"><div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div><div className="text-[8px] md:text-[9px] text-zinc-500 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div><div className="flex flex-wrap items-center gap-1.5 mt-0.5"><span className="text-[8px] md:text-[9px] text-zinc-600 font-black bg-well px-2 py-0.5 rounded">Cedido</span>{p.loanDuration && (<span className="text-[8px] md:text-[9px] text-zinc-500 font-black bg-well px-2 py-0.5 rounded">{formatLoanDuration(p.loanDuration)}</span>)}</div></div>
         </div>
 
-        <div className="hidden sm:flex flex-col items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button type="button" onClick={() => onDelete()} title="Borrar" className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-red-500 hover:bg-red-500/10 transition-colors touch-manipulation">
-            <Trash2 size={14} />
-          </button>
-          <button type="button" onClick={() => onEdit()} title="Editar" className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-fg hover:bg-well transition-colors touch-manipulation">
-            <Edit2 size={14} />
+        <div className="hidden sm:block shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button ref={moreBtnRef} type="button" onClick={toggleMore} title="Más opciones" className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-fg hover:bg-well transition-colors touch-manipulation">
+            <MoreHorizontal size={14} />
           </button>
         </div>
 
@@ -462,6 +501,21 @@ function LoanedPlayerRow({ p, onEdit, onDelete }) {
           </div>
         )}
       </div>
+
+      {showMore && moreRect && createPortal(
+        <div
+          ref={moreMenuRef}
+          style={{ position: 'fixed', top: moreRect.top, right: moreRect.right, width: moreRect.width }}
+          className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
+        >
+          {MORE_ACTIONS.map(({ key, icon: Icon, label, onClick }) => (
+            <button key={key} type="button" onClick={() => { onClick(); setShowMore(false); close(); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase text-fg-secondary hover:bg-well transition-all touch-manipulation">
+              <Icon size={14} className="shrink-0" /> {label}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
