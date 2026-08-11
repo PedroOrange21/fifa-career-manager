@@ -35,17 +35,13 @@ function YouthPlayerRow({ p, promoted, onUpdate, onPromote }) {
         <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
         <div className="flex-1 min-w-0">
           <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div>
-          <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest">{promoted ? p.positions?.join(' · ') : `${p.positions?.join(' · ')} · ${p.age} Años`}</div>
+          <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div>
           <PotentialBar rating={p.rating} potential={p.potential} />
         </div>
-        {promoted ? (
-          <div className="flex flex-col items-end gap-1.5 shrink-0">
-            <span className="text-[8px] text-fg-faint font-black uppercase tracking-widest">{p.age} Años</span>
-            {p.potential ? <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Pot. {p.potential}</span> : null}
-          </div>
-        ) : (
-          p.potential ? <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 shrink-0">Pot. {p.potential}</span> : null
-        )}
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <span className="text-[8px] text-fg-faint font-black uppercase tracking-widest">{p.age} Años</span>
+          {p.potential ? <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Pot. {p.potential}</span> : null}
+        </div>
       </div>
       <EvolutionTimeline history={p.evolutionHistory} />
       <div className="flex gap-2 mt-1">

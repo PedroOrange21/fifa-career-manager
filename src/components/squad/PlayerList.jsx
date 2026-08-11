@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ArrowUpDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap, ArrowDownToLine } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ArrowUpDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { getCardStyle } from '../../utils/cardStyle';
-import { abbreviateValue, formatLoanDuration } from '../../utils/format';
+import { abbreviateValue } from '../../utils/format';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import PlayerForm from './PlayerForm';
 import ConfirmModal from '../common/ConfirmModal';
@@ -370,23 +370,30 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
             <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
               <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{p.age} Años</span>
               {p.marketValue && (<span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(p.marketValue)}</span>)}
-              {p.type === 'Cedido' && p.loanDuration && (<span className="text-[7px] md:text-[8px] text-yellow-500 font-black uppercase tracking-widest bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">{formatLoanDuration(p.loanDuration)}</span>)}
             </div>
           </div>
         </div>
-        {/* Ancho mínimo homogéneo (min-w-[104px] + justify-center) en las dos etiquetas de
-            estado, para que "Titular", "Banquillo", "Cedible", "Venta", "Comprado", "Cedido"
-            y "Cantera" ocupen siempre el mismo espacio y la columna quede simétrica sin
-            importar qué combinación le toque a cada fila. */}
+
+        {/* Cedidos entrantes (type 'Cedido'): mismo formato de dos líneas ("Cedido" arriba,
+            duración abajo) y misma separación (mr-3/mr-4) que la lista de cedidos a otros
+            clubes, para coherencia visual total entre cesiones entrantes y salientes. */}
+        {p.type === 'Cedido' && (
+          <div className="shrink-0 text-right flex flex-col md:flex-row md:items-center md:gap-1 mr-3 md:mr-4">
+            <span className="text-[9px] md:text-[10px] text-zinc-500 font-black uppercase tracking-wide whitespace-nowrap">Cedido</span>
+            {p.loanDuration && (
+              <span className="text-[9px] md:text-[10px] text-zinc-500 font-black uppercase tracking-wide whitespace-nowrap">{p.loanDuration.toLowerCase()}</span>
+            )}
+          </div>
+        )}
+
+        {/* Ancho mínimo homogéneo (min-w-[104px] + justify-center) en la etiqueta de estado
+            (Cedible/Venta) y en el badge de Cantera, para que ocupen siempre el mismo espacio
+            y la columna quede simétrica. Titular/Banquillo se reducen a solo icono. */}
         <div className="flex flex-col items-end gap-2 shrink-0">
-          {Object.values(lineup).includes(p.id) ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-green-500/20 text-green-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-green-500/20"><Shirt size={12} className="shrink-0" /> <span className="hidden sm:inline">Titular</span><span className="sm:hidden">11</span></span>) : Object.values(bench).includes(p.id) ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-blue-500/20 text-blue-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-blue-500/20"><Armchair size={12} className="shrink-0" /> <span className="hidden sm:inline">Banquillo</span><span className="sm:hidden">Banq</span></span>) : p.type !== 'Cedido' && p.transferStatus === 'Cedible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} className="shrink-0" /> Cedible</span>) : p.type !== 'Cedido' && p.transferStatus === 'Transferible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-red-500/20 text-red-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-red-500/20"><Tag size={12} className="shrink-0" /> Venta</span>) : null}
-          {/* "Comprado" (jugador propiedad del club) no aporta información nueva junto al
-              resto de badges de estado, así que no se muestra ninguna etiqueta para ese caso
-              — solo Cantera y Cedido, que sí distinguen procedencias relevantes. */}
-          {p.type && p.type !== 'Comprado' && (
-            <span className={`text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center px-2 md:px-3 py-1 rounded-lg font-black uppercase tracking-widest border ${p.type === 'Cantera' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20'}`}>
-              {p.type === 'Cantera' ? <GraduationCap size={12} className="shrink-0" /> : <ArrowDownToLine size={12} className="shrink-0" />}
-              {p.type}
+          {Object.values(lineup).includes(p.id) ? (<span title="Titular" className="w-9 h-9 flex items-center justify-center bg-green-500/20 text-green-400 rounded-lg border border-green-500/20"><Shirt size={16} /></span>) : Object.values(bench).includes(p.id) ? (<span title="Banquillo" className="w-9 h-9 flex items-center justify-center bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/20"><Armchair size={16} /></span>) : p.type !== 'Cedido' && p.transferStatus === 'Cedible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} className="shrink-0" /> Cedible</span>) : p.type !== 'Cedido' && p.transferStatus === 'Transferible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-red-500/20 text-red-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-red-500/20"><Tag size={12} className="shrink-0" /> Venta</span>) : null}
+          {p.type === 'Cantera' && (
+            <span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center px-2 md:px-3 py-1 rounded-lg font-black uppercase tracking-widest border bg-emerald-500/20 text-emerald-400 border-emerald-500/20">
+              <GraduationCap size={12} className="shrink-0" /> Cantera
             </span>
           )}
         </div>
