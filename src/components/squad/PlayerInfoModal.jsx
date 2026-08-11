@@ -1,4 +1,4 @@
-import { X, Edit2, RefreshCcw, Trash2, Tag, Users, ArrowRightLeft } from 'lucide-react';
+import { X, Edit2, RefreshCcw, Trash2, Tag, Armchair, ArrowRightLeft, GraduationCap, ArrowDownToLine } from 'lucide-react';
 import { useState } from 'react';
 import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue, formatLoanDuration } from '../../utils/format';
@@ -38,7 +38,7 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
   // Contexto genérico (Plantilla / Mercado): un único grid con todas las acciones.
   const actions = [{ key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit(current), color: 'blue' }];
   if (current.transferStatus !== 'CedidoFuera') actions.push({ key: 'sell', icon: Tag, label: 'Vender', onClick: () => setShowSellModal(true), color: 'red' });
-  if (canSendToBench) actions.push({ key: 'bench', icon: Users, label: 'Al Banquillo', onClick: () => { assignPlayerToSlot(`bench-${emptyBenchIdx}`, current.id); onClose(); }, color: 'yellow' });
+  if (canSendToBench) actions.push({ key: 'bench', icon: Armchair, label: 'Al Banquillo', onClick: () => { assignPlayerToSlot(`bench-${emptyBenchIdx}`, current.id); onClose(); }, color: 'yellow' });
   if (!isUncalledZone(infoSlot)) {
     actions.push({ key: 'replace', icon: RefreshCcw, label: 'Reemplazar', onClick: () => onReplace(infoSlot), color: 'neutral' });
     actions.push({ key: 'uncalled', icon: Trash2, label: 'No Convocado', onClick: () => { assignPlayerToSlot(infoSlot, null); onClose(); }, color: 'red' });
@@ -49,7 +49,7 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
   // aplican al slot actual se muestran deshabilitadas en vez de desaparecer, para mantener la rejilla fija.
   const primaryActions = [
     { key: 'replace', icon: RefreshCcw, label: 'Reemplazar', onClick: () => onReplace(infoSlot), color: 'neutral', disabled: isUncalledZone(infoSlot) },
-    { key: 'bench', icon: Users, label: 'Mandar al Banquillo', onClick: () => { assignPlayerToSlot(`bench-${emptyBenchIdx}`, current.id); onClose(); }, color: 'neutral', disabled: !canSendToBench },
+    { key: 'bench', icon: Armchair, label: 'Mandar al Banquillo', onClick: () => { assignPlayerToSlot(`bench-${emptyBenchIdx}`, current.id); onClose(); }, color: 'neutral', disabled: !canSendToBench },
     { key: 'uncalled', icon: Trash2, label: 'Mandar a No Convocados', onClick: () => { assignPlayerToSlot(infoSlot, null); onClose(); }, color: 'neutral', disabled: isUncalledZone(infoSlot) },
   ];
 
@@ -77,7 +77,7 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
             <div className={`flex-1 min-w-0 ${hideMarketStatus ? 'pr-6' : ''}`}>
               <div className="font-black uppercase italic text-lg truncate tracking-tighter leading-tight text-black dark:text-white">{current.name}</div>
               <div className="text-[10px] text-green-500/80 font-black uppercase tracking-widest mb-1 mt-0.5 truncate">{current.positions?.join(' · ')}</div>
-              <div className="flex flex-wrap items-center gap-1.5 mt-1"><span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{current.age} Años</span><span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{current.preferredFoot || 'Diestro'}</span><span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{abbreviateValue(current.marketValue || current.value)}</span>{current.type === 'Cedido' ? (<span className="text-[8px] text-yellow-500 font-black uppercase tracking-widest bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">Cedido ({formatLoanDuration(current.loanDuration)})</span>) : current.type ? (<span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider ${current.type === 'Cantera' ? 'bg-emerald-600/20 text-emerald-400' : 'bg-blue-600/20 text-blue-400'}`}>{current.type}</span>) : null}</div>
+              <div className="flex flex-wrap items-center gap-1.5 mt-1"><span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{current.age} Años</span><span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{current.preferredFoot || 'Diestro'}</span><span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{abbreviateValue(current.marketValue || current.value)}</span>{current.type === 'Cedido' ? (<span className="text-[8px] flex items-center gap-1 text-yellow-500 font-black uppercase tracking-widest bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20"><ArrowDownToLine size={10} className="shrink-0" /> Cedido ({formatLoanDuration(current.loanDuration)})</span>) : current.type ? (<span className={`text-[8px] flex items-center gap-1 px-2 py-0.5 rounded font-black uppercase tracking-wider ${current.type === 'Cantera' ? 'bg-emerald-600/20 text-emerald-400' : 'bg-blue-600/20 text-blue-400'}`}>{current.type === 'Cantera' && <GraduationCap size={10} className="shrink-0" />} {current.type}</span>) : null}</div>
             </div>
           </div>
         </div>

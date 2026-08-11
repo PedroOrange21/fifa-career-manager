@@ -52,7 +52,12 @@ export default function SavedFormationsBar() {
           </button>
         ) : (
           <>
-            <input type="text" placeholder="Nombre de la táctica..." className="flex-1 min-w-0 h-9 bg-well px-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-xs font-bold text-fg placeholder:text-fg-faint" value={newFormationName} onChange={(e) => setNewFormationName(e.target.value)} />
+            {/* El placeholder hereda por defecto el font-size del propio input, que en móvil
+                queda forzado a 16px por la regla global anti-zoom (para que Safari/Chrome no
+                hagan zoom al enfocar). Como placeholder:text-xs apunta al pseudo-elemento
+                ::placeholder (más específico que esa herencia), reduce solo el texto de
+                marcador de posición sin tocar el tamaño real del texto tecleado. */}
+            <input type="text" placeholder="Nombre de la táctica..." className="flex-1 min-w-0 h-9 bg-well px-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-xs font-bold text-fg placeholder:text-fg-faint max-md:placeholder:text-xs" value={newFormationName} onChange={(e) => setNewFormationName(e.target.value)} />
             <button onClick={handleSave} title="Guardar táctica" className="shrink-0 h-9 w-9 flex items-center justify-center bg-green-500 text-black rounded-xl shadow-lg shadow-green-500/20 active:scale-95 transition-all hover:bg-green-400">
               <Save size={14} />
             </button>
