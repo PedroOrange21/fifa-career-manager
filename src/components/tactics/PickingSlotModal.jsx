@@ -53,9 +53,6 @@ export default function PickingSlotModal({ pickingSlot, onClose, onNavigateToSco
               <button onClick={goToScouting} className="w-full p-4 rounded-2xl bg-green-500 text-black font-black uppercase text-[10px] tracking-wider hover:bg-green-400 transition-all flex items-center justify-center gap-2"><Search size={14} /> Buscar en el Mercado</button>
             </div>
           )}
-          {currentSlotOccupied && (
-            <button onClick={() => pick(null)} className="w-full p-4 md:p-5 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-500 font-black uppercase text-[10px] tracking-wider border border-red-500/20 mb-2">Mandar a No Convocados</button>
-          )}
           {eligiblePlayers.map((p) => {
             const isLoanedOut = p.transferStatus === 'CedidoFuera';
             const isAlreadyIn11 = Object.values(lineup).includes(p.id); const isAlreadyInBench = Object.values(bench).includes(p.id);

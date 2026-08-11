@@ -34,6 +34,16 @@ export default function TacticsTab({ onNavigateToScouting }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPlayerInfo]);
 
+  // Modal "Colocar Jugador" también a pantalla limpia. chromeHiddenCount es un contador,
+  // así que se apila sin conflicto con el hide de la ficha del jugador (p. ej. al pulsar
+  // "Reemplazar", que cierra la ficha y abre este modal en el mismo render).
+  useEffect(() => {
+    if (pickingSlot === null) return;
+    hideChrome();
+    return () => showChrome();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickingSlot]);
+
   return (
     <div className="space-y-4 animate-in fade-in">
       <SavedFormationsBar />
