@@ -1,4 +1,5 @@
 import { getCardStyle } from '../../utils/cardStyle';
+import { abbreviateName } from '../../utils/format';
 import { useClubData } from '../../context/ClubDataContext';
 
 export default function UncalledZone({ dnd, onPlayerClick }) {
@@ -14,7 +15,7 @@ export default function UncalledZone({ dnd, onPlayerClick }) {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
         {uncalled.map((p) => (
           <div key={p.id} data-slot="uncalled" draggable onDragStart={(e) => handleDragStart(e, p.id, 'uncalled')} onTouchStart={(e) => handleTouchStartLocal(e, p.id, 'uncalled')} onClick={() => { if (shouldSuppressClick()) return; onPlayerClick(p, 'uncalled'); }} className="flex items-center gap-3 bg-well px-3 py-2 rounded-xl border border-border-subtle cursor-pointer active:cursor-grabbing touch-none hover:bg-well-strong">
-            <div className={`w-8 h-8 rounded-lg flex flex-shrink-0 items-center justify-center font-black text-[10px] ${getCardStyle(p.rating)}`}>{p.rating}</div><div className="flex flex-col flex-1 min-w-0 text-left"><span className="text-[10px] md:text-xs font-bold uppercase italic text-black dark:text-white truncate">{p.name}</span><span className="text-[8px] text-green-400 font-black uppercase tracking-widest truncate">{p.positions?.join(' · ')}</span></div>
+            <div className={`w-8 h-8 rounded-lg flex flex-shrink-0 items-center justify-center font-black text-[10px] ${getCardStyle(p.rating)}`}>{p.rating}</div><div className="flex flex-col flex-1 min-w-0 text-left"><span className="text-[10px] md:text-xs font-bold uppercase italic text-black dark:text-white truncate">{abbreviateName(p.name)}</span><span className="text-[8px] text-green-400 font-black uppercase tracking-widest truncate">{p.positions?.join(' · ')}</span></div>
           </div>
         ))}
         {uncalled.length === 0 && <span className="text-[10px] text-fg-faint italic p-2 col-span-full">Todos los jugadores están convocados.</span>}

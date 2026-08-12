@@ -379,6 +379,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
   // igualmente mas deshabilitadas (para dejar claro que no aplican), precedidas por
   // "Finalizar Cesión", que sí es una acción válida y propia de este tipo de jugador.
   const isIncomingLoan = p.type === 'Cedido';
+  const isCalledUp = Object.values(lineup).includes(p.id) || Object.values(bench).includes(p.id);
   const MARKET_ACTIONS = [
     { key: 'transferible', icon: Tag, label: 'Añadir a Transferibles', onClick: onMarkTransferible, disabled: isIncomingLoan },
     { key: 'cedible', icon: ArrowRightLeft, label: 'Añadir a Cedibles', onClick: onMarkCedible, disabled: isIncomingLoan },
@@ -441,8 +442,12 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
             <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${statusBadgeExpanded ? 'max-md:max-w-[160px] max-md:ml-1.5' : 'max-md:max-w-0 max-md:ml-0'} md:max-w-0 md:ml-0 md:group-hover/badge:max-w-[160px] md:group-hover/badge:ml-1.5`}>Jugador en el banquillo</span>
           </button>
         ) : null}
+        {/* Canterano NO convocado: no hay badge de Titular/Banquillo disputando la esquina
+            superior, así que el birrete sube ahí. Convocado (Titular/Banquillo): ese badge ya
+            ocupa la esquina superior, así que el birrete baja a la inferior — misma lógica en
+            móvil y escritorio. */}
         {p.type === 'Cantera' && (
-          <button type="button" ref={canteraBadgeRef} onClick={(e) => { e.stopPropagation(); setCanteraBadgeExpanded((v) => !v); }} title="Cantera" className="group/badge absolute bottom-2 right-2 md:right-12 z-20 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out touch-manipulation">
+          <button type="button" ref={canteraBadgeRef} onClick={(e) => { e.stopPropagation(); setCanteraBadgeExpanded((v) => !v); }} title="Cantera" className={`group/badge absolute right-2 md:right-12 z-20 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out touch-manipulation ${isCalledUp ? 'bottom-2' : 'top-2'}`}>
             <GraduationCap size={12} className="shrink-0" />
             <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${canteraBadgeExpanded ? 'max-md:max-w-[160px] max-md:ml-1.5' : 'max-md:max-w-0 max-md:ml-0'} md:max-w-0 md:ml-0 md:group-hover/badge:max-w-[160px] md:group-hover/badge:ml-1.5`}>Canterano del club</span>
           </button>
