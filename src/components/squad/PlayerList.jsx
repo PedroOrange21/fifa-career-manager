@@ -445,11 +445,13 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
         )}
 
         {/* Cuerpo de la tarjeta (badges de escritorio, avatar, info y badge de Cedible): en
-            escritorio TODO este bloque se desplaza junto hacia la izquierda al hacer hover
+            escritorio TODO este bloque se desplaza junto hacia la DERECHA al hacer hover
             (group-hover, mismo "group" del rowRef), badges incluidos, para que nunca queden
             "flotando" respecto al contenido — es "relative" para que los badges (absolute)
-            se posicionen respecto a él y no respecto al borde rígido de la fila. */}
-        <div className="relative flex items-center justify-between flex-1 min-w-0 gap-4 md:transition-transform md:duration-300 md:ease-in-out md:group-hover:-translate-x-11">
+            se posicionen respecto a él y no respecto al borde rígido de la fila. Al viajar
+            hacia la derecha, deja al descubierto el botón "..." fijo en la esquina superior
+            izquierda (ver más abajo), que quedaba oculto detrás de este bloque en reposo. */}
+        <div className="relative flex items-center justify-between flex-1 min-w-0 gap-4 md:transition-transform md:duration-300 md:ease-in-out md:group-hover:translate-x-11">
           {/* Solo 2 posiciones de badge en escritorio (absolutos dentro de este contenedor
               desplazable, hover puro vía "group/badge", ocultos hasta md:). Esquina superior:
               estado deportivo, o Cantera si no está convocado. Esquina inferior: Cantera
@@ -499,12 +501,12 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           )}
         </div>
 
-        {/* Botón "..." de escritorio: capa fija (absolute right-0) que NO forma parte del
+        {/* Botón "..." de escritorio: capa fija (absolute top-2 left-2) que NO forma parte del
             contenedor desplazable, así que nunca se mueve. Oculto por defecto (opacity-0) y
             revelado junto con el desplazamiento del cuerpo de la tarjeta al hacer hover: al
-            desplazarse todo el bloque (badges incluidos) hacia la izquierda, este botón queda
-            limpiamente expuesto en el extremo derecho, sin solaparse nunca con los badges. */}
-        <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="hidden md:flex absolute top-1/2 -translate-y-1/2 right-0 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
+            desplazarse todo el bloque (badges incluidos) hacia la derecha, este botón queda
+            limpiamente expuesto en la esquina superior izquierda, que quedaba oculta detrás. */}
+        <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="hidden md:flex absolute top-2 left-2 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
           <MoreHorizontal size={13} />
         </button>
 
