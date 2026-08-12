@@ -7,7 +7,14 @@ import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 // el texto (arma la confirmación) y un segundo toque para ejecutar; tocar fuera lo contrae.
 const HAS_HOVER = typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
-export default function ClearButton({ onConfirm, label, className = '' }) {
+export default function ClearButton({
+  onConfirm, label, className = '',
+  // Por defecto, tonos del tema (pensado para vivir sobre bg-surface, p.ej. "Vaciar
+  // Banquillo"). "Vaciar 11" en FormationPitch vive sobre el césped, junto al selector de
+  // esquema táctico, y sobreescribe esto con el mismo estilo oscuro semitransparente de ese
+  // desplegable para que ambos luzcan idénticos en cualquier tema.
+  colorClassName = 'bg-well text-fg-faint dark:bg-black/40 dark:text-white/40 hover:bg-red-500/20 hover:text-red-400',
+}) {
   const [confirming, setConfirming] = useState(false);
   const ref = useRef(null);
   useOnClickOutside(ref, () => setConfirming(false), confirming);
@@ -24,7 +31,7 @@ export default function ClearButton({ onConfirm, label, className = '' }) {
         type="button"
         onClick={handleClick}
         title={label}
-        className={`flex items-center h-9 pl-2.5 pr-2.5 rounded-full transition-colors duration-300 ${confirming ? 'bg-red-500 text-white' : 'bg-well text-fg-faint dark:bg-black/40 dark:text-white/40 hover:bg-red-500/20 hover:text-red-400'}`}
+        className={`flex items-center h-9 pl-2.5 pr-2.5 rounded-full transition-colors duration-300 ${confirming ? 'bg-red-500 text-white' : colorClassName}`}
       >
         <Eraser size={14} className="shrink-0" />
         <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wider transition-all duration-300 ${confirming ? 'max-w-[160px] ml-2' : 'max-w-0 ml-0 group-hover/clear:max-w-[160px] group-hover/clear:ml-2'}`}>

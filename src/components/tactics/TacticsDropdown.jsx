@@ -10,6 +10,10 @@ export default function TacticsDropdown({
   // ambos temas sin necesidad de variantes. Cuando el desplegable vive sobre bg-surface
   // (p.ej. "Plantillas" en SavedFormationsBar), se sobreescribe con tonos del tema.
   triggerColorClassName = 'bg-black/40 text-white/80 hover:bg-black/60 backdrop-blur-sm',
+  // Lado al que se alinea el panel de opciones al desplegarse. "Plantillas" (SavedFormationsBar)
+  // usa el valor por defecto ("left"); el selector de esquema (FormationPitch), anclado a la
+  // esquina superior derecha del campo, pasa "right" para no salirse del lienzo.
+  menuAlign = 'left',
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -23,7 +27,7 @@ export default function TacticsDropdown({
         {Icon && <Icon size={12} className="shrink-0" />} <span className="whitespace-nowrap">{value || placeholder}</span>
       </button>
       {open && (
-        <div className={`absolute left-0 top-full mt-2 ${hasActions ? 'w-52' : 'w-40'} bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150 p-1.5 max-h-64 overflow-y-auto no-scrollbar`}>
+        <div className={`absolute ${menuAlign === 'right' ? 'right-0' : 'left-0'} top-full mt-2 ${hasActions ? 'w-52' : 'w-40'} bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150 p-1.5 max-h-64 overflow-y-auto no-scrollbar`}>
           {options.length === 0 && <div className="px-3 py-2 text-[10px] text-fg-faint font-bold italic">{emptyLabel}</div>}
           {options.map((opt) => (
             <div key={opt} className={`flex items-center rounded-xl transition-all ${value === opt ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
