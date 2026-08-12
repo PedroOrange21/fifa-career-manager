@@ -27,6 +27,22 @@ export default function SavedFormationsBar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSaveChoice]);
 
+  // Modal de renombrar táctica, también a pantalla limpia.
+  useEffect(() => {
+    if (!renaming) return;
+    hideChrome();
+    return () => showChrome();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renaming]);
+
+  // Confirmación de borrado de táctica, también a pantalla limpia.
+  useEffect(() => {
+    if (!formationToDelete) return;
+    hideChrome();
+    return () => showChrome();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formationToDelete]);
+
   // Sin táctica activa (primer guardado) no hay nada que "actualizar", así que el modal se
   // abre directamente en modo "nueva formación" — ahí es donde ahora se define el nombre.
   const openSaveChoice = () => { setSaveMode(activeTacticName ? 'current' : 'new'); setNewTacticNameForSave(''); setShowSaveChoice(true); };
