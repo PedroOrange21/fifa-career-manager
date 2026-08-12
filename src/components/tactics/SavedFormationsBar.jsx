@@ -66,6 +66,11 @@ export default function SavedFormationsBar() {
   // ese nombre? Si no hay ninguna táctica activa (nunca se guardó, o se vació), no aplica.
   const activePreset = activeTacticName ? savedFormations.find((f) => f.name === activeTacticName) : null;
   const hasPendingChanges = !!activePreset && JSON.stringify({ formation, lineup, bench }) !== JSON.stringify({ formation: activePreset.formation, lineup: activePreset.lineup, bench: activePreset.bench || {} });
+  // Sin ningún equipo guardado todavía, el botón arranca en formato grande (icono + texto)
+  // para que la acción principal de guardado sea evidente desde el primer momento; en cuanto
+  // exista al menos un equipo guardado, vuelve a la lógica dinámica de siempre (compacto en
+  // reposo, expandido solo con cambios pendientes).
+  const showExpandedSave = hasPendingChanges || savedFormations.length === 0;
 
   const handleLoadSelect = (name) => {
     const f = savedFormations.find((sf) => sf.name === name);
@@ -113,9 +118,9 @@ export default function SavedFormationsBar() {
             descentraría; el espaciado hacia el texto lo pone el propio span vía su margen
             izquierdo condicional. Anclado a la derecha por el "justify-between" de la fila, el
             botón crece "hacia dentro" (izquierda) al expandirse, sin desplazarse de bloque. */}
-        <button onClick={openSaveChoice} title="Guardar equipo" className={`shrink-0 h-9 flex items-center justify-center text-center rounded-full bg-green-500 text-black shadow-lg shadow-green-500/20 active:scale-95 transition-all duration-300 ease-in-out hover:bg-green-400 font-black uppercase text-xs ${hasPendingChanges ? 'px-4' : 'w-9 px-0'}`}>
+        <button onClick={openSaveChoice} title="Guardar equipo" className={`shrink-0 h-9 flex items-center justify-center text-center rounded-full bg-green-500 text-black shadow-lg shadow-green-500/20 active:scale-95 transition-all duration-300 ease-in-out hover:bg-green-400 font-black uppercase text-xs ${showExpandedSave ? 'px-4' : 'w-9 px-0'}`}>
           <Save size={14} className="shrink-0 mx-auto" />
-          <span className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${hasPendingChanges ? 'max-w-[140px] ml-1.5' : 'max-w-0 ml-0'}`}>Guardar Equipo</span>
+          <span className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${showExpandedSave ? 'max-w-[140px] ml-1.5' : 'max-w-0 ml-0'}`}>Guardar Equipo</span>
         </button>
       </div>
 
