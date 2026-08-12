@@ -341,6 +341,15 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
   const moreBtnDesktopRef = useRef(null);
   const moreMenuRef = useRef(null);
 
+  // Badges circulares (Titular/Banquillo arriba, Cantera abajo) expandibles al tocarlos en
+  // móvil: se despliegan en una píldora con texto explicativo y se repliegan al tocar fuera.
+  const [statusBadgeExpanded, setStatusBadgeExpanded] = useState(false);
+  const [canteraBadgeExpanded, setCanteraBadgeExpanded] = useState(false);
+  const statusBadgeRef = useRef(null);
+  const canteraBadgeRef = useRef(null);
+  useOnClickOutside(statusBadgeRef, () => setStatusBadgeExpanded(false), statusBadgeExpanded);
+  useOnClickOutside(canteraBadgeRef, () => setCanteraBadgeExpanded(false), canteraBadgeExpanded);
+
   useEffect(() => {
     if (!showMore) return;
     const handler = (e) => {
@@ -414,13 +423,25 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
         {/* Badges circulares e integrados en las esquinas, solo en móvil: sustituyen a los
             recuadros rectangulares de Titular/Banquillo/Cantera para una tarjeta más compacta.
             En escritorio se mantienen los recuadros de la columna de estado (más abajo). */}
+        {/* Al tocar, el badge se despliega en una píldora con texto explicativo (icono
+            desplazado a la izquierda, texto revelado a su derecha) y se repliega al tocar
+            de nuevo o fuera de él, vía useOnClickOutside. */}
         {Object.values(lineup).includes(p.id) ? (
-          <span title="Titular" className="sm:hidden absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center bg-green-500/20 text-green-400 rounded-full border border-green-500/30"><Shirt size={12} /></span>
+          <button type="button" ref={statusBadgeRef} onClick={(e) => { e.stopPropagation(); setStatusBadgeExpanded((v) => !v); }} title="Titular" className="sm:hidden absolute top-2 right-2 z-10 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 transition-all duration-300 ease-in-out touch-manipulation">
+            <Shirt size={12} className="shrink-0" />
+            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${statusBadgeExpanded ? 'max-w-[160px] ml-1.5' : 'max-w-0 ml-0'}`}>Jugador en el once inicial</span>
+          </button>
         ) : Object.values(bench).includes(p.id) ? (
-          <span title="Banquillo" className="sm:hidden absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center bg-blue-500/20 text-blue-400 rounded-full border border-blue-500/30"><Armchair size={12} /></span>
+          <button type="button" ref={statusBadgeRef} onClick={(e) => { e.stopPropagation(); setStatusBadgeExpanded((v) => !v); }} title="Banquillo" className="sm:hidden absolute top-2 right-2 z-10 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all duration-300 ease-in-out touch-manipulation">
+            <Armchair size={12} className="shrink-0" />
+            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${statusBadgeExpanded ? 'max-w-[160px] ml-1.5' : 'max-w-0 ml-0'}`}>Jugador en el banquillo</span>
+          </button>
         ) : null}
         {p.type === 'Cantera' && (
-          <span title="Cantera" className="sm:hidden absolute bottom-2 right-2 z-10 w-6 h-6 flex items-center justify-center bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-500/30"><GraduationCap size={12} /></span>
+          <button type="button" ref={canteraBadgeRef} onClick={(e) => { e.stopPropagation(); setCanteraBadgeExpanded((v) => !v); }} title="Cantera" className="sm:hidden absolute bottom-2 right-2 z-10 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out touch-manipulation">
+            <GraduationCap size={12} className="shrink-0" />
+            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${canteraBadgeExpanded ? 'max-w-[160px] ml-1.5' : 'max-w-0 ml-0'}`}>Canterano del club</span>
+          </button>
         )}
 
         <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
