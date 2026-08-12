@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { onSnapshot, setDoc, addDoc, deleteDoc, updateDoc, increment } from 'firebase/firestore';
 import { playersCol, playerDoc, tacticsDoc, transactionsCol, shortlistCol, shortlistDoc, matchesCol, seasonsCol } from '../utils/firestorePaths';
 import { FORMATIONS } from '../constants/formations';
@@ -17,6 +17,16 @@ export function ClubDataProvider({ children }) {
   const [lineup, setLineup] = useState({});
   const [bench, setBench] = useState({});
   const [savedFormations, setSavedFormations] = useState([]);
+  // Espejo síncrono de savedFormations: saveTactics (llamada tras cada movimiento de
+  // jugador) escribe este campo de vuelta en el documento con setDoc SIN merge, así que
+  // necesita el valor más fresco posible en el momento exacto de la llamada. Leer el estado
+  // (savedFormations) desde un closure es insuficiente cuando saveTactics se dispara justo
+  // después de guardar/actualizar/renombrar/borrar una táctica desde otro componente (p.ej.
+  // loadSavedFormation tras "Guardar como Nueva Formación"): ese closure puede seguir
+  // apuntando a la función de un render anterior a que React aplique el setSavedFormations
+  // más reciente, y su escritura sin merge revertiría en Firestore la lista recién guardada.
+  const savedFormationsRef = useRef([]);
+  const setSavedFormationsBoth = (value) => { savedFormationsRef.current = value; setSavedFormations(value); };
   const [activeTacticName, setActiveTacticName] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [shortlist, setShortlist] = useState([]);
@@ -39,7 +49,7 @@ export function ClubDataProvider({ children }) {
       return;
     }
 
-    setPlayers([]); setFormation('4-3-3'); setLineup({}); setBench({}); setSavedFormations([]); setActiveTacticName(null);
+    setPlayers([]); setFormation('4-3-3'); setLineup({}); setBench({}); setSavedFormationsBoth([]); setActiveTacticName(null);
     setTransactions([]); setShortlist([]); setMatches([]); setSeasons([]);
 
     const unsubPlayers = onSnapshot(playersCol(user.uid, activeClubId), (snap) => {
@@ -52,10 +62,10 @@ export function ClubDataProvider({ children }) {
         setFormation(data.formation || '4-3-3');
         setLineup(data.lineup || {});
         setBench(data.bench || {});
-        setSavedFormations(data.savedFormations || []);
+        setSavedFormationsBoth(data.savedFormations || []);
         setActiveTacticName(data.activeTacticName || null);
       } else {
-        setFormation('4-3-3'); setLineup({}); setBench({}); setSavedFormations([]); setActiveTacticName(null);
+        setFormation('4-3-3'); setLineup({}); setBench({}); setSavedFormationsBoth([]); setActiveTacticName(null);
       }
     });
 
@@ -219,7 +229,7 @@ export function ClubDataProvider({ children }) {
       // (jugador que sale de un slot) deben desaparecer del documento. Con merge, Firestore
       // fusiona los mapas anidados y las claves ausentes en el nuevo objeto NO se borran en el
       // servidor, dejando al jugador "duplicado" en su slot anterior tras el siguiente snapshot.
-      await setDoc(tacticsDoc(user.uid, activeClubId), { formation: newForm, lineup: newLineup, bench: newBench ?? bench, savedFormations, activeTacticName: tacticName ?? null });
+      await setDoc(tacticsDoc(user.uid, activeClubId), { formation: newForm, lineup: newLineup, bench: newBench ?? bench, savedFormations: savedFormationsRef.current, activeTacticName: tacticName ?? null });
     } catch (err) { console.error('Error al guardar táctica:', err); }
   };
 
@@ -318,7 +328,7 @@ export function ClubDataProvider({ children }) {
   const saveCurrentFormation = async (name) => {
     if (!user || !activeClubId || !name.trim()) return;
     const newSaved = [...savedFormations, { name, formation, lineup, bench }];
-    setSavedFormations(newSaved);
+    setSavedFormationsBoth(newSaved);
     await setDoc(tacticsDoc(user.uid, activeClubId), { savedFormations: newSaved }, { merge: true });
   };
 
@@ -329,7 +339,7 @@ export function ClubDataProvider({ children }) {
   const updateActiveTactic = async () => {
     if (!user || !activeClubId || !activeTacticName) return;
     const newSaved = savedFormations.map((f) => (f.name === activeTacticName ? { ...f, formation, lineup, bench } : f));
-    setSavedFormations(newSaved);
+    setSavedFormationsBoth(newSaved);
     await setDoc(tacticsDoc(user.uid, activeClubId), { savedFormations: newSaved }, { merge: true });
   };
 
@@ -337,7 +347,7 @@ export function ClubDataProvider({ children }) {
     if (!user || !activeClubId || !newName.trim() || oldName === newName.trim()) return;
     const trimmed = newName.trim();
     const newSaved = savedFormations.map((f) => (f.name === oldName ? { ...f, name: trimmed } : f));
-    setSavedFormations(newSaved);
+    setSavedFormationsBoth(newSaved);
     const renamingActive = activeTacticName === oldName;
     if (renamingActive) setActiveTacticName(trimmed);
     await setDoc(tacticsDoc(user.uid, activeClubId), { savedFormations: newSaved, ...(renamingActive ? { activeTacticName: trimmed } : {}) }, { merge: true });
@@ -346,7 +356,7 @@ export function ClubDataProvider({ children }) {
   const confirmDeleteFormation = async () => {
     if (!user || !activeClubId || !formationToDelete) return;
     const newSaved = savedFormations.filter((f) => f.name !== formationToDelete);
-    setSavedFormations(newSaved);
+    setSavedFormationsBoth(newSaved);
     const clearingActive = formationToDelete === activeTacticName;
     if (clearingActive) setActiveTacticName(null);
     await setDoc(tacticsDoc(user.uid, activeClubId), { savedFormations: newSaved, ...(clearingActive ? { activeTacticName: null } : {}) }, { merge: true });
