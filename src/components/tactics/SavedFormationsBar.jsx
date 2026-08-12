@@ -94,6 +94,7 @@ export default function SavedFormationsBar() {
           emptyLabel="Sin equipos guardados"
           wrapperClassName="relative shrink-0"
           triggerClassName="h-9 px-3"
+          triggerColorClassName="bg-well text-fg-secondary hover:bg-well-strong border border-border-subtle dark:bg-black/40 dark:text-white/80 dark:hover:bg-black/60 dark:border-transparent dark:backdrop-blur-sm"
         />
       </div>
 

@@ -5,6 +5,11 @@ import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 export default function TacticsDropdown({
   icon: Icon, value, options, onChange, onEditOption, onDeleteOption,
   placeholder = 'Seleccionar', emptyLabel = 'Sin opciones', wrapperClassName = 'relative', triggerClassName = 'h-8 px-3',
+  // Por defecto, pastilla oscura semitransparente: pensada para vivir sobre el césped
+  // (verde en claro, verde muy oscuro en dark) de FormationPitch, donde contrasta bien en
+  // ambos temas sin necesidad de variantes. Cuando el desplegable vive sobre bg-surface
+  // (p.ej. "Plantillas" en SavedFormationsBar), se sobreescribe con tonos del tema.
+  triggerColorClassName = 'bg-black/40 text-white/80 hover:bg-black/60 backdrop-blur-sm',
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -14,7 +19,7 @@ export default function TacticsDropdown({
 
   return (
     <div ref={ref} className={wrapperClassName}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-full bg-black/40 text-white/80 hover:bg-black/60 backdrop-blur-sm transition-all text-[10px] font-black uppercase tracking-wider ${triggerClassName}`}>
+      <button type="button" onClick={() => setOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-full transition-all text-[10px] font-black uppercase tracking-wider ${triggerColorClassName} ${triggerClassName}`}>
         {Icon && <Icon size={12} className="shrink-0" />} <span className="truncate max-w-[90px]">{value || placeholder}</span>
       </button>
       {open && (
