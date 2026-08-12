@@ -21,8 +21,14 @@ export default function PickingSlotModal({ pickingSlot, onClose, onNavigateToSco
   const isBenchSlot = String(pickingSlot).startsWith('bench-');
   const slotData = isBenchSlot ? null : FORMATIONS[formation][pickingSlot];
 
-  // Prioridad de disponibilidad: Banquillo > No Convocados/Reserva > 11 Inicial (otra posición) > Transferibles > Cedidos Fuera.
+  // El jugador que ya ocupa la casilla que se está editando (el implicado en el
+  // reemplazo/intercambio) siempre encabeza la lista, por delante de cualquier otra
+  // prioridad de disponibilidad.
+  const isCurrentSlotPlayer = (p) => (isBenchSlot ? bench[pickingSlot.split('-')[1]] === p.id : lineup[pickingSlot] === p.id);
+
+  // Prioridad de disponibilidad: Seleccionado > Banquillo > No Convocados/Reserva > 11 Inicial (otra posición) > Transferibles > Cedidos Fuera.
   const getPriority = (p) => {
+    if (isCurrentSlotPlayer(p)) return 0;
     if (Object.values(bench).includes(p.id)) return 1;
     if (Object.values(lineup).includes(p.id)) return 3;
     if (p.transferStatus === 'Transferible') return 4;
@@ -56,7 +62,7 @@ export default function PickingSlotModal({ pickingSlot, onClose, onNavigateToSco
           {eligiblePlayers.map((p) => {
             const isLoanedOut = p.transferStatus === 'CedidoFuera';
             const isAlreadyIn11 = Object.values(lineup).includes(p.id); const isAlreadyInBench = Object.values(bench).includes(p.id);
-            const isCurrentSlot = isBenchSlot ? bench[pickingSlot.split('-')[1]] === p.id : lineup[pickingSlot] === p.id;
+            const isCurrentSlot = isCurrentSlotPlayer(p);
             return (
               <button
                 key={p.id}
