@@ -501,12 +501,13 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           )}
         </div>
 
-        {/* Botón "..." de escritorio: capa fija (absolute top-2 left-2) que NO forma parte del
-            contenedor desplazable, así que nunca se mueve. Oculto por defecto (opacity-0) y
-            revelado junto con el desplazamiento del cuerpo de la tarjeta al hacer hover: al
-            desplazarse todo el bloque (badges incluidos) hacia la derecha, este botón queda
-            limpiamente expuesto en la esquina superior izquierda, que quedaba oculta detrás. */}
-        <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="hidden md:flex absolute top-2 left-2 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
+        {/* Botón "..." de escritorio: capa fija (absolute left-3, centrado verticalmente con
+            top-1/2 -translate-y-1/2) que NO forma parte del contenedor desplazable, así que
+            nunca se mueve. Oculto por defecto (opacity-0) y revelado junto con el
+            desplazamiento del cuerpo de la tarjeta al hacer hover: al desplazarse todo el
+            bloque (badges incluidos) hacia la derecha, este botón queda perfectamente al
+            descubierto y centrado en el espacio liberado a la izquierda. */}
+        <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
           <MoreHorizontal size={13} />
         </button>
 
