@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ArrowUpDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ArrowUpDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap, Undo2 } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue } from '../../utils/format';
@@ -37,6 +37,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [formInitialStep, setFormInitialStep] = useState(1);
   const [sellingPlayer, setSellingPlayer] = useState(null);
   const [loaningPlayer, setLoaningPlayer] = useState(null);
+  const [endingLoanPlayer, setEndingLoanPlayer] = useState(null);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const sortMenuRef = useRef(null);
   useOnClickOutside(sortMenuRef, () => setShowSortMenu(false), showSortMenu);
@@ -148,6 +149,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
             onMarkCedible={() => setPlayerTransferStatus(p.id, 'Cedible')}
             onSell={() => setSellingPlayer(p)}
             onLoan={() => setLoaningPlayer(p)}
+            onEndLoan={() => { setEndingLoanPlayer(p); setPlayerToDelete(p.id); }}
           />
         ))}
       </div>
@@ -171,7 +173,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       {sellingPlayer && <SellPlayerModal player={sellingPlayer} onClose={() => setSellingPlayer(null)} />}
       {loaningPlayer && <LoanOutModal player={loaningPlayer} onClose={() => setLoaningPlayer(null)} />}
 
-      {playerToDelete && (
+      {playerToDelete && !endingLoanPlayer && (
         <ConfirmModal
           icon={ShieldAlert}
           title="Eliminar Jugador"
@@ -179,6 +181,23 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
           confirmLabel="Eliminar"
           onCancel={() => setPlayerToDelete(null)}
           onConfirm={confirmDeletePlayer}
+        />
+      )}
+
+      {/* "Finalizar Cesión" reutiliza el mismo borrado que confirmDeletePlayer (el jugador
+          cedido entrante no es propiedad del club, así que "eliminarlo" de la plantilla es
+          exactamente devolverlo a su club de origen), con su propio mensaje de confirmación
+          para que quede claro que no se trata de un borrado normal. */}
+      {endingLoanPlayer && (
+        <ConfirmModal
+          icon={Undo2}
+          iconClassName="text-yellow-500"
+          title="Finalizar Cesión"
+          message={`${endingLoanPlayer.name} volverá a su club de origen y saldrá de la plantilla. ¿Confirmas la finalización de la cesión?`}
+          confirmLabel="Finalizar Cesión"
+          confirmClassName="bg-yellow-500 text-black shadow-yellow-500/20 hover:bg-yellow-400"
+          onCancel={() => { setEndingLoanPlayer(null); setPlayerToDelete(null); }}
+          onConfirm={async () => { await confirmDeletePlayer(); setEndingLoanPlayer(null); }}
         />
       )}
     </div>
@@ -279,7 +298,7 @@ function useSwipeReveal(onFullSwipe, actionWidth = 128) {
 
 const ROW_ACTION_WIDTH = 192; // 3 botones de 64px (w-16) cada uno
 
-function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onMarkCedible, onSell, onLoan }) {
+function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onMarkCedible, onSell, onLoan, onEndLoan }) {
   const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
@@ -321,19 +340,23 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
   };
 
   // Un jugador cedido a nuestro club (type 'Cedido') no es propiedad del club: no puede
-  // marcarse como transferible/cedible ni venderse/re-cederse.
+  // marcarse como transferible/cedible ni venderse/re-cederse. Esas 4 opciones se muestran
+  // igualmente mas deshabilitadas (para dejar claro que no aplican), precedidas por
+  // "Finalizar Cesión", que sí es una acción válida y propia de este tipo de jugador.
   const isIncomingLoan = p.type === 'Cedido';
-  const MARKET_ACTIONS = isIncomingLoan ? [] : [
-    { key: 'transferible', icon: Tag, label: 'Añadir a Transferibles', onClick: onMarkTransferible },
-    { key: 'cedible', icon: ArrowRightLeft, label: 'Añadir a Cedibles', onClick: onMarkCedible },
-    { key: 'sell', icon: DollarSign, label: 'Vender Jugador', onClick: onSell },
-    { key: 'loan', icon: Handshake, label: 'Ceder Jugador', onClick: onLoan },
+  const MARKET_ACTIONS = [
+    { key: 'transferible', icon: Tag, label: 'Añadir a Transferibles', onClick: onMarkTransferible, disabled: isIncomingLoan },
+    { key: 'cedible', icon: ArrowRightLeft, label: 'Añadir a Cedibles', onClick: onMarkCedible, disabled: isIncomingLoan },
+    { key: 'sell', icon: DollarSign, label: 'Vender Jugador', onClick: onSell, disabled: isIncomingLoan },
+    { key: 'loan', icon: Handshake, label: 'Ceder Jugador', onClick: onLoan, disabled: isIncomingLoan },
   ];
-  // Móvil: solo las 4 acciones de mercado (Editar/Eliminar van por swipe).
-  // Escritorio: las mismas 4 más Editar y Borrar al final, único punto de acceso a esas dos.
+  const endLoanAction = { key: 'endLoan', icon: Undo2, label: 'Finalizar Cesión', onClick: () => onEndLoan(p) };
+  const marketWithEndLoan = isIncomingLoan ? [endLoanAction, ...MARKET_ACTIONS] : MARKET_ACTIONS;
+  // Móvil: solo las acciones de mercado (Editar/Eliminar van por swipe).
+  // Escritorio: las mismas más Editar y Borrar al final, único punto de acceso a esas dos.
   const MORE_ACTIONS = moreContext === 'mobile'
-    ? MARKET_ACTIONS
-    : [...MARKET_ACTIONS, { key: 'edit', icon: Edit2, label: 'Editar Jugador', onClick: () => onEdit(p) }, { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete(p.id) }];
+    ? marketWithEndLoan
+    : [...marketWithEndLoan, { key: 'edit', icon: Edit2, label: 'Editar Jugador', onClick: () => onEdit(p) }, { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete(p.id) }];
 
   return (
     <div className="relative overflow-hidden">
@@ -428,8 +451,8 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           style={{ position: 'fixed', top: moreRect.top, right: moreRect.right, width: moreRect.width }}
           className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
         >
-          {MORE_ACTIONS.map(({ key, icon: Icon, label, onClick }) => (
-            <button key={key} type="button" onClick={() => { onClick(); setShowMore(false); close(); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase text-fg-secondary hover:bg-well transition-all touch-manipulation">
+          {MORE_ACTIONS.map(({ key, icon: Icon, label, onClick, disabled }) => (
+            <button key={key} type="button" disabled={disabled} onClick={() => { if (disabled) return; onClick(); setShowMore(false); close(); }} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase transition-all touch-manipulation ${disabled ? 'text-fg-faint opacity-40 pointer-events-none' : 'text-fg-secondary hover:bg-well'}`}>
               <Icon size={14} className="shrink-0" /> {label}
             </button>
           ))}
@@ -537,8 +560,8 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall }) {
           style={{ position: 'fixed', top: moreRect.top, right: moreRect.right, width: moreRect.width }}
           className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
         >
-          {MORE_ACTIONS.map(({ key, icon: Icon, label, onClick }) => (
-            <button key={key} type="button" onClick={() => { onClick(); setShowMore(false); close(); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase text-fg-secondary hover:bg-well transition-all touch-manipulation">
+          {MORE_ACTIONS.map(({ key, icon: Icon, label, onClick, disabled }) => (
+            <button key={key} type="button" disabled={disabled} onClick={() => { if (disabled) return; onClick(); setShowMore(false); close(); }} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase transition-all touch-manipulation ${disabled ? 'text-fg-faint opacity-40 pointer-events-none' : 'text-fg-secondary hover:bg-well'}`}>
               <Icon size={14} className="shrink-0" /> {label}
             </button>
           ))}
