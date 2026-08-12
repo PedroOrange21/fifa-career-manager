@@ -471,35 +471,40 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           </button>
         )}
 
-        <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-          <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
-          <div className="flex-1 min-w-0">
-            <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight flex items-center gap-2 text-black dark:text-white">{p.name}</div>
-            <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest mb-1">{p.positions?.join(' · ') || p.pos}</div>
-            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-              <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{p.age} Años</span>
-              {p.marketValue && (<span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(p.marketValue)}</span>)}
-              {p.type === 'Cedido' && p.loanDuration && (<span className="text-[7px] md:text-[8px] font-black uppercase tracking-widest bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded">Ced. {formatLoanDuration(p.loanDuration)}</span>)}
+        {/* Cuerpo de la tarjeta (avatar, info y badge de Cedible): en escritorio se desplaza
+            suavemente hacia la izquierda al pasar el ratón por la fila (group-hover, mismo
+            "group" del rowRef), liberando espacio a la derecha para el botón "...". Los badges
+            circulares NO están dentro de este wrapper, así que nunca se mueven ni se tapan. */}
+        <div className="flex items-center justify-between flex-1 min-w-0 gap-4 md:transition-transform md:duration-300 md:ease-in-out md:group-hover:-translate-x-11">
+          <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+            <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
+            <div className="flex-1 min-w-0">
+              <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight flex items-center gap-2 text-black dark:text-white">{p.name}</div>
+              <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest mb-1">{p.positions?.join(' · ') || p.pos}</div>
+              <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{p.age} Años</span>
+                {p.marketValue && (<span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(p.marketValue)}</span>)}
+                {p.type === 'Cedido' && p.loanDuration && (<span className="text-[7px] md:text-[8px] font-black uppercase tracking-widest bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded">Ced. {formatLoanDuration(p.loanDuration)}</span>)}
+              </div>
             </div>
           </div>
+
+          {/* La tarjeta roja de "Venta"/Transferible se elimina por completo (móvil y
+              escritorio); solo queda la etiqueta de Cedible. */}
+          {p.type !== 'Cedido' && p.transferStatus === 'Cedible' && (
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} className="shrink-0" /> Cedible</span>
+            </div>
+          )}
         </div>
 
-        {/* La tarjeta roja de "Venta"/Transferible se elimina por completo (móvil y
-            escritorio); solo queda la etiqueta de Cedible. */}
-        {p.type !== 'Cedido' && p.transferStatus === 'Cedible' && (
-          <div className="flex flex-col items-end gap-2 shrink-0">
-            <span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} className="shrink-0" /> Cedible</span>
-          </div>
-        )}
-
-        {/* Botón "..." de escritorio: posición absoluta fija a right-12 (48px del borde),
-            fuera del todo del área de los badges circulares (right-2, ~8-32px), con 16px de
-            margen limpio de sobra — así nunca colisiona ni los tapa, estén o no presentes.
-            Oculto por defecto (opacity-0 + ligero translate-x) y revelado con una transición
-            suave al pasar el ratón por la fila (group-hover), simulando la tarjeta
-            "extendiéndose" hacia la derecha sin mover ni tapar los badges ni alterar el layout. */}
-        <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="hidden md:flex absolute top-1/2 -translate-y-1/2 right-12 z-20 w-7 h-7 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 translate-x-2 pointer-events-none transition-all duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:translate-x-0 md:group-hover:pointer-events-auto touch-manipulation">
-          <MoreHorizontal size={14} />
+        {/* Botón "..." de escritorio: oculto por defecto (opacity-0, detrás del margen
+            derecho) y revelado junto con el desplazamiento del cuerpo de la tarjeta al hacer
+            hover. Anclado en right-2 pero centrado verticalmente (top-1/2 -translate-y-1/2),
+            en la franja media de la fila que los badges (arriba/abajo) dejan siempre libre —
+            así nunca colisiona ni los tapa, estén o no presentes. */}
+        <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="hidden md:flex absolute top-1/2 -translate-y-1/2 right-2 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
+          <MoreHorizontal size={13} />
         </button>
 
         {/* Umbral de borrado continuo (solo móvil): al superar la mitad de la fila, toda la
