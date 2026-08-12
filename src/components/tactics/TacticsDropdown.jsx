@@ -20,7 +20,7 @@ export default function TacticsDropdown({
   return (
     <div ref={ref} className={wrapperClassName}>
       <button type="button" onClick={() => setOpen((o) => !o)} className={`flex items-center gap-1.5 rounded-full transition-all text-[10px] font-black uppercase tracking-wider ${triggerColorClassName} ${triggerClassName}`}>
-        {Icon && <Icon size={12} className="shrink-0" />} <span className="truncate max-w-[90px]">{value || placeholder}</span>
+        {Icon && <Icon size={12} className="shrink-0" />} <span className="whitespace-nowrap">{value || placeholder}</span>
       </button>
       {open && (
         <div className={`absolute right-0 top-full mt-2 ${hasActions ? 'w-52' : 'w-40'} bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150 p-1.5 max-h-64 overflow-y-auto no-scrollbar`}>

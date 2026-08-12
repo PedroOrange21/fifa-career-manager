@@ -69,10 +69,12 @@ export default function SavedFormationsBar() {
 
   return (
     <div className="flex flex-col gap-3 md:gap-4 mb-2">
-      <div className="bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl flex items-center gap-2">
-        {/* Izquierda: desplegable de plantillas guardadas. Derecha: guardar (equipo nuevo o
-            cambios sobre el activo) — el nombre ya no se pide aquí, se define en la propia
-            modal de guardado al elegir "Guardar como Nueva Formación". */}
+      <div className="bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+        {/* Izquierda: desplegable de plantillas guardadas, dimensionado a su propio contenido
+            (w-auto/min-w-max, sin truncate) para mostrar el nombre completo del equipo en una
+            sola línea, sin puntos suspensivos, en móvil y escritorio. "justify-between" en el
+            contenedor mantiene el botón de guardar pegado a la derecha con independencia del
+            ancho que ocupe el desplegable. */}
         <TacticsDropdown
           icon={Users}
           value={selectedName}
@@ -82,8 +84,8 @@ export default function SavedFormationsBar() {
           onDeleteOption={(name) => setFormationToDelete(name)}
           placeholder="Plantillas"
           emptyLabel="Sin equipos guardados"
-          wrapperClassName="relative flex-1 min-w-0"
-          triggerClassName="h-9 px-3 w-full"
+          wrapperClassName="relative shrink-0"
+          triggerClassName="h-9 px-3 w-auto min-w-max max-w-none"
           triggerColorClassName="bg-well text-fg-secondary hover:bg-well-strong border border-border-subtle dark:bg-black/40 dark:text-white/80 dark:hover:bg-black/60 dark:border-transparent dark:backdrop-blur-sm"
         />
         <button onClick={openSaveChoice} title="Guardar equipo" className={`shrink-0 h-9 px-4 flex items-center justify-center gap-2 rounded-xl bg-green-500 text-black shadow-lg shadow-green-500/20 active:scale-95 transition-all hover:bg-green-400 font-black uppercase text-xs ${hasPendingChanges ? 'animate-in fade-in slide-in-from-right-4 duration-200' : ''}`}>
