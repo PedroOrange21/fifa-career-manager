@@ -444,38 +444,39 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           </button>
         )}
 
-        {/* Solo 2 posiciones de badge en escritorio (absolutos, hover puro vía "group/badge",
-            ocultos hasta md:). Esquina superior: estado deportivo, o Cantera si no está
-            convocado. Esquina inferior: Cantera cuando SÍ está convocado. El botón "..." ya no
-            vive aquí (ver más abajo, en el flujo normal de la fila). */}
-        {Object.values(lineup).includes(p.id) ? (
-          <button type="button" title="Titular" className="group/badge hidden md:flex absolute top-2 right-2 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 transition-all duration-300 ease-in-out">
-            <Shirt size={12} className="shrink-0" />
-            <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[160px] group-hover/badge:ml-1.5">Jugador en el once</span>
-          </button>
-        ) : Object.values(bench).includes(p.id) ? (
-          <button type="button" title="Banquillo" className="group/badge hidden md:flex absolute top-2 right-2 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all duration-300 ease-in-out">
-            <Armchair size={12} className="shrink-0" />
-            <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[160px] group-hover/badge:ml-1.5">Jugador en el banquillo</span>
-          </button>
-        ) : p.type === 'Cantera' ? (
-          <button type="button" title="Cantera" className="group/badge hidden md:flex absolute top-2 right-2 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out">
-            <GraduationCap size={12} className="shrink-0" />
-            <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[160px] group-hover/badge:ml-1.5">Canterano del club</span>
-          </button>
-        ) : null}
-        {p.type === 'Cantera' && isCalledUp && (
-          <button type="button" title="Cantera" className="group/badge hidden md:flex absolute bottom-2 right-2 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out">
-            <GraduationCap size={12} className="shrink-0" />
-            <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[160px] group-hover/badge:ml-1.5">Canterano del club</span>
-          </button>
-        )}
+        {/* Cuerpo de la tarjeta (badges de escritorio, avatar, info y badge de Cedible): en
+            escritorio TODO este bloque se desplaza junto hacia la izquierda al hacer hover
+            (group-hover, mismo "group" del rowRef), badges incluidos, para que nunca queden
+            "flotando" respecto al contenido — es "relative" para que los badges (absolute)
+            se posicionen respecto a él y no respecto al borde rígido de la fila. */}
+        <div className="relative flex items-center justify-between flex-1 min-w-0 gap-4 md:transition-transform md:duration-300 md:ease-in-out md:group-hover:-translate-x-11">
+          {/* Solo 2 posiciones de badge en escritorio (absolutos dentro de este contenedor
+              desplazable, hover puro vía "group/badge", ocultos hasta md:). Esquina superior:
+              estado deportivo, o Cantera si no está convocado. Esquina inferior: Cantera
+              cuando SÍ está convocado. */}
+          {Object.values(lineup).includes(p.id) ? (
+            <button type="button" title="Titular" className="group/badge hidden md:flex absolute top-0 right-0 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 transition-all duration-300 ease-in-out">
+              <Shirt size={12} className="shrink-0" />
+              <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[160px] group-hover/badge:ml-1.5">Jugador en el once</span>
+            </button>
+          ) : Object.values(bench).includes(p.id) ? (
+            <button type="button" title="Banquillo" className="group/badge hidden md:flex absolute top-0 right-0 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all duration-300 ease-in-out">
+              <Armchair size={12} className="shrink-0" />
+              <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[160px] group-hover/badge:ml-1.5">Jugador en el banquillo</span>
+            </button>
+          ) : p.type === 'Cantera' ? (
+            <button type="button" title="Cantera" className="group/badge hidden md:flex absolute top-0 right-0 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out">
+              <GraduationCap size={12} className="shrink-0" />
+              <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[160px] group-hover/badge:ml-1.5">Canterano del club</span>
+            </button>
+          ) : null}
+          {p.type === 'Cantera' && isCalledUp && (
+            <button type="button" title="Cantera" className="group/badge hidden md:flex absolute bottom-0 right-0 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out">
+              <GraduationCap size={12} className="shrink-0" />
+              <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[160px] group-hover/badge:ml-1.5">Canterano del club</span>
+            </button>
+          )}
 
-        {/* Cuerpo de la tarjeta (avatar, info y badge de Cedible): en escritorio se desplaza
-            suavemente hacia la izquierda al pasar el ratón por la fila (group-hover, mismo
-            "group" del rowRef), liberando espacio a la derecha para el botón "...". Los badges
-            circulares NO están dentro de este wrapper, así que nunca se mueven ni se tapan. */}
-        <div className="flex items-center justify-between flex-1 min-w-0 gap-4 md:transition-transform md:duration-300 md:ease-in-out md:group-hover:-translate-x-11">
           <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
             <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
             <div className="flex-1 min-w-0">
@@ -498,12 +499,12 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           )}
         </div>
 
-        {/* Botón "..." de escritorio: oculto por defecto (opacity-0, detrás del margen
-            derecho) y revelado junto con el desplazamiento del cuerpo de la tarjeta al hacer
-            hover. Anclado en right-2 pero centrado verticalmente (top-1/2 -translate-y-1/2),
-            en la franja media de la fila que los badges (arriba/abajo) dejan siempre libre —
-            así nunca colisiona ni los tapa, estén o no presentes. */}
-        <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="hidden md:flex absolute top-1/2 -translate-y-1/2 right-2 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
+        {/* Botón "..." de escritorio: capa fija (absolute right-0) que NO forma parte del
+            contenedor desplazable, así que nunca se mueve. Oculto por defecto (opacity-0) y
+            revelado junto con el desplazamiento del cuerpo de la tarjeta al hacer hover: al
+            desplazarse todo el bloque (badges incluidos) hacia la izquierda, este botón queda
+            limpiamente expuesto en el extremo derecho, sin solaparse nunca con los badges. */}
+        <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="hidden md:flex absolute top-1/2 -translate-y-1/2 right-0 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
           <MoreHorizontal size={13} />
         </button>
 
