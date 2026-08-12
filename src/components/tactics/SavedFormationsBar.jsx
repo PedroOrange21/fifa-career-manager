@@ -109,7 +109,7 @@ export default function SavedFormationsBar() {
           triggerClassName={`h-9 px-3 min-w-max max-w-none transition-all duration-300 ease-in-out ${hasPendingChanges ? 'w-auto' : 'w-full'}`}
           triggerColorClassName="bg-well text-fg-secondary hover:bg-well-strong border border-border-subtle dark:bg-black/40 dark:text-white/80 dark:hover:bg-black/60 dark:border-transparent dark:backdrop-blur-sm"
         />
-        <button onClick={openSaveChoice} title="Guardar equipo" className={`shrink-0 h-9 flex items-center justify-center gap-2 rounded-xl bg-green-500 text-black shadow-lg shadow-green-500/20 active:scale-95 transition-all duration-300 ease-in-out hover:bg-green-400 font-black uppercase text-xs ${hasPendingChanges ? 'px-4' : 'w-9 px-0'}`}>
+        <button onClick={openSaveChoice} title="Guardar equipo" className={`shrink-0 h-10 flex items-center justify-center gap-2 rounded-full bg-green-500 text-black shadow-lg shadow-green-500/20 active:scale-95 transition-all duration-300 ease-in-out hover:bg-green-400 font-black uppercase text-xs ${hasPendingChanges ? 'px-4' : 'w-10 px-0'}`}>
           <Save size={14} className="shrink-0" />
           <span className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${hasPendingChanges ? 'max-w-[140px] ml-0.5' : 'max-w-0 ml-0'}`}>Guardar Equipo</span>
         </button>
