@@ -429,7 +429,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
         {Object.values(lineup).includes(p.id) ? (
           <button type="button" ref={statusBadgeRef} onClick={(e) => { e.stopPropagation(); setStatusBadgeExpanded((v) => !v); }} title="Titular" className="sm:hidden absolute top-2 right-2 z-10 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 transition-all duration-300 ease-in-out touch-manipulation">
             <Shirt size={12} className="shrink-0" />
-            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${statusBadgeExpanded ? 'max-w-[160px] ml-1.5' : 'max-w-0 ml-0'}`}>Jugador en el once inicial</span>
+            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${statusBadgeExpanded ? 'max-w-[160px] ml-1.5' : 'max-w-0 ml-0'}`}>Jugador en el once</span>
           </button>
         ) : Object.values(bench).includes(p.id) ? (
           <button type="button" ref={statusBadgeRef} onClick={(e) => { e.stopPropagation(); setStatusBadgeExpanded((v) => !v); }} title="Banquillo" className="sm:hidden absolute top-2 right-2 z-10 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all duration-300 ease-in-out touch-manipulation">
