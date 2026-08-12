@@ -420,27 +420,31 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
         style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
         className="relative bg-surface p-3 md:p-4 flex items-center justify-between hover:bg-well/50 transition-colors gap-4 touch-pan-y group"
       >
-        {/* Badges circulares e integrados en las esquinas, solo en móvil: sustituyen a los
-            recuadros rectangulares de Titular/Banquillo/Cantera para una tarjeta más compacta.
-            En escritorio se mantienen los recuadros de la columna de estado (más abajo). */}
-        {/* Al tocar, el badge se despliega en una píldora con texto explicativo (icono
-            desplazado a la izquierda, texto revelado a su derecha) y se repliega al tocar
-            de nuevo o fuera de él, vía useOnClickOutside. */}
+        {/* Badges circulares e integrados en las esquinas, en móvil y escritorio: sustituyen a
+            los recuadros rectangulares de Titular/Banquillo/Cantera para una tarjeta más
+            compacta. Móvil: tap alterna el estado (statusBadgeExpanded/canteraBadgeExpanded,
+            con useOnClickOutside para replegar). Escritorio: hover puro vía "group/badge" en
+            el propio botón, sin depender del estado (md:group-hover/badge:...), para que no
+            haga falta clic con ratón. El botón "..." de escritorio vive en el flujo normal de
+            la fila, pegado al padding derecho (p-4 + w-7 ≈ últimos 44px), así que en escritorio
+            el badge se ancla más adentro (md:right-12, ≈48px) para que ni colapsado ni
+            desplegado hacia la izquierda invada nunca su zona — no se usa desplazamiento
+            negativo porque el contenedor de swipe tiene overflow-hidden y lo recortaría. */}
         {Object.values(lineup).includes(p.id) ? (
-          <button type="button" ref={statusBadgeRef} onClick={(e) => { e.stopPropagation(); setStatusBadgeExpanded((v) => !v); }} title="Titular" className="sm:hidden absolute top-2 right-2 z-10 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 transition-all duration-300 ease-in-out touch-manipulation">
+          <button type="button" ref={statusBadgeRef} onClick={(e) => { e.stopPropagation(); setStatusBadgeExpanded((v) => !v); }} title="Titular" className="group/badge absolute top-2 right-2 md:right-12 z-20 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 transition-all duration-300 ease-in-out touch-manipulation">
             <Shirt size={12} className="shrink-0" />
-            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${statusBadgeExpanded ? 'max-w-[160px] ml-1.5' : 'max-w-0 ml-0'}`}>Jugador en el once</span>
+            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${statusBadgeExpanded ? 'max-md:max-w-[160px] max-md:ml-1.5' : 'max-md:max-w-0 max-md:ml-0'} md:max-w-0 md:ml-0 md:group-hover/badge:max-w-[160px] md:group-hover/badge:ml-1.5`}>Jugador en el once</span>
           </button>
         ) : Object.values(bench).includes(p.id) ? (
-          <button type="button" ref={statusBadgeRef} onClick={(e) => { e.stopPropagation(); setStatusBadgeExpanded((v) => !v); }} title="Banquillo" className="sm:hidden absolute top-2 right-2 z-10 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all duration-300 ease-in-out touch-manipulation">
+          <button type="button" ref={statusBadgeRef} onClick={(e) => { e.stopPropagation(); setStatusBadgeExpanded((v) => !v); }} title="Banquillo" className="group/badge absolute top-2 right-2 md:right-12 z-20 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all duration-300 ease-in-out touch-manipulation">
             <Armchair size={12} className="shrink-0" />
-            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${statusBadgeExpanded ? 'max-w-[160px] ml-1.5' : 'max-w-0 ml-0'}`}>Jugador en el banquillo</span>
+            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${statusBadgeExpanded ? 'max-md:max-w-[160px] max-md:ml-1.5' : 'max-md:max-w-0 max-md:ml-0'} md:max-w-0 md:ml-0 md:group-hover/badge:max-w-[160px] md:group-hover/badge:ml-1.5`}>Jugador en el banquillo</span>
           </button>
         ) : null}
         {p.type === 'Cantera' && (
-          <button type="button" ref={canteraBadgeRef} onClick={(e) => { e.stopPropagation(); setCanteraBadgeExpanded((v) => !v); }} title="Cantera" className="sm:hidden absolute bottom-2 right-2 z-10 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out touch-manipulation">
+          <button type="button" ref={canteraBadgeRef} onClick={(e) => { e.stopPropagation(); setCanteraBadgeExpanded((v) => !v); }} title="Cantera" className="group/badge absolute bottom-2 right-2 md:right-12 z-20 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out touch-manipulation">
             <GraduationCap size={12} className="shrink-0" />
-            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${canteraBadgeExpanded ? 'max-w-[160px] ml-1.5' : 'max-w-0 ml-0'}`}>Canterano del club</span>
+            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${canteraBadgeExpanded ? 'max-md:max-w-[160px] max-md:ml-1.5' : 'max-md:max-w-0 max-md:ml-0'} md:max-w-0 md:ml-0 md:group-hover/badge:max-w-[160px] md:group-hover/badge:ml-1.5`}>Canterano del club</span>
           </button>
         )}
 
@@ -458,16 +462,11 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
         </div>
 
         {/* Ancho mínimo homogéneo (min-w-[104px] + justify-center) en la etiqueta de estado
-            (Cedible/Venta) y en el badge de Cantera, para que ocupen siempre el mismo espacio
-            y la columna quede simétrica. En móvil, Titular/Banquillo/Cantera se ocultan aquí
-            (van como círculo en la esquina de la tarjeta); Cedible/Venta se mantienen visibles. */}
+            (Cedible/Venta), para que ocupe siempre el mismo espacio. Titular/Banquillo/Cantera
+            ya no se repiten aquí: viven como círculo interactivo en la esquina de la tarjeta,
+            tanto en móvil como en escritorio (ver más arriba). */}
         <div className="flex flex-col items-end gap-2 shrink-0">
-          {Object.values(lineup).includes(p.id) ? (<span title="Titular" className="hidden sm:flex w-9 h-9 items-center justify-center bg-green-500/20 text-green-400 rounded-lg border border-green-500/20"><Shirt size={16} /></span>) : Object.values(bench).includes(p.id) ? (<span title="Banquillo" className="hidden sm:flex w-9 h-9 items-center justify-center bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/20"><Armchair size={16} /></span>) : p.type !== 'Cedido' && p.transferStatus === 'Cedible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} className="shrink-0" /> Cedible</span>) : p.type !== 'Cedido' && p.transferStatus === 'Transferible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-red-500/20 text-red-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-red-500/20"><Tag size={12} className="shrink-0" /> Venta</span>) : null}
-          {p.type === 'Cantera' && (
-            <span className="hidden sm:flex text-[8px] md:text-[9px] items-center justify-center gap-1.5 min-w-[104px] text-center px-2 md:px-3 py-1 rounded-lg font-black uppercase tracking-widest border bg-emerald-500/20 text-emerald-400 border-emerald-500/20">
-              <GraduationCap size={12} className="shrink-0" /> Cantera
-            </span>
-          )}
+          {p.type !== 'Cedido' && p.transferStatus === 'Cedible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} className="shrink-0" /> Cedible</span>) : p.type !== 'Cedido' && p.transferStatus === 'Transferible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-red-500/20 text-red-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-red-500/20"><Tag size={12} className="shrink-0" /> Venta</span>) : null}
         </div>
 
         {/* Escritorio: nada de swipe (no hay touch), así que todas las acciones (Editar,
