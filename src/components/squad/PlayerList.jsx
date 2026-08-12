@@ -492,14 +492,15 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           </div>
         )}
 
-        {/* Botón "..." de escritorio: oculto por defecto (max-w-0, sin ocupar espacio) y
-            revelado con una expansión suave de la propia tarjeta hacia la derecha al pasar el
-            ratón por la fila (group-hover:max-w-[44px]), en vez del simple fundido anterior. */}
-        <div className="hidden md:flex md:items-center md:shrink-0 md:overflow-hidden md:max-w-0 md:group-hover:max-w-[44px] md:transition-all md:duration-300 md:ease-in-out">
-          <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="w-7 h-7 md:ml-2 flex items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong transition-colors touch-manipulation shrink-0">
-            <MoreHorizontal size={14} />
-          </button>
-        </div>
+        {/* Botón "..." de escritorio: posición absoluta fija a right-12 (48px del borde),
+            fuera del todo del área de los badges circulares (right-2, ~8-32px), con 16px de
+            margen limpio de sobra — así nunca colisiona ni los tapa, estén o no presentes.
+            Oculto por defecto (opacity-0 + ligero translate-x) y revelado con una transición
+            suave al pasar el ratón por la fila (group-hover), simulando la tarjeta
+            "extendiéndose" hacia la derecha sin mover ni tapar los badges ni alterar el layout. */}
+        <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="hidden md:flex absolute top-1/2 -translate-y-1/2 right-12 z-20 w-7 h-7 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 translate-x-2 pointer-events-none transition-all duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:translate-x-0 md:group-hover:pointer-events-auto touch-manipulation">
+          <MoreHorizontal size={14} />
+        </button>
 
         {/* Umbral de borrado continuo (solo móvil): al superar la mitad de la fila, toda la
             franja se tiñe de rojo en tiempo real para anticipar que soltar aquí borra al
