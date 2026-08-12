@@ -23,7 +23,7 @@ export default function TacticsDropdown({
         {Icon && <Icon size={12} className="shrink-0" />} <span className="whitespace-nowrap">{value || placeholder}</span>
       </button>
       {open && (
-        <div className={`absolute right-0 top-full mt-2 ${hasActions ? 'w-52' : 'w-40'} bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150 p-1.5 max-h-64 overflow-y-auto no-scrollbar`}>
+        <div className={`absolute left-0 top-full mt-2 ${hasActions ? 'w-52' : 'w-40'} bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150 p-1.5 max-h-64 overflow-y-auto no-scrollbar`}>
           {options.length === 0 && <div className="px-3 py-2 text-[10px] text-fg-faint font-bold italic">{emptyLabel}</div>}
           {options.map((opt) => (
             <div key={opt} className={`flex items-center rounded-xl transition-all ${value === opt ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>

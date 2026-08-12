@@ -90,14 +90,11 @@ export default function SavedFormationsBar() {
           aquí fuerza a los navegadores a tratar también el eje Y como recortado, dejando la
           lista oculta detrás de la tarjeta. Los nombres largos ya no truncan (ver
           TacticsDropdown), así que no hace falta scroll horizontal como red de seguridad. */}
-      <div className="bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl flex items-center justify-between gap-2">
-        {/* Sin cambios pendientes: el desplegable ocupa todo el ancho disponible (flex-1) hasta
-            el botón de guardar, que queda compacto (solo icono). Con cambios pendientes: el
-            desplegable se comprime a su ancho natural (shrink-0, el nombre se sigue mostrando
-            completo, sin truncar) y el botón de guardar se expande revelando su texto. Ambos
-            con transition-all duration-300 para un cambio fluido. "justify-between" en la fila
-            ancla el botón al extremo derecho también cuando el desplegable deja de ser flex-1
-            (si no, el hueco sobrante quedaba después del botón en vez de entre ambos). */}
+      <div className="bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl flex items-center gap-2">
+        {/* El desplegable es SIEMPRE flex-1/w-full (móvil y escritorio, con o sin cambios
+            pendientes), extendiéndose de forma continua hasta el botón de Guardar equipo sin
+            dejar ningún hueco vacío intermedio — el propio flex-1 se encoge automáticamente
+            (min-w-0) para cederle espacio al botón cuando este se expande con texto. */}
         <TacticsDropdown
           icon={Users}
           value={selectedName}
@@ -107,8 +104,8 @@ export default function SavedFormationsBar() {
           onDeleteOption={(name) => setFormationToDelete(name)}
           placeholder="Plantillas"
           emptyLabel="Sin equipos guardados"
-          wrapperClassName={`relative min-w-0 transition-all duration-300 ease-in-out ${hasPendingChanges ? 'shrink-0' : 'flex-1'}`}
-          triggerClassName={`h-9 px-3 min-w-max max-w-none transition-all duration-300 ease-in-out ${hasPendingChanges ? 'w-auto' : 'w-full'}`}
+          wrapperClassName="relative min-w-0 flex-1"
+          triggerClassName="h-9 px-3 min-w-max max-w-none w-full transition-all duration-300 ease-in-out"
           triggerColorClassName="bg-well text-fg-secondary hover:bg-well-strong border border-border-subtle dark:bg-black/40 dark:text-white/80 dark:hover:bg-black/60 dark:border-transparent dark:backdrop-blur-sm"
         />
         {/* Altura h-9 igual que el desplegable. Sin "gap" en el flex: con el botón compacto
