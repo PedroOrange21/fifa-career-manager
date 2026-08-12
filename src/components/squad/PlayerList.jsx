@@ -421,37 +421,60 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
         style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
         className="relative bg-surface p-3 md:p-4 flex items-center justify-between hover:bg-well/50 transition-colors gap-4 touch-pan-y group"
       >
-        {/* Badges circulares e integrados en las esquinas, en móvil y escritorio: sustituyen a
-            los recuadros rectangulares de Titular/Banquillo/Cantera para una tarjeta más
-            compacta. Móvil: tap alterna el estado (statusBadgeExpanded/canteraBadgeExpanded,
-            con useOnClickOutside para replegar). Escritorio: hover puro vía "group/badge" en
-            el propio botón, sin depender del estado (md:group-hover/badge:...), para que no
-            haga falta clic con ratón. El botón "..." de escritorio vive en el flujo normal de
-            la fila, pegado al padding derecho (p-4 + w-7 ≈ últimos 44px), así que en escritorio
-            el badge se ancla más adentro (md:right-12, ≈48px) para que ni colapsado ni
-            desplegado hacia la izquierda invada nunca su zona — no se usa desplazamiento
-            negativo porque el contenedor de swipe tiene overflow-hidden y lo recortaría. */}
+        {/* Badges circulares e integrados en las esquinas — MÓVIL (absolutos, tap para
+            desplegar texto, con useOnClickOutside para replegar; ocultos desde md:). */}
         {Object.values(lineup).includes(p.id) ? (
-          <button type="button" ref={statusBadgeRef} onClick={(e) => { e.stopPropagation(); setStatusBadgeExpanded((v) => !v); }} title="Titular" className="group/badge absolute top-2 right-2 md:right-12 z-20 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 transition-all duration-300 ease-in-out touch-manipulation">
+          <button type="button" ref={statusBadgeRef} onClick={(e) => { e.stopPropagation(); setStatusBadgeExpanded((v) => !v); }} title="Titular" className="group/badge md:hidden absolute top-2 right-2 z-20 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 transition-all duration-300 ease-in-out touch-manipulation">
             <Shirt size={12} className="shrink-0" />
-            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${statusBadgeExpanded ? 'max-md:max-w-[160px] max-md:ml-1.5' : 'max-md:max-w-0 max-md:ml-0'} md:max-w-0 md:ml-0 md:group-hover/badge:max-w-[160px] md:group-hover/badge:ml-1.5`}>Jugador en el once</span>
+            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${statusBadgeExpanded ? 'max-w-[160px] ml-1.5' : 'max-w-0 ml-0'}`}>Jugador en el once</span>
           </button>
         ) : Object.values(bench).includes(p.id) ? (
-          <button type="button" ref={statusBadgeRef} onClick={(e) => { e.stopPropagation(); setStatusBadgeExpanded((v) => !v); }} title="Banquillo" className="group/badge absolute top-2 right-2 md:right-12 z-20 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all duration-300 ease-in-out touch-manipulation">
+          <button type="button" ref={statusBadgeRef} onClick={(e) => { e.stopPropagation(); setStatusBadgeExpanded((v) => !v); }} title="Banquillo" className="group/badge md:hidden absolute top-2 right-2 z-20 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all duration-300 ease-in-out touch-manipulation">
             <Armchair size={12} className="shrink-0" />
-            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${statusBadgeExpanded ? 'max-md:max-w-[160px] max-md:ml-1.5' : 'max-md:max-w-0 max-md:ml-0'} md:max-w-0 md:ml-0 md:group-hover/badge:max-w-[160px] md:group-hover/badge:ml-1.5`}>Jugador en el banquillo</span>
+            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${statusBadgeExpanded ? 'max-w-[160px] ml-1.5' : 'max-w-0 ml-0'}`}>Jugador en el banquillo</span>
           </button>
         ) : null}
         {/* Canterano NO convocado: no hay badge de Titular/Banquillo disputando la esquina
-            superior, así que el birrete sube ahí. Convocado (Titular/Banquillo): ese badge ya
-            ocupa la esquina superior, así que el birrete baja a la inferior — misma lógica en
-            móvil y escritorio. */}
+            superior, así que el birrete sube ahí. Convocado: ese badge ya ocupa la esquina
+            superior, así que el birrete baja a la inferior. */}
         {p.type === 'Cantera' && (
-          <button type="button" ref={canteraBadgeRef} onClick={(e) => { e.stopPropagation(); setCanteraBadgeExpanded((v) => !v); }} title="Cantera" className={`group/badge absolute right-2 md:right-12 z-20 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out touch-manipulation ${isCalledUp ? 'bottom-2' : 'top-2'}`}>
+          <button type="button" ref={canteraBadgeRef} onClick={(e) => { e.stopPropagation(); setCanteraBadgeExpanded((v) => !v); }} title="Cantera" className={`group/badge md:hidden absolute right-2 z-20 flex items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out touch-manipulation ${isCalledUp ? 'bottom-2' : 'top-2'}`}>
             <GraduationCap size={12} className="shrink-0" />
-            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${canteraBadgeExpanded ? 'max-md:max-w-[160px] max-md:ml-1.5' : 'max-md:max-w-0 max-md:ml-0'} md:max-w-0 md:ml-0 md:group-hover/badge:max-w-[160px] md:group-hover/badge:ml-1.5`}>Canterano del club</span>
+            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${canteraBadgeExpanded ? 'max-w-[160px] ml-1.5' : 'max-w-0 ml-0'}`}>Canterano del club</span>
           </button>
         )}
+
+        {/* Columna vertical pegada a la derecha — ESCRITORIO (absolutos, hover puro vía
+            "group/badge", ocultos hasta md:). Esquina superior: estado deportivo, o Cantera si
+            no está convocado. Centro vertical (top-1/2 -translate-y-1/2, robusto ante cambios
+            de altura de fila): Cantera cuando SÍ está convocado. Esquina inferior: botón "...". */}
+        {Object.values(lineup).includes(p.id) ? (
+          <button type="button" title="Titular" className="group/badge hidden md:flex absolute top-2 right-2 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 transition-all duration-300 ease-in-out">
+            <Shirt size={12} className="shrink-0" />
+            <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[160px] group-hover/badge:ml-1.5">Jugador en el once</span>
+          </button>
+        ) : Object.values(bench).includes(p.id) ? (
+          <button type="button" title="Banquillo" className="group/badge hidden md:flex absolute top-2 right-2 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all duration-300 ease-in-out">
+            <Armchair size={12} className="shrink-0" />
+            <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[160px] group-hover/badge:ml-1.5">Jugador en el banquillo</span>
+          </button>
+        ) : p.type === 'Cantera' ? (
+          <button type="button" title="Cantera" className="group/badge hidden md:flex absolute top-2 right-2 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out">
+            <GraduationCap size={12} className="shrink-0" />
+            <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[160px] group-hover/badge:ml-1.5">Canterano del club</span>
+          </button>
+        ) : null}
+        {p.type === 'Cantera' && isCalledUp && (
+          <button type="button" title="Cantera" className="group/badge hidden md:flex absolute top-1/2 -translate-y-1/2 right-2 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out">
+            <GraduationCap size={12} className="shrink-0" />
+            <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[160px] group-hover/badge:ml-1.5">Canterano del club</span>
+          </button>
+        )}
+        <div className="hidden md:block absolute bottom-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="w-7 h-7 flex items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong transition-colors touch-manipulation">
+            <MoreHorizontal size={14} />
+          </button>
+        </div>
 
         <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
           <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
@@ -466,23 +489,13 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           </div>
         </div>
 
-        {/* Ancho mínimo homogéneo (min-w-[104px] + justify-center) en la etiqueta de estado
-            (Cedible/Venta), para que ocupe siempre el mismo espacio. Titular/Banquillo/Cantera
-            ya no se repiten aquí: viven como círculo interactivo en la esquina de la tarjeta,
-            tanto en móvil como en escritorio (ver más arriba). */}
-        <div className="flex flex-col items-end gap-2 shrink-0">
-          {p.type !== 'Cedido' && p.transferStatus === 'Cedible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} className="shrink-0" /> Cedible</span>) : p.type !== 'Cedido' && p.transferStatus === 'Transferible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-red-500/20 text-red-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-red-500/20"><Tag size={12} className="shrink-0" /> Venta</span>) : null}
-        </div>
-
-        {/* Escritorio: nada de swipe (no hay touch), así que todas las acciones (Editar,
-            Eliminar, Transferibles, Cedibles, Vender, Ceder) se agrupan en el único botón
-            "...", ahorrando espacio horizontal en la fila. Solo se hace visible al pasar el
-            cursor por encima de la fila. */}
-        <div className="hidden sm:block shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="w-7 h-7 flex items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong transition-colors touch-manipulation">
-            <MoreHorizontal size={14} />
-          </button>
-        </div>
+        {/* La tarjeta roja de "Venta"/Transferible se elimina por completo (móvil y
+            escritorio); solo queda la etiqueta de Cedible. */}
+        {p.type !== 'Cedido' && p.transferStatus === 'Cedible' && (
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} className="shrink-0" /> Cedible</span>
+          </div>
+        )}
 
         {/* Umbral de borrado continuo (solo móvil): al superar la mitad de la fila, toda la
             franja se tiñe de rojo en tiempo real para anticipar que soltar aquí borra al
