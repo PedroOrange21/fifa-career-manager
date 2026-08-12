@@ -260,7 +260,12 @@ export function ClubDataProvider({ children }) {
     playersToUpdate.forEach((playerId) => {
       updateDoc(playerDoc(user.uid, activeClubId, playerId), { transferStatus: 'Activo' });
     });
-    setFormation(newForm); setLineup(newLineup); setActiveTacticName(null); saveTactics(newForm, newLineup, bench, null);
+    // A diferencia de clearTactics/clearLineup/clearBench (que sí "sueltan" la táctica activa
+    // a propósito, como reinicio deliberado), cambiar el esquema NO debe desvincular
+    // activeTacticName: si lo hiciera, hasPendingChanges (que exige una táctica activa para
+    // comparar) nunca detectaría el cambio y el botón de Guardar no se expandiría. Se omite el
+    // 4º argumento a propósito para que saveTactics conserve el activeTacticName vigente.
+    setFormation(newForm); setLineup(newLineup); saveTactics(newForm, newLineup, bench);
   };
 
   const executeMove = (playerId, source, target) => {
