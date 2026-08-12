@@ -369,7 +369,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
   const toggleMore = (e, context) => {
     if (showMore) { setShowMore(false); return; }
     const rect = e.currentTarget.getBoundingClientRect();
-    setMoreRect({ top: rect.bottom + 4, right: window.innerWidth - rect.right, width: 200 });
+    setMoreRect({ top: rect.bottom + 4, right: window.innerWidth - rect.right, width: 240 });
     setMoreContext(context);
     setShowMore(true);
   };
@@ -518,7 +518,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
         >
           {MORE_ACTIONS.map(({ key, icon: Icon, label, onClick, disabled }) => (
-            <button key={key} type="button" disabled={disabled} onClick={() => { if (disabled) return; onClick(); setShowMore(false); close(); }} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase transition-all touch-manipulation ${disabled ? 'text-fg-faint opacity-40 pointer-events-none' : 'text-fg-secondary hover:bg-well'}`}>
+            <button key={key} type="button" disabled={disabled} onClick={() => { if (disabled) return; onClick(); setShowMore(false); close(); }} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase whitespace-nowrap transition-all touch-manipulation ${disabled ? 'text-fg-faint opacity-40 pointer-events-none' : 'text-fg-secondary hover:bg-well'}`}>
               <Icon size={14} className="shrink-0" /> {label}
             </button>
           ))}
@@ -559,7 +559,7 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall }) {
   const toggleMore = (e) => {
     if (showMore) { setShowMore(false); return; }
     const rect = e.currentTarget.getBoundingClientRect();
-    setMoreRect({ top: rect.bottom + 4, right: window.innerWidth - rect.right, width: 200 });
+    setMoreRect({ top: rect.bottom + 4, right: window.innerWidth - rect.right, width: 240 });
     setShowMore(true);
   };
 
@@ -627,7 +627,7 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall }) {
           className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
         >
           {MORE_ACTIONS.map(({ key, icon: Icon, label, onClick, disabled }) => (
-            <button key={key} type="button" disabled={disabled} onClick={() => { if (disabled) return; onClick(); setShowMore(false); close(); }} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase transition-all touch-manipulation ${disabled ? 'text-fg-faint opacity-40 pointer-events-none' : 'text-fg-secondary hover:bg-well'}`}>
+            <button key={key} type="button" disabled={disabled} onClick={() => { if (disabled) return; onClick(); setShowMore(false); close(); }} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase whitespace-nowrap transition-all touch-manipulation ${disabled ? 'text-fg-faint opacity-40 pointer-events-none' : 'text-fg-secondary hover:bg-well'}`}>
               <Icon size={14} className="shrink-0" /> {label}
             </button>
           ))}
