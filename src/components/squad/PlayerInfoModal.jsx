@@ -1,10 +1,12 @@
-import { X, Edit2, RefreshCcw, Trash2, Tag, Armchair, ArrowRightLeft, GraduationCap, ArrowDownToLine } from 'lucide-react';
-import { useState } from 'react';
+import { X, Edit2, RefreshCcw, Trash2, Tag, Armchair, ArrowRightLeft, GraduationCap, ArrowDownToLine, MoreHorizontal, Undo2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue, formatLoanDuration } from '../../utils/format';
 import { isUncalledZone } from '../../utils/slots';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import ConfirmModal from '../common/ConfirmModal';
 import SellPlayerModal from '../economy/SellPlayerModal';
 import LoanOutModal from '../economy/LoanOutModal';
 
@@ -15,22 +17,51 @@ const ACTION_STYLES = {
   neutral: 'bg-well-strong text-fg border-transparent hover:brightness-125',
 };
 
-const ACTIVE_STYLES = {
-  red: 'bg-red-500 text-black border-red-500',
-  yellow: 'bg-yellow-500 text-black border-yellow-500',
-};
-
 export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onReplace, hideMarketStatus = false }) {
   useBodyScrollLock();
-  const { bench, assignPlayerToSlot, setPlayerTransferStatus } = useClubData();
+  const { bench, assignPlayerToSlot, setPlayerTransferStatus, setPlayerToDelete, confirmDeletePlayer } = useClubData();
   const [current, setCurrent] = useState(player);
   const [showSellModal, setShowSellModal] = useState(false);
   const [showLoanModal, setShowLoanModal] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+  const [moreRect, setMoreRect] = useState(null);
+  const [showEndLoanConfirm, setShowEndLoanConfirm] = useState(false);
+  const moreBtnRef = useRef(null);
+  const moreMenuRef = useRef(null);
 
   const changeStatus = async (status) => {
     await setPlayerTransferStatus(current.id, status);
     setCurrent({ ...current, transferStatus: status });
   };
+
+  useEffect(() => {
+    if (!showMore) return;
+    const handler = (e) => {
+      if (moreBtnRef.current?.contains(e.target)) return;
+      if (moreMenuRef.current?.contains(e.target)) return;
+      setShowMore(false);
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [showMore]);
+
+  const toggleMore = (e) => {
+    if (showMore) { setShowMore(false); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMoreRect({ top: rect.bottom + 4, right: window.innerWidth - rect.right, width: 220 });
+    setShowMore(true);
+  };
+
+  // "Finalizar Cesión" reutiliza el mismo borrado que confirmDeletePlayer (el jugador cedido
+  // entrante no es propiedad del club, así que "eliminarlo" de la plantilla es exactamente
+  // devolverlo a su club de origen) — mismo patrón que en la Plantilla.
+  const requestEndLoan = () => { setPlayerToDelete(current.id); setShowEndLoanConfirm(true); };
+  const cancelEndLoan = () => { setPlayerToDelete(null); setShowEndLoanConfirm(false); };
+  const confirmEndLoan = async () => { await confirmDeletePlayer(); setShowEndLoanConfirm(false); onClose(); };
 
   const emptyBenchIdx = [0, 1, 2, 3, 4, 5, 6, 7, 8].find((i) => !bench[i]);
   const canSendToBench = current.transferStatus !== 'CedidoFuera' && !isUncalledZone(infoSlot) && !String(infoSlot).startsWith('bench-') && emptyBenchIdx !== undefined;
@@ -48,24 +79,20 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
     actions.push({ key: 'uncalled', icon: Trash2, label: 'No Convocado', onClick: () => { assignPlayerToSlot(infoSlot, null); onClose(); }, color: 'red' });
   }
 
-  // Contexto Táctica: fila 1 (3 columnas fijas: Reemplazar / Banquillo / No Convocado) con gestión de
-  // alineación, fila 2 (2 columnas) con accesos directos a las listas de mercado. Las acciones que no
-  // aplican al slot actual se muestran deshabilitadas en vez de desaparecer, para mantener la rejilla fija.
-  const primaryActions = [
-    { key: 'replace', icon: RefreshCcw, label: 'Reemplazar', onClick: () => onReplace(infoSlot), color: 'neutral', disabled: isUncalledZone(infoSlot) },
-    { key: 'bench', icon: Armchair, label: 'Mandar al Banquillo', onClick: () => { assignPlayerToSlot(`bench-${emptyBenchIdx}`, current.id); onClose(); }, color: 'neutral', disabled: !canSendToBench },
-    { key: 'uncalled', icon: Trash2, label: 'Mandar a No Convocados', onClick: () => { assignPlayerToSlot(infoSlot, null); onClose(); }, color: 'neutral', disabled: isUncalledZone(infoSlot) },
+  // Contexto Táctica: botón principal "Reemplazar" a todo lo ancho, seguido de una fila de 3
+  // (Banquillo / No Convocado / "..."). El menú de tres puntos agrupa transferible, cedible,
+  // venta y cesión — o, si el jugador está cedido en nuestro club, "Finalizar Cesión" primero
+  // y esas 4 opciones deshabilitadas — con exactamente la misma lógica condicional que en la
+  // Plantilla (ver PlayerList.jsx: isIncomingLoan = type === 'Cedido').
+  const marketMoreActions = [
+    { key: 'transferible', icon: Tag, label: 'Mandar a Transferibles', onClick: () => changeStatus('Transferible'), disabled: isIncomingLoan },
+    { key: 'cedible', icon: ArrowRightLeft, label: 'Mandar a Cedibles', onClick: () => changeStatus('Cedible'), disabled: isIncomingLoan },
+    { key: 'sell', icon: Tag, label: 'Vender Jugador', onClick: () => setShowSellModal(true), disabled: current.transferStatus === 'CedidoFuera' || isIncomingLoan },
+    { key: 'loan', icon: ArrowRightLeft, label: 'Ceder Jugador', onClick: () => setShowLoanModal(true), disabled: current.transferStatus === 'CedidoFuera' || isIncomingLoan },
   ];
-
-  const marketActions = [
-    { key: 'transferible', icon: Tag, label: 'Mandar a Transferibles', onClick: () => changeStatus('Transferible'), color: 'red', active: current.transferStatus === 'Transferible', disabled: isIncomingLoan },
-    { key: 'cedible', icon: ArrowRightLeft, label: 'Mandar a Cedibles', onClick: () => changeStatus('Cedible'), color: 'yellow', active: current.transferStatus === 'Cedible', disabled: isIncomingLoan },
-  ];
-
-  const directMarketActions = [
-    { key: 'sell', icon: Tag, label: 'Vender Jugador', onClick: () => setShowSellModal(true), color: 'red', disabled: current.transferStatus === 'CedidoFuera' || isIncomingLoan },
-    { key: 'loan', icon: ArrowRightLeft, label: 'Ceder Jugador', onClick: () => setShowLoanModal(true), color: 'yellow', disabled: current.transferStatus === 'CedidoFuera' || isIncomingLoan },
-  ];
+  const moreMenuItems = isIncomingLoan
+    ? [{ key: 'endLoan', icon: Undo2, label: 'Finalizar Cesión', onClick: requestEndLoan }, ...marketMoreActions]
+    : marketMoreActions;
 
   return (
     <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
@@ -100,26 +127,39 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
 
         {hideMarketStatus ? (
           <>
-            <div className="grid grid-cols-3 gap-1.5 mt-3">
-              {primaryActions.map(({ key, icon: Icon, label, onClick, color, disabled }) => (
-                <button key={key} onClick={onClick} disabled={disabled} className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-black uppercase text-[8px] leading-tight text-center transition-all duration-150 border ${disabled ? 'opacity-40 pointer-events-none bg-well-strong text-fg-faint border-transparent' : `${ACTION_STYLES[color]} hover:scale-105 active:scale-95`}`}>
-                  <Icon size={14} /> {label}
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              {marketActions.map(({ key, icon: Icon, label, onClick, color, active, disabled }) => (
-                <button key={key} onClick={onClick} disabled={disabled} className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-black uppercase text-[9px] transition-all border ${disabled ? 'opacity-40 pointer-events-none bg-well-strong text-fg-faint border-transparent' : active ? ACTIVE_STYLES[color] : ACTION_STYLES[color]}`}>
-                  <Icon size={16} /> {label}
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              {directMarketActions.map(({ key, icon: Icon, label, onClick, color, disabled }) => (
-                <button key={key} onClick={onClick} disabled={disabled} className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-black uppercase text-[9px] transition-all border ${disabled ? 'opacity-40 pointer-events-none bg-well-strong text-fg-faint border-transparent' : ACTION_STYLES[color]}`}>
-                  <Icon size={16} /> {label}
-                </button>
-              ))}
+            {/* Botón principal a todo lo ancho. */}
+            <button
+              onClick={() => onReplace(infoSlot)}
+              disabled={isUncalledZone(infoSlot)}
+              className={`w-full mt-3 py-3.5 rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 transition-all duration-150 border ${isUncalledZone(infoSlot) ? 'opacity-40 pointer-events-none bg-well-strong text-fg-faint border-transparent' : `${ACTION_STYLES.neutral} hover:scale-[1.02] active:scale-95`}`}
+            >
+              <RefreshCcw size={16} /> Reemplazar
+            </button>
+
+            {/* Fila inferior: Banquillo (izquierda) / No Convocado (centro) / "..." (derecha). */}
+            <div className="grid grid-cols-3 gap-1.5 mt-2">
+              <button
+                onClick={() => { assignPlayerToSlot(`bench-${emptyBenchIdx}`, current.id); onClose(); }}
+                disabled={!canSendToBench}
+                className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-black uppercase text-[8px] leading-tight text-center transition-all duration-150 border ${!canSendToBench ? 'opacity-40 pointer-events-none bg-well-strong text-fg-faint border-transparent' : `${ACTION_STYLES.neutral} hover:scale-105 active:scale-95`}`}
+              >
+                <Armchair size={14} /> Banquillo
+              </button>
+              <button
+                onClick={() => { assignPlayerToSlot(infoSlot, null); onClose(); }}
+                disabled={isUncalledZone(infoSlot)}
+                className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-black uppercase text-[8px] leading-tight text-center transition-all duration-150 border ${isUncalledZone(infoSlot) ? 'opacity-40 pointer-events-none bg-well-strong text-fg-faint border-transparent' : `${ACTION_STYLES.neutral} hover:scale-105 active:scale-95`}`}
+              >
+                <Trash2 size={14} /> No Convocado
+              </button>
+              <button
+                ref={moreBtnRef}
+                type="button"
+                onClick={toggleMore}
+                className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-black uppercase text-[8px] leading-tight text-center transition-all duration-150 border ${ACTION_STYLES.neutral} hover:scale-105 active:scale-95`}
+              >
+                <MoreHorizontal size={16} /> Más
+              </button>
             </div>
           </>
         ) : (
@@ -132,8 +172,35 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
           </div>
         )}
       </div>
+      {showMore && moreRect && createPortal(
+        <div
+          ref={moreMenuRef}
+          style={{ position: 'fixed', top: moreRect.top, right: moreRect.right, width: moreRect.width }}
+          className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {moreMenuItems.map(({ key, icon: Icon, label, onClick, disabled }) => (
+            <button key={key} type="button" disabled={disabled} onClick={() => { if (disabled) return; onClick(); setShowMore(false); }} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase whitespace-nowrap transition-all ${disabled ? 'text-fg-faint opacity-40 pointer-events-none' : 'text-fg-secondary hover:bg-well'}`}>
+              <Icon size={14} className="shrink-0" /> {label}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
       {showSellModal && <SellPlayerModal player={current} onClose={() => { setShowSellModal(false); onClose(); }} />}
       {showLoanModal && <LoanOutModal player={current} onClose={() => { setShowLoanModal(false); onClose(); }} />}
+      {showEndLoanConfirm && (
+        <ConfirmModal
+          icon={Undo2}
+          iconClassName="text-yellow-500"
+          title="Finalizar Cesión"
+          message={`${current.name} volverá a su club de origen y saldrá de la plantilla. ¿Confirmas la finalización de la cesión?`}
+          confirmLabel="Finalizar Cesión"
+          confirmClassName="bg-yellow-500 text-black shadow-yellow-500/20 hover:bg-yellow-400"
+          onCancel={cancelEndLoan}
+          onConfirm={confirmEndLoan}
+        />
+      )}
     </div>
   );
 }
