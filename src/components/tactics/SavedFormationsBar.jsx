@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ShieldAlert, Users, Save, Pencil, X } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
+import { useUiChrome } from '../../context/UiChromeContext';
 import ConfirmModal from '../common/ConfirmModal';
 import TacticsDropdown from './TacticsDropdown';
 
@@ -10,12 +11,22 @@ export default function SavedFormationsBar() {
     formation, lineup, bench,
     loadSavedFormation, formationToDelete, setFormationToDelete, confirmDeleteFormation, renameSavedFormation,
   } = useClubData();
+  const { hide: hideChrome, show: showChrome } = useUiChrome();
   const [newFormationName, setNewFormationName] = useState('');
   const [renaming, setRenaming] = useState(null);
   const [renameValue, setRenameValue] = useState('');
   const [showSaveChoice, setShowSaveChoice] = useState(false);
   const [saveMode, setSaveMode] = useState('current');
   const [newTacticNameForSave, setNewTacticNameForSave] = useState('');
+
+  // Modal de guardar cambios a pantalla limpia: oculta cabecera y barra de navegación
+  // inferior mientras está abierta, igual que el resto de modales de pantalla completa.
+  useEffect(() => {
+    if (!showSaveChoice) return;
+    hideChrome();
+    return () => showChrome();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSaveChoice]);
 
   const handleSave = () => {
     if (!newFormationName.trim()) return;
@@ -131,7 +142,7 @@ export default function SavedFormationsBar() {
 
             <div className="space-y-2 mb-4">
               <button type="button" onClick={() => setSaveMode('current')} className={`w-full p-4 rounded-2xl border text-left transition-all ${saveMode === 'current' ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:bg-well-strong'}`}>
-                <div className="font-black uppercase text-xs">Guardar en {activeTacticName}</div>
+                <div className="font-black uppercase text-xs">Actualizar {activeTacticName}</div>
                 <div className="text-[9px] font-bold mt-0.5 opacity-70 uppercase tracking-widest">Actualiza esta formación existente</div>
               </button>
               <button type="button" onClick={() => setSaveMode('new')} className={`w-full p-4 rounded-2xl border text-left transition-all ${saveMode === 'new' ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:bg-well-strong'}`}>
@@ -145,7 +156,7 @@ export default function SavedFormationsBar() {
             )}
 
             <button type="button" onClick={confirmSaveChoice} disabled={saveMode === 'new' && !newTacticNameForSave.trim()} className="w-full bg-green-500 text-black p-4 rounded-2xl font-black uppercase text-xs tracking-wider hover:bg-green-400 transition-all disabled:opacity-40 disabled:pointer-events-none">
-              {saveMode === 'current' ? `Guardar en ${activeTacticName}` : 'Guardar Nueva Formación'}
+              {saveMode === 'current' ? `Actualizar ${activeTacticName}` : 'Guardar Nueva Formación'}
             </button>
           </div>
         </div>
