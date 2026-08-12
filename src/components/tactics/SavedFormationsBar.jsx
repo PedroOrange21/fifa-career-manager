@@ -85,12 +85,17 @@ export default function SavedFormationsBar() {
 
   return (
     <div className="flex flex-col gap-3 md:gap-4 mb-2">
-      <div className="bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
-        {/* Izquierda: desplegable de plantillas guardadas, dimensionado a su propio contenido
-            (w-auto/min-w-max, sin truncate) para mostrar el nombre completo del equipo en una
-            sola línea, sin puntos suspensivos, en móvil y escritorio. "justify-between" en el
-            contenedor mantiene el botón de guardar pegado a la derecha con independencia del
-            ancho que ocupe el desplegable. */}
+      {/* overflow visible a propósito (sin overflow-x-auto): el desplegable abre su lista de
+          opciones en "position: absolute" por debajo de este contenedor, y un overflow-x-auto
+          aquí fuerza a los navegadores a tratar también el eje Y como recortado, dejando la
+          lista oculta detrás de la tarjeta. Los nombres largos ya no truncan (ver
+          TacticsDropdown), así que no hace falta scroll horizontal como red de seguridad. */}
+      <div className="bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl flex items-center gap-2">
+        {/* Sin cambios pendientes: el desplegable ocupa todo el ancho disponible (flex-1) hasta
+            el botón de guardar, que queda compacto (solo icono). Con cambios pendientes: el
+            desplegable se comprime a su ancho natural (shrink-0, el nombre se sigue mostrando
+            completo, sin truncar) y el botón de guardar se expande revelando su texto. Ambos
+            con transition-all duration-300 para un cambio fluido. */}
         <TacticsDropdown
           icon={Users}
           value={selectedName}
@@ -100,12 +105,13 @@ export default function SavedFormationsBar() {
           onDeleteOption={(name) => setFormationToDelete(name)}
           placeholder="Plantillas"
           emptyLabel="Sin equipos guardados"
-          wrapperClassName="relative shrink-0"
-          triggerClassName="h-9 px-3 w-auto min-w-max max-w-none"
+          wrapperClassName={`relative min-w-0 transition-all duration-300 ease-in-out ${hasPendingChanges ? 'shrink-0' : 'flex-1'}`}
+          triggerClassName={`h-9 px-3 min-w-max max-w-none transition-all duration-300 ease-in-out ${hasPendingChanges ? 'w-auto' : 'w-full'}`}
           triggerColorClassName="bg-well text-fg-secondary hover:bg-well-strong border border-border-subtle dark:bg-black/40 dark:text-white/80 dark:hover:bg-black/60 dark:border-transparent dark:backdrop-blur-sm"
         />
-        <button onClick={openSaveChoice} title="Guardar equipo" className={`shrink-0 h-9 px-4 flex items-center justify-center gap-2 rounded-xl bg-green-500 text-black shadow-lg shadow-green-500/20 active:scale-95 transition-all hover:bg-green-400 font-black uppercase text-xs ${hasPendingChanges ? 'animate-in fade-in slide-in-from-right-4 duration-200' : ''}`}>
-          <Save size={14} className="shrink-0" /> {hasPendingChanges ? 'Guardar Cambios' : 'Guardar Equipo'}
+        <button onClick={openSaveChoice} title="Guardar equipo" className={`shrink-0 h-9 flex items-center justify-center gap-2 rounded-xl bg-green-500 text-black shadow-lg shadow-green-500/20 active:scale-95 transition-all duration-300 ease-in-out hover:bg-green-400 font-black uppercase text-xs ${hasPendingChanges ? 'px-4' : 'w-9 px-0'}`}>
+          <Save size={14} className="shrink-0" />
+          <span className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${hasPendingChanges ? 'max-w-[140px] ml-0.5' : 'max-w-0 ml-0'}`}>Guardar Equipo</span>
         </button>
       </div>
 
