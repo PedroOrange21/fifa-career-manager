@@ -90,12 +90,14 @@ export default function SavedFormationsBar() {
           aquí fuerza a los navegadores a tratar también el eje Y como recortado, dejando la
           lista oculta detrás de la tarjeta. Los nombres largos ya no truncan (ver
           TacticsDropdown), así que no hace falta scroll horizontal como red de seguridad. */}
-      <div className="bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl flex items-center gap-2">
+      <div className="bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl flex items-center justify-between gap-2">
         {/* Sin cambios pendientes: el desplegable ocupa todo el ancho disponible (flex-1) hasta
             el botón de guardar, que queda compacto (solo icono). Con cambios pendientes: el
             desplegable se comprime a su ancho natural (shrink-0, el nombre se sigue mostrando
             completo, sin truncar) y el botón de guardar se expande revelando su texto. Ambos
-            con transition-all duration-300 para un cambio fluido. */}
+            con transition-all duration-300 para un cambio fluido. "justify-between" en la fila
+            ancla el botón al extremo derecho también cuando el desplegable deja de ser flex-1
+            (si no, el hueco sobrante quedaba después del botón en vez de entre ambos). */}
         <TacticsDropdown
           icon={Users}
           value={selectedName}
@@ -109,9 +111,14 @@ export default function SavedFormationsBar() {
           triggerClassName={`h-9 px-3 min-w-max max-w-none transition-all duration-300 ease-in-out ${hasPendingChanges ? 'w-auto' : 'w-full'}`}
           triggerColorClassName="bg-well text-fg-secondary hover:bg-well-strong border border-border-subtle dark:bg-black/40 dark:text-white/80 dark:hover:bg-black/60 dark:border-transparent dark:backdrop-blur-sm"
         />
-        <button onClick={openSaveChoice} title="Guardar equipo" className={`shrink-0 h-10 flex items-center justify-center gap-2 rounded-full bg-green-500 text-black shadow-lg shadow-green-500/20 active:scale-95 transition-all duration-300 ease-in-out hover:bg-green-400 font-black uppercase text-xs ${hasPendingChanges ? 'px-4' : 'w-10 px-0'}`}>
-          <Save size={14} className="shrink-0" />
-          <span className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${hasPendingChanges ? 'max-w-[140px] ml-0.5' : 'max-w-0 ml-0'}`}>Guardar Equipo</span>
+        {/* Altura h-9 igual que el desplegable. Sin "gap" en el flex: con el botón compacto
+            (span de texto en max-w-0) un gap seguiría reservando hueco tras el icono y lo
+            descentraría; el espaciado hacia el texto lo pone el propio span vía su margen
+            izquierdo condicional. Anclado a la derecha por el "justify-between" de la fila, el
+            botón crece "hacia dentro" (izquierda) al expandirse, sin desplazarse de bloque. */}
+        <button onClick={openSaveChoice} title="Guardar equipo" className={`shrink-0 h-9 flex items-center justify-center text-center rounded-full bg-green-500 text-black shadow-lg shadow-green-500/20 active:scale-95 transition-all duration-300 ease-in-out hover:bg-green-400 font-black uppercase text-xs ${hasPendingChanges ? 'px-4' : 'w-9 px-0'}`}>
+          <Save size={14} className="shrink-0 mx-auto" />
+          <span className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${hasPendingChanges ? 'max-w-[140px] ml-1.5' : 'max-w-0 ml-0'}`}>Guardar Equipo</span>
         </button>
       </div>
 
