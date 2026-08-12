@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ArrowUpDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap, Undo2 } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap, Undo2 } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue, formatLoanDuration } from '../../utils/format';
@@ -15,15 +15,18 @@ import LoanOutModal from '../economy/LoanOutModal';
 // los botones "Vaciar" de la pizarra táctica.
 const HAS_HOVER = typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
+// Media/Valor/Edad se agrupan en una fila compacta por criterio (etiqueta + dos botones
+// mayor/menor), en vez de 2 filas sueltas cada uno como antes.
+const SORT_GROUPS = [
+  { label: 'Media', descId: 'rating-desc', ascId: 'rating-asc', icon: Star },
+  { label: 'Valor', descId: 'value-desc', ascId: 'value-asc', icon: DollarSign },
+  { label: 'Edad', descId: 'age-desc', ascId: 'age-asc', icon: Calendar },
+];
+
 const SORT_OPTIONS = [
-  { id: 'rating-desc', label: 'Mayor Media', icon: Star },
-  { id: 'rating-asc', label: 'Menor Media', icon: Star },
-  { id: 'value-desc', label: 'Mayor Valor', icon: DollarSign },
-  { id: 'value-asc', label: 'Menor Valor', icon: DollarSign },
-  { id: 'age-desc', label: 'Mayor Edad', icon: Calendar },
-  { id: 'age-asc', label: 'Menor Edad', icon: Calendar },
   { id: 'name-asc', label: 'Nombre (A-Z)', icon: ArrowDownAZ },
   { id: 'status-role', label: 'Rol en Equipo', icon: Shirt },
+  { id: 'ownership', label: 'Propiedad del Club', icon: ShieldCheck },
 ];
 
 export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pendingPrefill, onConsumePendingPrefill }) {
@@ -89,6 +92,15 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       if (scoreA !== scoreB) return scoreA - scoreB; return b.rating - a.rating;
     });
   }
+  if (filterType === 'ownership') {
+    // Comprados y canteranos son propiedad directa del club; los cedidos entrantes
+    // (type 'Cedido') pertenecen a otro equipo, así que van al final.
+    const getOwnershipScore = (p) => (p.type === 'Cedido' ? 2 : 1);
+    filteredPlayers.sort((a, b) => {
+      const scoreA = getOwnershipScore(a); const scoreB = getOwnershipScore(b);
+      if (scoreA !== scoreB) return scoreA - scoreB; return b.rating - a.rating;
+    });
+  }
 
   const activePlayers = filteredPlayers.filter((p) => p.transferStatus !== 'CedidoFuera');
   const loanedOutPlayers = filteredPlayers.filter((p) => p.transferStatus === 'CedidoFuera');
@@ -124,7 +136,21 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
             <ArrowUpDown size={16} />
           </button>
           {showSortMenu && (
-            <div className="absolute right-0 top-full mt-2 w-52 bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150 p-1.5">
+            <div className="absolute right-0 top-full mt-2 w-56 bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150 p-1.5">
+              {SORT_GROUPS.map(({ label, descId, ascId, icon: Icon }) => (
+                <div key={label} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl">
+                  <span className="flex items-center gap-2 text-xs font-bold text-fg-secondary"><Icon size={14} className="shrink-0" /> {label}</span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button type="button" onClick={() => { setFilterType(descId); setShowSortMenu(false); }} title="Mayor a menor" className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all ${filterType === descId ? 'bg-green-500/10 text-green-500' : 'text-fg-faint hover:bg-well hover:text-fg-secondary'}`}>
+                      <ArrowUp size={14} />
+                    </button>
+                    <button type="button" onClick={() => { setFilterType(ascId); setShowSortMenu(false); }} title="Menor a mayor" className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all ${filterType === ascId ? 'bg-green-500/10 text-green-500' : 'text-fg-faint hover:bg-well hover:text-fg-secondary'}`}>
+                      <ArrowDown size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <div className="h-px bg-border-subtle my-1 mx-1" />
               {SORT_OPTIONS.map(({ id, label, icon: Icon }) => (
                 <button key={id} onClick={() => { setFilterType(id); setShowSortMenu(false); }} className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl text-xs font-bold transition-all ${filterType === id ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
                   <Icon size={14} /> {label}
