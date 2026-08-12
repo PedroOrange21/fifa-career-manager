@@ -444,10 +444,10 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           </button>
         )}
 
-        {/* Columna vertical pegada a la derecha — ESCRITORIO (absolutos, hover puro vía
-            "group/badge", ocultos hasta md:). Esquina superior: estado deportivo, o Cantera si
-            no está convocado. Centro vertical (top-1/2 -translate-y-1/2, robusto ante cambios
-            de altura de fila): Cantera cuando SÍ está convocado. Esquina inferior: botón "...". */}
+        {/* Solo 2 posiciones de badge en escritorio (absolutos, hover puro vía "group/badge",
+            ocultos hasta md:). Esquina superior: estado deportivo, o Cantera si no está
+            convocado. Esquina inferior: Cantera cuando SÍ está convocado. El botón "..." ya no
+            vive aquí (ver más abajo, en el flujo normal de la fila). */}
         {Object.values(lineup).includes(p.id) ? (
           <button type="button" title="Titular" className="group/badge hidden md:flex absolute top-2 right-2 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 transition-all duration-300 ease-in-out">
             <Shirt size={12} className="shrink-0" />
@@ -465,16 +465,11 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           </button>
         ) : null}
         {p.type === 'Cantera' && isCalledUp && (
-          <button type="button" title="Cantera" className="group/badge hidden md:flex absolute top-1/2 -translate-y-1/2 right-2 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out">
+          <button type="button" title="Cantera" className="group/badge hidden md:flex absolute bottom-2 right-2 z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all duration-300 ease-in-out">
             <GraduationCap size={12} className="shrink-0" />
             <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[160px] group-hover/badge:ml-1.5">Canterano del club</span>
           </button>
         )}
-        <div className="hidden md:block absolute bottom-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="w-7 h-7 flex items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong transition-colors touch-manipulation">
-            <MoreHorizontal size={14} />
-          </button>
-        </div>
 
         <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
           <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
@@ -496,6 +491,15 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
             <span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} className="shrink-0" /> Cedible</span>
           </div>
         )}
+
+        {/* Botón "..." de escritorio: oculto por defecto (max-w-0, sin ocupar espacio) y
+            revelado con una expansión suave de la propia tarjeta hacia la derecha al pasar el
+            ratón por la fila (group-hover:max-w-[44px]), en vez del simple fundido anterior. */}
+        <div className="hidden md:flex md:items-center md:shrink-0 md:overflow-hidden md:max-w-0 md:group-hover:max-w-[44px] md:transition-all md:duration-300 md:ease-in-out">
+          <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="w-7 h-7 md:ml-2 flex items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong transition-colors touch-manipulation shrink-0">
+            <MoreHorizontal size={14} />
+          </button>
+        </div>
 
         {/* Umbral de borrado continuo (solo móvil): al superar la mitad de la fila, toda la
             franja se tiñe de rojo en tiempo real para anticipar que soltar aquí borra al
