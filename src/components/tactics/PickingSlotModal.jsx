@@ -70,7 +70,7 @@ export default function PickingSlotModal({ pickingSlot, onClose, onNavigateToSco
                   <div className="flex items-center gap-2 mt-0.5 md:mt-1">
                     <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase">{p.age} Años</span>
                     {isLoanedOut && (<span className="text-[7px] md:text-[8px] bg-zinc-500/20 text-zinc-400 px-2 py-0.5 rounded uppercase font-black tracking-widest">Cedido Fuera</span>)}
-                    {(!isLoanedOut && !isCurrentSlot && (isAlreadyIn11 || isAlreadyInBench)) && (<span className="text-[7px] md:text-[8px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded uppercase font-black tracking-widest">{isAlreadyIn11 ? 'En el 11' : 'Banquillo'}</span>)}
+                    {(!isLoanedOut && !isCurrentSlot && (isAlreadyIn11 || isAlreadyInBench)) && (<span className={`text-[7px] md:text-[8px] px-2 py-0.5 rounded uppercase font-black tracking-widest ${isAlreadyIn11 ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>{isAlreadyIn11 ? 'En el 11' : 'Banquillo'}</span>)}
                   </div>
                 </div>
                 {isCurrentSlot && !isLoanedOut && <Check className="text-green-500" size={18} />}
