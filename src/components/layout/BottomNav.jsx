@@ -9,7 +9,7 @@ const NAV_ITEMS = [
 export default function BottomNav({ activeTab, setActiveTab }) {
   return (
     <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center items-center gap-3 px-4 pointer-events-none pb-safe">
-      <div className="flex justify-between items-center p-1.5 w-full max-w-[260px] bg-surface/60 backdrop-blur-2xl border border-border rounded-[28px] shadow-[0_10px_40px_rgba(0,0,0,0.5)] pointer-events-auto">
+      <div className="liquid-glass-nav flex justify-between items-center p-1.5 w-full max-w-[260px] bg-surface/60 backdrop-blur-2xl border border-border rounded-[28px] shadow-[0_10px_40px_rgba(0,0,0,0.5)] pointer-events-auto">
         {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setActiveTab(id)} className={`flex flex-col items-center justify-center w-[68px] h-[52px] rounded-[22px] transition-all duration-300 ${activeTab === id ? 'bg-well-strong text-green-500' : 'text-fg-muted hover:text-fg-secondary'}`}>
             <Icon size={18} className={activeTab === id ? 'mb-0.5 drop-shadow-[0_0_8px_rgba(74,222,128,0.4)]' : 'mb-0.5'} />
