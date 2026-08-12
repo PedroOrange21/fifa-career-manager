@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ArrowUpDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap, Undo2 } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { getCardStyle } from '../../utils/cardStyle';
-import { abbreviateValue } from '../../utils/format';
+import { abbreviateValue, formatLoanDuration } from '../../utils/format';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import PlayerForm from './PlayerForm';
 import ConfirmModal from '../common/ConfirmModal';
@@ -385,6 +385,18 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
         style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
         className="relative bg-surface p-3 md:p-4 flex items-center justify-between hover:bg-well/50 transition-colors gap-4 touch-pan-y group"
       >
+        {/* Badges circulares e integrados en las esquinas, solo en móvil: sustituyen a los
+            recuadros rectangulares de Titular/Banquillo/Cantera para una tarjeta más compacta.
+            En escritorio se mantienen los recuadros de la columna de estado (más abajo). */}
+        {Object.values(lineup).includes(p.id) ? (
+          <span title="Titular" className="sm:hidden absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center bg-green-500/20 text-green-400 rounded-full border border-green-500/30"><Shirt size={12} /></span>
+        ) : Object.values(bench).includes(p.id) ? (
+          <span title="Banquillo" className="sm:hidden absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center bg-blue-500/20 text-blue-400 rounded-full border border-blue-500/30"><Armchair size={12} /></span>
+        ) : null}
+        {p.type === 'Cantera' && (
+          <span title="Cantera" className="sm:hidden absolute bottom-2 right-2 z-10 w-6 h-6 flex items-center justify-center bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-500/30"><GraduationCap size={12} /></span>
+        )}
+
         <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
           <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
           <div className="flex-1 min-w-0">
@@ -393,29 +405,19 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
             <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
               <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{p.age} Años</span>
               {p.marketValue && (<span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(p.marketValue)}</span>)}
+              {p.type === 'Cedido' && p.loanDuration && (<span className="text-[7px] md:text-[8px] font-black uppercase tracking-widest bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded">Ced. {formatLoanDuration(p.loanDuration)}</span>)}
             </div>
           </div>
         </div>
 
-        {/* Cedidos entrantes (type 'Cedido'): mismo formato de dos líneas ("Cedido" arriba,
-            duración abajo) y misma separación (mr-3/mr-4) que la lista de cedidos a otros
-            clubes, para coherencia visual total entre cesiones entrantes y salientes. */}
-        {p.type === 'Cedido' && (
-          <div className="shrink-0 text-right flex flex-col md:flex-row md:items-center md:gap-1 mr-3 md:mr-4">
-            <span className="text-[9px] md:text-[10px] text-zinc-500 font-black uppercase tracking-wide whitespace-nowrap">Cedido</span>
-            {p.loanDuration && (
-              <span className="text-[9px] md:text-[10px] text-zinc-500 font-black uppercase tracking-wide whitespace-nowrap">{p.loanDuration.toLowerCase()}</span>
-            )}
-          </div>
-        )}
-
         {/* Ancho mínimo homogéneo (min-w-[104px] + justify-center) en la etiqueta de estado
             (Cedible/Venta) y en el badge de Cantera, para que ocupen siempre el mismo espacio
-            y la columna quede simétrica. Titular/Banquillo se reducen a solo icono. */}
+            y la columna quede simétrica. En móvil, Titular/Banquillo/Cantera se ocultan aquí
+            (van como círculo en la esquina de la tarjeta); Cedible/Venta se mantienen visibles. */}
         <div className="flex flex-col items-end gap-2 shrink-0">
-          {Object.values(lineup).includes(p.id) ? (<span title="Titular" className="w-9 h-9 flex items-center justify-center bg-green-500/20 text-green-400 rounded-lg border border-green-500/20"><Shirt size={16} /></span>) : Object.values(bench).includes(p.id) ? (<span title="Banquillo" className="w-9 h-9 flex items-center justify-center bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/20"><Armchair size={16} /></span>) : p.type !== 'Cedido' && p.transferStatus === 'Cedible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} className="shrink-0" /> Cedible</span>) : p.type !== 'Cedido' && p.transferStatus === 'Transferible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-red-500/20 text-red-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-red-500/20"><Tag size={12} className="shrink-0" /> Venta</span>) : null}
+          {Object.values(lineup).includes(p.id) ? (<span title="Titular" className="hidden sm:flex w-9 h-9 items-center justify-center bg-green-500/20 text-green-400 rounded-lg border border-green-500/20"><Shirt size={16} /></span>) : Object.values(bench).includes(p.id) ? (<span title="Banquillo" className="hidden sm:flex w-9 h-9 items-center justify-center bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/20"><Armchair size={16} /></span>) : p.type !== 'Cedido' && p.transferStatus === 'Cedible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} className="shrink-0" /> Cedible</span>) : p.type !== 'Cedido' && p.transferStatus === 'Transferible' ? (<span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-red-500/20 text-red-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-red-500/20"><Tag size={12} className="shrink-0" /> Venta</span>) : null}
           {p.type === 'Cantera' && (
-            <span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center px-2 md:px-3 py-1 rounded-lg font-black uppercase tracking-widest border bg-emerald-500/20 text-emerald-400 border-emerald-500/20">
+            <span className="hidden sm:flex text-[8px] md:text-[9px] items-center justify-center gap-1.5 min-w-[104px] text-center px-2 md:px-3 py-1 rounded-lg font-black uppercase tracking-widest border bg-emerald-500/20 text-emerald-400 border-emerald-500/20">
               <GraduationCap size={12} className="shrink-0" /> Cantera
             </span>
           )}
