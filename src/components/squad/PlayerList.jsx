@@ -601,31 +601,39 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall }) {
         style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
         className="relative bg-surface p-3 md:p-4 flex items-center justify-between gap-4 touch-pan-y group"
       >
-        <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-          <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
-          <div className="flex-1 min-w-0"><div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div><div className="text-[8px] md:text-[9px] text-zinc-500 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div></div>
+        {/* Cuerpo de la tarjeta (avatar, info y duración): en escritorio se desplaza junto
+            hacia la DERECHA al hacer hover (mismo patrón que PlayerRow), dejando al
+            descubierto el botón "..." fijo en la esquina/lado izquierdo, oculto detrás en
+            reposo. */}
+        <div className="flex items-center justify-between flex-1 min-w-0 gap-4 md:transition-transform md:duration-300 md:ease-in-out md:group-hover:translate-x-11">
+          <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+            <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
+            <div className="flex-1 min-w-0"><div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div><div className="text-[8px] md:text-[9px] text-zinc-500 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div></div>
+          </div>
+
+          {/* Texto claro y completo de la duración, a la derecha del todo de la casilla —
+              sustituye el formato comprimido anterior (icono + "6M"). La duración real de la
+              cesión saliente vive en outboundLoan.duration (así la guarda cedePlayer); se
+              conserva "loanDuration" como respaldo por compatibilidad con datos antiguos.
+              En móvil se apila en dos líneas ("Cedido" arriba, duración abajo); en escritorio
+              (md:) se une en una sola línea, con más espacio horizontal disponible. */}
+          <div className="shrink-0 text-right flex flex-col md:flex-row md:items-center md:gap-1 mr-3 md:mr-4">
+            <span className="text-[9px] md:text-[10px] text-zinc-500 font-black uppercase tracking-wide whitespace-nowrap">Cedido</span>
+            {(p.outboundLoan?.duration || p.loanDuration) && (
+              <span className="text-[9px] md:text-[10px] text-zinc-500 font-black uppercase tracking-wide whitespace-nowrap">
+                {(p.outboundLoan?.duration || p.loanDuration).toLowerCase()}
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Texto claro y completo de la duración, a la derecha del todo de la casilla —
-            sustituye el formato comprimido anterior (icono + "6M"). La duración real de la
-            cesión saliente vive en outboundLoan.duration (así la guarda cedePlayer); se
-            conserva "loanDuration" como respaldo por compatibilidad con datos antiguos.
-            En móvil se apila en dos líneas ("Cedido" arriba, duración abajo); en escritorio
-            (md:) se une en una sola línea, con más espacio horizontal disponible. */}
-        <div className="shrink-0 text-right flex flex-col md:flex-row md:items-center md:gap-1 mr-3 md:mr-4">
-          <span className="text-[9px] md:text-[10px] text-zinc-500 font-black uppercase tracking-wide whitespace-nowrap">Cedido</span>
-          {(p.outboundLoan?.duration || p.loanDuration) && (
-            <span className="text-[9px] md:text-[10px] text-zinc-500 font-black uppercase tracking-wide whitespace-nowrap">
-              {(p.outboundLoan?.duration || p.loanDuration).toLowerCase()}
-            </span>
-          )}
-        </div>
-
-        <div className="hidden sm:block shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button ref={moreBtnRef} type="button" onClick={toggleMore} title="Más opciones" className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-fg hover:bg-well transition-colors touch-manipulation">
-            <MoreHorizontal size={14} />
-          </button>
-        </div>
+        {/* Botón "..." de escritorio: capa fija (left-3, centrado verticalmente) que NO forma
+            parte del contenedor desplazable. Oculto por defecto (opacity-0) y revelado junto
+            con el desplazamiento del cuerpo hacia la derecha, igual que en las tarjetas de
+            jugadores activos de la Plantilla. */}
+        <button ref={moreBtnRef} type="button" onClick={toggleMore} title="Más opciones" className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 w-6 h-6 items-center justify-center rounded-lg text-zinc-500 hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
+          <MoreHorizontal size={13} />
+        </button>
 
         {pastThreshold && (
           <div className="absolute inset-0 z-10 bg-red-500 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden">
