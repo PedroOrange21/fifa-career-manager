@@ -1,4 +1,4 @@
-import { Users, LayoutDashboard, Target } from 'lucide-react';
+import { Users, LayoutDashboard, GraduationCap } from 'lucide-react';
 import PlayerList from '../squad/PlayerList';
 import TacticsTab from '../tactics/TacticsTab';
 import AcademyTab from '../academy/AcademyTab';
@@ -6,7 +6,7 @@ import AcademyTab from '../academy/AcademyTab';
 const SUB_TABS = [
   { id: 'squad', label: 'Plantilla', icon: Users },
   { id: 'tactics', label: 'Táctica', icon: LayoutDashboard },
-  { id: 'academy', label: 'Cantera', icon: Target },
+  { id: 'academy', label: 'Academia', icon: GraduationCap },
 ];
 
 export default function ClubTab({
