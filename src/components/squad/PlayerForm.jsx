@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, ShieldAlert, Camera, RefreshCcw, User, ChevronLeft, ChevronRight, Check, Globe2, Pencil } from 'lucide-react';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { flagEmoji, detectCountry } from '../../constants/countries';
-import { formatValueInput, parseValue } from '../../utils/format';
+import { formatValueInput, parseValue, formatCurrency } from '../../utils/format';
 import { resizeImageToDataUrl } from '../../utils/image';
 import { getCardStyle } from '../../utils/cardStyle';
 import { useClubData } from '../../context/ClubDataContext';
@@ -47,6 +47,14 @@ const LOAN_DURATION_OPTIONS = [
   { value: '2 Temporadas', label: '2 Temporadas' },
 ];
 
+// Duración de la cesión ENTRANTE (jugador tipo "Cedido" que llega a nuestro club): solo 1 o 2
+// temporadas, a diferencia de la cesión SALIENTE (outboundLoan, jugador propio cedido fuera)
+// que sí admite "6 Meses" y usa LOAN_DURATION_OPTIONS más abajo, sin tocar.
+const INCOMING_LOAN_DURATION_OPTIONS = [
+  { value: '1 Temporada', label: '1 Temporada' },
+  { value: '2 Temporadas', label: '2 Temporadas' },
+];
+
 // Campos de texto/número compactos, uniformes en toda la tarjeta: 16px (text-base) en
 // móvil para evitar el auto-zoom de Safari/Chrome, algo más compactos en escritorio.
 const FIELD_BASE = 'w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-black text-base md:text-sm text-fg placeholder:text-fg-faint';
@@ -79,6 +87,7 @@ const toFormState = (p) => {
     value: formatValueInput(String(p?.value || '')),
     loanDuration: p?.loanDuration || '1 Temporada',
     originClub: p?.originClub || '',
+    hasBuyOption: !!p?.buyOption,
     buyOption: formatValueInput(String(p?.buyOption || '')),
     wagePercentage: p?.wagePercentage != null ? String(p.wagePercentage) : '',
     potential: p?.potential || '',
@@ -220,6 +229,10 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
   const selectAcquisitionType = (t) => {
     const patch = { type: t, contractYears: '' };
     if (t === 'Cedido') { patch.transferStatus = 'Activo'; patch.outboundLoan = null; }
+    // La Cantera no maneja términos económicos: se limpian para no arrastrar en silencio un
+    // valor de mercado/sueldo de un tipo anterior (p. ej. si se edita un "Comprado" y se
+    // cambia a "Cantera") a un campo que ya no es visible ni editable.
+    if (t === 'Cantera') { patch.marketValue = ''; patch.wage = ''; patch.releaseClause = ''; }
     set(patch);
   };
 
@@ -289,9 +302,10 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
       if (!form.age || isNaN(form.age) || form.age < 15 || form.age > 50) return 'Edad entre 15 y 50.';
     }
     if (s === 3) {
-      if (!form.marketValue || parseValue(form.marketValue) <= 0) return 'Valor de mercado obligatorio.';
+      if (form.type !== 'Cantera' && (!form.marketValue || parseValue(form.marketValue) <= 0)) return 'Valor de mercado obligatorio.';
       if (form.type === 'Comprado' && (!form.value || parseValue(form.value) <= 0)) return 'Precio de compra obligatorio.';
       if (form.type === 'Cedido' && !form.originClub.trim()) return 'Club de origen obligatorio.';
+      if (form.type === 'Cedido' && form.hasBuyOption && (!form.buyOption || parseValue(form.buyOption) <= 0)) return 'Introduce el precio de la opción de compra.';
       if (form.type === 'Cantera' && form.potential && (isNaN(form.potential) || form.potential < 1 || form.potential > 99)) return 'Potencial entre 1 y 99.';
     }
     return '';
@@ -323,20 +337,25 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
         preferredFoot: form.preferredFoot || 'Diestro',
         photo: form.photo || null,
         nationality: form.nationality.trim() || null,
-        marketValue: parseValue(form.marketValue), type: form.type,
+        // La Cantera no tiene valor de mercado ni sueldo (campos ocultos en el asistente):
+        // se guardan a 0 en vez de arrastrar lo que hubiera en el estado del formulario.
+        marketValue: form.type === 'Cantera' ? 0 : parseValue(form.marketValue), type: form.type,
         value: form.type === 'Comprado' ? parseValue(form.value) : 0,
         loanDuration: form.type === 'Cedido' ? form.loanDuration : null,
         originClub: form.type === 'Cedido' ? form.originClub.trim() : null,
-        buyOption: form.type === 'Cedido' ? (parseValue(form.buyOption) || null) : null,
+        buyOption: form.type === 'Cedido' && form.hasBuyOption ? (parseValue(form.buyOption) || null) : null,
         wagePercentage: form.type === 'Cedido' && form.wagePercentage ? parseInt(form.wagePercentage) : null,
         // Conserva el estado de mercado real del jugador (Activo/Cedible/Transferible/
         // CedidoFuera): antes se pisaba siempre con 'Activo', lo que sacaba en silencio a un
         // jugador cedido fuera de esa lista con solo editarlo desde el Paso 4.
         transferStatus: form.transferStatus,
         outboundLoan: form.transferStatus === 'CedidoFuera' ? form.outboundLoan : null,
-        wage: parseValue(form.wage),
-        releaseClause: parseValue(form.releaseClause) || null,
-        contractYears: form.contractYears ? parseInt(form.contractYears) : null,
+        wage: form.type === 'Cantera' ? 0 : parseValue(form.wage),
+        // Años de contrato y cláusula de rescisión son exclusivos de "Comprado": Cantera nunca
+        // los tuvo y Cedido los pierde a partir de ahora (sustituidos por duración de cesión,
+        // % de salario asumido y opción de compra).
+        releaseClause: form.type === 'Comprado' ? (parseValue(form.releaseClause) || null) : null,
+        contractYears: form.type === 'Comprado' && form.contractYears ? parseInt(form.contractYears) : null,
         potential: form.type === 'Cantera' && form.potential ? parseInt(form.potential) : null,
       }, editingPlayer?.id);
       if (!editingPlayer && sourceScoutId) {
@@ -359,9 +378,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
   const fullNamePreview = `${form.firstName.trim()}${form.lastName.trim() ? ` ${form.lastName.trim()}` : ''}` || 'Nuevo Jugador';
   const positionsPreview = [form.primaryPosition, ...form.secondaryPositions].filter(Boolean).join(' · ') || '—';
 
-  const contractYearOptions = form.type === 'Cedido'
-    ? [{ value: '1', label: 'Cesión 1 temporada' }, { value: '2', label: 'Cesión 2 temporadas' }]
-    : [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `${n} Año${n > 1 ? 's' : ''}` }));
+  // Años de Contrato es exclusivo de "Comprado" (Cedido usa su propia Duración de Cesión).
+  const contractYearOptions = [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `${n} Año${n > 1 ? 's' : ''}` }));
 
   return (
     <>
@@ -505,23 +523,28 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       <button type="button" onClick={() => selectAcquisitionType('Comprado')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Comprado' ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Comprado</button>
                     </div>
                   </div>
+                  {/* Cantera: la ficha ya recoge Media/Edad/Posición en el Paso 2; aquí solo
+                      falta el Potencial. Sin valor de mercado, sueldo, años de contrato ni
+                      cláusula — un canterano todavía no tiene términos económicos. */}
                   {form.type === 'Cantera' && (
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Potencial (1-99)</label>
                       <input type="number" min="1" max="99" placeholder="Ej: 88" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.potential} onChange={(e) => set({ potential: e.target.value })} />
                     </div>
                   )}
+
                   {form.type === 'Comprado' && (
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Precio de Compra (€) *</label>
                       <input type="text" inputMode="numeric" required placeholder="Ej: 50.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.value} onChange={formatMoneyField('value')} />
                     </div>
                   )}
+
                   {form.type === 'Cedido' && (
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">Duración Cesión</label>
-                        <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => set({ loanDuration: v })} />
+                        <Dropdown value={form.loanDuration} options={INCOMING_LOAN_DURATION_OPTIONS} onChange={(v) => set({ loanDuration: v })} />
                       </div>
                       <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">Club de Origen *</label>
@@ -529,26 +552,60 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       </div>
                     </div>
                   )}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1 relative">
-                      <label className="text-[9px] font-black text-fg-muted ml-1">Valor de Mercado (€) *</label>
-                      <input type="text" inputMode="numeric" required placeholder="Ej: 80.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.marketValue} onChange={formatMoneyField('marketValue')} />
+
+                  {/* Valor de Mercado y Sueldo: ocultos por completo para Cantera (sin
+                      términos económicos todavía). El sueldo, en Cedido, es el total del
+                      jugador — el % que asume nuestro club se define justo debajo. */}
+                  {form.type !== 'Cantera' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1 relative">
+                        <label className="text-[9px] font-black text-fg-muted ml-1">Valor de Mercado (€) *</label>
+                        <input type="text" inputMode="numeric" required placeholder="Ej: 80.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.marketValue} onChange={formatMoneyField('marketValue')} />
+                      </div>
+                      <div className="space-y-1 relative">
+                        <label className="text-[9px] font-black text-fg-muted ml-1">{form.type === 'Cedido' ? 'Sueldo Mensual Total (€)' : 'Sueldo Mensual (€)'}</label>
+                        <input type="text" inputMode="numeric" placeholder="Ej: 500.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.wage} onChange={formatMoneyField('wage')} />
+                      </div>
                     </div>
+                  )}
+
+                  {form.type === 'Cedido' && (
                     <div className="space-y-1 relative">
-                      <label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Anual (€)</label>
-                      <input type="text" inputMode="numeric" placeholder="Ej: 5.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.wage} onChange={formatMoneyField('wage')} />
+                      <label className="text-[9px] font-black text-fg-muted ml-1">% Salario Pagado por Nuestro Club</label>
+                      <div className="flex items-center gap-3 bg-well p-3 rounded-xl border border-border-subtle">
+                        <input type="range" min="0" max="100" step="5" className="flex-1 accent-green-500" value={form.wagePercentage || 0} onChange={(e) => set({ wagePercentage: e.target.value })} />
+                        <span className="w-12 text-center font-black text-fg bg-well-strong rounded-lg py-1.5 text-xs shrink-0">{form.wagePercentage || 0}%</span>
+                      </div>
+                      <p className="text-[9px] text-fg-faint font-bold ml-1">Tu club paga: {formatCurrency(parseValue(form.wage) * (Number(form.wagePercentage) || 0) / 100)} / mes</p>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  )}
+
+                  {form.type === 'Cedido' && (
                     <div className="space-y-1 relative">
-                      <label className="text-[9px] font-black text-fg-muted ml-1">Años Contrato</label>
-                      <Dropdown value={form.contractYears} options={contractYearOptions} onChange={(v) => set({ contractYears: v })} placeholder="Seleccionar" />
+                      <label className="text-[9px] font-black text-fg-muted ml-1">¿Con Opción de Compra?</label>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => set({ hasBuyOption: true })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.hasBuyOption ? 'bg-green-500 text-black' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Sí</button>
+                        <button type="button" onClick={() => set({ hasBuyOption: false, buyOption: '' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${!form.hasBuyOption ? 'bg-well-strong text-fg' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>No</button>
+                      </div>
+                      {form.hasBuyOption && (
+                        <input type="text" inputMode="numeric" placeholder="Ej: 40.000.000" onKeyDown={blockEnterKey} className={`${FIELD_CLASS} mt-2`} value={form.buyOption} onChange={formatMoneyField('buyOption')} />
+                      )}
                     </div>
-                    <div className="space-y-1 relative">
-                      <label className="text-[9px] font-black text-fg-muted ml-1">Cláusula (€)</label>
-                      <input type="text" inputMode="numeric" placeholder="Ej: 150.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.releaseClause} onChange={formatMoneyField('releaseClause')} />
+                  )}
+
+                  {/* Años de Contrato y Cláusula de Rescisión: exclusivos de "Comprado". */}
+                  {form.type === 'Comprado' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1 relative">
+                        <label className="text-[9px] font-black text-fg-muted ml-1">Años Contrato</label>
+                        <Dropdown value={form.contractYears} options={contractYearOptions} onChange={(v) => set({ contractYears: v })} placeholder="Seleccionar" />
+                      </div>
+                      <div className="space-y-1 relative">
+                        <label className="text-[9px] font-black text-fg-muted ml-1">Cláusula de Rescisión (€)</label>
+                        <input type="text" inputMode="numeric" placeholder="Ej: 150.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.releaseClause} onChange={formatMoneyField('releaseClause')} />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </>
               )}
 
@@ -667,9 +724,12 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
                     </ReviewRow>
 
-                    <ReviewRow label="Valor de Mercado (€)" active={editField === 'marketValue'} onOpen={() => setEditField('marketValue')} display={`${form.marketValue || '0'} €`}>
-                      <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.marketValue} onChange={formatMoneyField('marketValue')} />
-                    </ReviewRow>
+                    {/* Valor de Mercado: oculto para Cantera, igual que en el Paso 3. */}
+                    {form.type !== 'Cantera' && (
+                      <ReviewRow label="Valor de Mercado (€)" active={editField === 'marketValue'} onOpen={() => setEditField('marketValue')} display={`${form.marketValue || '0'} €`}>
+                        <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.marketValue} onChange={formatMoneyField('marketValue')} />
+                      </ReviewRow>
+                    )}
 
                     {/* Campos dinámicos: cambian según el Tipo de Adquisición elegido arriba. */}
                     {form.type === 'Comprado' && (
@@ -677,13 +737,13 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                         <ReviewRow label="Precio de Compra (€)" active={editField === 'value'} onOpen={() => setEditField('value')} display={`${form.value || '0'} €`}>
                           <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.value} onChange={formatMoneyField('value')} />
                         </ReviewRow>
-                        <ReviewRow label="Sueldo Anual (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
+                        <ReviewRow label="Sueldo Mensual (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
                           <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
                         </ReviewRow>
                         <ReviewRow label="Años Contrato" active={editField === 'contractYears'} onOpen={() => setEditField('contractYears')} display={form.contractYears ? `${form.contractYears} Años` : 'Sin definir'}>
                           <Dropdown value={form.contractYears} options={contractYearOptions} onChange={(v) => { set({ contractYears: v }); setEditField(null); }} placeholder="Seleccionar" />
                         </ReviewRow>
-                        <ReviewRow label="Cláusula (€)" active={editField === 'releaseClause'} onOpen={() => setEditField('releaseClause')} display={`${form.releaseClause || '0'} €`}>
+                        <ReviewRow label="Cláusula de Rescisión (€)" active={editField === 'releaseClause'} onOpen={() => setEditField('releaseClause')} display={`${form.releaseClause || '0'} €`}>
                           <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.releaseClause} onChange={formatMoneyField('releaseClause')} />
                         </ReviewRow>
                       </>
@@ -695,10 +755,10 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                           <input autoFocus type="text" placeholder="Ej: Real Madrid" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} />
                         </ReviewRow>
                         <ReviewRow label="Duración Cesión" active={editField === 'loanDuration'} onOpen={() => setEditField('loanDuration')} display={form.loanDuration}>
-                          <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => { set({ loanDuration: v }); setEditField(null); }} />
+                          <Dropdown value={form.loanDuration} options={INCOMING_LOAN_DURATION_OPTIONS} onChange={(v) => { set({ loanDuration: v }); setEditField(null); }} />
                         </ReviewRow>
-                        <ReviewRow label="Opción de Compra (€)" active={editField === 'buyOption'} onOpen={() => setEditField('buyOption')} display={form.buyOption ? `${form.buyOption} €` : 'Sin opción de compra'}>
-                          <input autoFocus type="text" inputMode="numeric" placeholder="Ej: 40.000.000" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.buyOption} onChange={formatMoneyField('buyOption')} />
+                        <ReviewRow label="Sueldo Mensual Total (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
+                          <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
                         </ReviewRow>
                         <ReviewRow label="% Salario Pagado" active={editField === 'wagePercentage'} onOpen={() => setEditField('wagePercentage')} display={`${form.wagePercentage || 0}%`}>
                           <div className="flex items-center gap-3">
@@ -706,6 +766,16 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                             <span className="w-12 text-center font-black text-fg bg-well-strong rounded-lg py-1.5 text-xs shrink-0">{form.wagePercentage || 0}%</span>
                           </div>
                           <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
+                        </ReviewRow>
+                        <ReviewRow label="¿Opción de Compra?" active={editField === 'buyOption'} onOpen={() => setEditField('buyOption')} display={form.hasBuyOption ? `Sí · ${form.buyOption || '0'} €` : 'No'}>
+                          <div className="flex gap-2 mb-2">
+                            <button type="button" onClick={() => set({ hasBuyOption: true })} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${form.hasBuyOption ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>Sí</button>
+                            <button type="button" onClick={() => set({ hasBuyOption: false, buyOption: '' })} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${!form.hasBuyOption ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>No</button>
+                          </div>
+                          {form.hasBuyOption && (
+                            <input autoFocus type="text" inputMode="numeric" placeholder="Ej: 40.000.000" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.buyOption} onChange={formatMoneyField('buyOption')} />
+                          )}
+                          {!form.hasBuyOption && <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>}
                         </ReviewRow>
                       </>
                     )}

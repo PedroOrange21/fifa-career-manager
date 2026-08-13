@@ -47,7 +47,7 @@ export default function FinanceTab() {
       </div>
 
       <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
-        <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted flex items-center gap-2 mb-2"><Users2 size={14} /> Masa Salarial Anual</span>
+        <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted flex items-center gap-2 mb-2"><Users2 size={14} /> Masa Salarial Mensual</span>
         <div className="text-xl md:text-2xl font-black italic tracking-tighter text-fg">{formatCurrency(wageBill)}</div>
         <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest mt-1">Suma de salarios de la plantilla activa</p>
       </div>
