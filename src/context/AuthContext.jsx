@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
   onAuthStateChanged, signOut, signInWithPopup, signInWithRedirect, getRedirectResult,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, updatePassword,
@@ -24,21 +24,42 @@ export function AuthProvider({ children }) {
   const [loadingApp, setLoadingApp] = useState(true);
   const [googleRedirectError, setGoogleRedirectError] = useState('');
 
+  // La pantalla de carga (loadingApp) no debe apagarse hasta que AMBAS señales hayan
+  // llegado: el primer disparo de onAuthStateChanged Y la resolución de getRedirectResult.
+  // Si solo se esperara a onAuthStateChanged, en Safari/móvil podía dispararse una primera
+  // vez con el usuario aún en null (antes de que Firebase terminara de procesar la vuelta
+  // de la redirección de Google), provocando que la app mostrara un parpadeo del login o
+  // se quedara varada en él en vez de esperar el resultado real.
+  const authReadyRef = useRef(false);
+  const redirectCheckedRef = useRef(false);
+  const finishLoadingIfReady = () => {
+    if (authReadyRef.current && redirectCheckedRef.current) setLoadingApp(false);
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      setLoadingApp(false);
+      authReadyRef.current = true;
+      finishLoadingIfReady();
     });
     return () => unsubscribe();
   }, []);
 
   // Recoge el resultado del inicio de sesión con Google al volver de la redirección completa
-  // (signInWithRedirect navega fuera de la app; onAuthStateChanged detecta el login exitoso al
-  // regresar, pero un error solo llega aquí, tras el nuevo montaje de la app).
+  // (signInWithRedirect navega fuera de la app; al volver, esta promesa entrega directamente
+  // las credenciales si había un login pendiente, o se resuelve con null si no la había, sin
+  // que eso se considere un error). Los errores se registran para depuración y se muestran al
+  // usuario, pero nunca bloquean el arranque de la app.
   useEffect(() => {
-    getRedirectResult(auth).catch(() => {
-      setGoogleRedirectError('No se pudo iniciar sesión con Google.');
-    });
+    getRedirectResult(auth)
+      .catch((err) => {
+        console.error('Error al procesar getRedirectResult:', err);
+        setGoogleRedirectError('No se pudo iniciar sesión con Google.');
+      })
+      .finally(() => {
+        redirectCheckedRef.current = true;
+        finishLoadingIfReady();
+      });
   }, []);
 
   const handleGoogleLogin = async () => {
