@@ -47,18 +47,19 @@ export function ClubsProvider({ children }) {
     return () => unsubClubs();
   }, [user, loadingApp]);
 
-  const createClub = async (name, logo) => {
+  const createClub = async (name, logo, initialBudget = 0) => {
     if (!user || !name.trim()) return null;
     const isFirstClub = clubs.length === 0;
     const clubId = crypto.randomUUID();
+    const budget = Number(initialBudget) || 0;
     await setDoc(clubDoc(user.uid, clubId), {
       name: name.trim(),
       logo: logo || null,
       createdAt: Date.now(),
-      transferBudget: 0,
+      transferBudget: budget,
       currentSeasonNumber: 1,
     });
-    setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: 0, currentSeasonNumber: 1 }]));
+    setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: budget, currentSeasonNumber: 1 }]));
     setShowClubModal(false);
     setActiveClubId(clubId);
     return { clubId, isFirstClub };
