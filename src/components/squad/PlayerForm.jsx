@@ -41,16 +41,10 @@ const FOOT_OPTIONS = [
   { value: 'Ambas', label: 'Ambas', icon: <FootIndicator variant="Ambas" size={10} />, closedIcon: <FootIndicator variant="Ambas" /> },
 ];
 
+// Duración de la cesión: compartida por la cesión ENTRANTE (jugador tipo "Cedido" que llega a
+// nuestro club) y la SALIENTE (outboundLoan, jugador propio cedido fuera).
 const LOAN_DURATION_OPTIONS = [
   { value: '6 Meses', label: '6 Meses' },
-  { value: '1 Temporada', label: '1 Temporada' },
-  { value: '2 Temporadas', label: '2 Temporadas' },
-];
-
-// Duración de la cesión ENTRANTE (jugador tipo "Cedido" que llega a nuestro club): solo 1 o 2
-// temporadas, a diferencia de la cesión SALIENTE (outboundLoan, jugador propio cedido fuera)
-// que sí admite "6 Meses" y usa LOAN_DURATION_OPTIONS más abajo, sin tocar.
-const INCOMING_LOAN_DURATION_OPTIONS = [
   { value: '1 Temporada', label: '1 Temporada' },
   { value: '2 Temporadas', label: '2 Temporadas' },
 ];
@@ -552,7 +546,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">Duración Cesión</label>
-                        <Dropdown value={form.loanDuration} options={INCOMING_LOAN_DURATION_OPTIONS} onChange={(v) => set({ loanDuration: v })} />
+                        <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => set({ loanDuration: v })} />
                       </div>
                       <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">Club de Origen *</label>
@@ -763,7 +757,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                           <input autoFocus type="text" placeholder="Ej: Real Madrid" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} />
                         </ReviewRow>
                         <ReviewRow label="Duración Cesión" active={editField === 'loanDuration'} onOpen={() => setEditField('loanDuration')} display={form.loanDuration}>
-                          <Dropdown value={form.loanDuration} options={INCOMING_LOAN_DURATION_OPTIONS} onChange={(v) => { set({ loanDuration: v }); setEditField(null); }} />
+                          <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => { set({ loanDuration: v }); setEditField(null); }} />
                         </ReviewRow>
                         <ReviewRow label="Sueldo Mensual Total (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
                           <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
