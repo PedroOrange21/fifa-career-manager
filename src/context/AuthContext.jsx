@@ -3,7 +3,7 @@ import {
   onAuthStateChanged, signOut, signInWithPopup, signInWithRedirect, getRedirectResult,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, updatePassword,
 } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase';
+import { auth, googleProvider, ensureAuthPersistence } from '../firebase';
 import { resizeImageToDataUrl } from '../utils/image';
 
 const AuthContext = createContext(null);
@@ -18,6 +18,15 @@ const isMobileOrSafari = () => {
   const isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(ua);
   return isMobile || isSafari;
 };
+
+// Códigos de error de signInWithPopup ante los que tiene sentido reintentar automáticamente
+// con signInWithRedirect en vez de mostrar un error directamente al usuario.
+const POPUP_FALLBACK_CODES = [
+  'auth/popup-blocked',
+  'auth/popup-closed-by-user',
+  'auth/cancelled-popup-request',
+  'auth/operation-not-supported-in-this-environment',
+];
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -52,6 +61,12 @@ export function AuthProvider({ children }) {
   // usuario, pero nunca bloquean el arranque de la app.
   useEffect(() => {
     getRedirectResult(auth)
+      .then((result) => {
+        // Defensivo: en algunos casos de Safari/iOS con ITP, onAuthStateChanged puede tardar
+        // en reflejar el resultado de la redirección. Si getRedirectResult ya trae un usuario
+        // válido, se guarda aquí directamente en vez de esperar a ese otro disparo.
+        if (result?.user) setUser(result.user);
+      })
       .catch((err) => {
         console.error('Error al procesar getRedirectResult:', err);
         setGoogleRedirectError('No se pudo iniciar sesión con Google.');
@@ -64,15 +79,29 @@ export function AuthProvider({ children }) {
 
   const handleGoogleLogin = async () => {
     setGoogleRedirectError('');
+    // La persistencia se fija también aquí (y no solo una vez al cargar firebase.js) para
+    // garantizar que ya esté aplicada justo antes de iniciar el login, evitando que Safari
+    // pierda la sesión al volver de la redirección.
+    await ensureAuthPersistence();
+
     if (isMobileOrSafari()) {
-      // La navegación fuera de la página corta la ejecución aquí; el resultado (éxito o
-      // error) se recoge en el useEffect de getRedirectResult al volver.
+      // En Safari/iOS el popup de Google es poco fiable (ITP puede bloquear las cookies de
+      // terceros que necesita para completarse), así que se va directo a redirección
+      // completa. La navegación fuera de la página corta la ejecución aquí; el resultado
+      // (éxito o error) se recoge en el useEffect de getRedirectResult al volver.
       await signInWithRedirect(auth, googleProvider);
       return;
     }
+
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
+      // Si el popup fue bloqueado o cerrado antes de completarse, se reintenta con
+      // redirección completa en vez de mostrar un error directamente.
+      if (POPUP_FALLBACK_CODES.includes(err?.code)) {
+        await signInWithRedirect(auth, googleProvider);
+        return;
+      }
       throw new Error('No se pudo iniciar sesión con Google.');
     }
   };
