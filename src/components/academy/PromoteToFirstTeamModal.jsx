@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { X, ShieldCheck, ShieldAlert, Check } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { usePreventBackdropTouch } from '../../hooks/usePreventBackdropTouch';
-import { formatValueInput, parseValue } from '../../utils/format';
+import { parseValue } from '../../utils/format';
 
 const CONTRACT_YEARS_CHOICES = [1, 2, 3, 4, 5];
 const DEFAULT_CONTRACT_YEARS = '3';
@@ -11,27 +11,15 @@ const DEFAULT_CONTRACT_YEARS = '3';
 // se bloquea explícitamente para que nunca dispare un cierre ni acción inesperada.
 const blockEnterKey = (e) => { if (e.key === 'Enter') e.preventDefault(); };
 
-// Formatea los campos monetarios (puntos de miles, ej. 20.000) sin que el cursor salte al
-// final del texto al editar un dígito en medio del número — mismo patrón que PlayerForm.
-const formatMoneyField = (setter) => (e) => {
-  const input = e.target;
-  const raw = input.value;
-  const cursorPos = input.selectionStart ?? raw.length;
-  const digitsBeforeCursor = raw.slice(0, cursorPos).replace(/\D/g, '').length;
-  const formatted = formatValueInput(raw);
-  setter(formatted);
-  requestAnimationFrame(() => {
-    if (!input.isConnected) return;
-    let seen = 0; let pos = formatted.length;
-    if (digitsBeforeCursor === 0) { pos = 0; }
-    else {
-      for (let i = 0; i < formatted.length; i++) {
-        if (/\d/.test(formatted[i])) seen++;
-        if (seen === digitsBeforeCursor) { pos = i + 1; break; }
-      }
-    }
-    try { input.setSelectionRange(pos, pos); } catch (err) { /* input puede haber perdido el foco */ }
-  });
+// Formateo de miles en vivo, directo y sin manipulación manual del cursor (que en algunos
+// navegadores móviles puede interactuar mal con el teclado numérico y sentirse como "saltos"):
+// se limpia todo lo que no sea dígito y se reformatea con separador de miles es-ES en cada
+// pulsación, ej. 5000 -> "5.000". parseValue() limpia los puntos de nuevo al guardar, para no
+// persistir NaN en la base de datos.
+const formatMoneyLive = (raw) => {
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+  return Number(digits).toLocaleString('es-ES');
 };
 
 // Misma estructura de contenedor/overlay/tarjeta que "Fichar Jugador" (PlayerForm.jsx): backdrop
@@ -55,7 +43,9 @@ export default function PromoteToFirstTeamModal({ player, onClose }) {
   const backdropRef = usePreventBackdropTouch(true);
   const discardBackdropRef = usePreventBackdropTouch(showDiscardConfirm);
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (isSubmitting) return;
     if (!wage || parseValue(wage) <= 0) { setError('El sueldo mensual es obligatorio.'); return; }
     if (!contractYears) { setError('Selecciona los años de contrato.'); return; }
@@ -84,10 +74,23 @@ export default function PromoteToFirstTeamModal({ player, onClose }) {
   };
 
   // --- Cierre: única y exclusivamente disparado por el botón X (mismo patrón que PlayerForm). ---
+  // stopPropagation + preventDefault: aísla el toque de la "X" del resto de la tarjeta para
+  // que, aunque el dedo se deslice ligeramente al soltar, el evento no llegue a reinterpretarse
+  // sobre ningún otro control cercano (p. ej. los botones de Años de Contrato).
   const isDirty = !!wage || !!releaseClause || contractYears !== DEFAULT_CONTRACT_YEARS;
-  const handleCloseClick = () => {
+  const handleCloseClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (isDirty) setShowDiscardConfirm(true);
     else onClose();
+  };
+
+  // Misma protección para cada botón de Años de Contrato: un solo toque selecciona la opción
+  // sin que el evento se propague a controles vecinos.
+  const selectContractYears = (e, n) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContractYears(String(n));
   };
 
   return (
@@ -101,9 +104,11 @@ export default function PromoteToFirstTeamModal({ player, onClose }) {
             cabecera y pie queden completamente estáticos y solo el cuerpo central (flex-1
             overflow-y-auto) haga scroll, incluso si el teclado se despliega en móvil. */}
         <div className="bg-surface border border-border rounded-[32px] w-full max-w-sm shadow-2xl max-h-[90dvh] flex flex-col overflow-hidden">
-          <div className="shrink-0 bg-surface flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
-            <h3 className="font-black italic text-blue-400 text-sm uppercase flex items-center gap-2"><ShieldCheck size={16} /> Contrato Profesional</h3>
-            <button type="button" onClick={handleCloseClick} className="p-1 text-fg-faint hover:text-fg transition-colors touch-manipulation">
+          <div className="shrink-0 bg-surface flex justify-between items-center gap-3 px-5 pt-5 pb-3 border-b border-border-subtle">
+            <h3 className="font-black italic text-blue-400 text-sm uppercase flex items-center gap-2 min-w-0 truncate"><ShieldCheck size={16} className="shrink-0" /> Contrato Profesional</h3>
+            {/* Área de toque ampliada (p-2.5, radio propio) y separada del título con gap-3:
+                evita que un toque impreciso sobre la "X" roce el contenido vecino. */}
+            <button type="button" onClick={handleCloseClick} className="shrink-0 p-2.5 -mr-1 rounded-full text-fg-faint hover:text-fg hover:bg-well transition-colors touch-manipulation">
               <X size={18} />
             </button>
           </div>
@@ -120,16 +125,18 @@ export default function PromoteToFirstTeamModal({ player, onClose }) {
 
               <div className="space-y-1 relative">
                 <label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Mensual (€) *</label>
-                <input autoFocus type="text" inputMode="numeric" required placeholder="Ej: 500.000" onKeyDown={blockEnterKey} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-blue-400 font-black text-base md:text-sm text-fg text-center placeholder:text-fg-faint" value={wage} onChange={formatMoneyField(setWage)} />
+                <input autoFocus type="text" inputMode="numeric" required placeholder="Ej: 500.000" onKeyDown={blockEnterKey} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-blue-400 font-black text-base md:text-sm text-fg text-center placeholder:text-fg-faint" value={wage} onChange={(e) => setWage(formatMoneyLive(e.target.value))} />
               </div>
               {/* Botones fijos en vez de un desplegable: sin portal ni listeners globales de
                   "clic fuera", así que no hay ningún elemento que pueda quedar interceptando
-                  los toques del resto de la tarjeta en móvil. */}
+                  los toques del resto de la tarjeta en móvil. e.stopPropagation() +
+                  e.preventDefault() en cada uno aísla el toque para que un solo golpe
+                  seleccione una única opción sin rebotar sobre botones vecinos. */}
               <div className="space-y-1 relative">
                 <label className="text-[9px] font-black text-fg-muted ml-1">Años de Contrato *</label>
-                <div className="grid grid-cols-5 gap-1.5">
+                <div className="grid grid-cols-5 gap-2">
                   {CONTRACT_YEARS_CHOICES.map((n) => (
-                    <button key={n} type="button" onClick={() => setContractYears(String(n))} className={`py-3 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${contractYears === String(n) ? 'bg-blue-500 text-black shadow-lg shadow-blue-500/30' : 'bg-well text-fg-muted hover:bg-well-strong border border-border-subtle'}`}>
+                    <button key={n} type="button" onClick={(e) => selectContractYears(e, n)} className={`py-3.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${contractYears === String(n) ? 'bg-blue-500 text-black shadow-lg shadow-blue-500/30' : 'bg-well text-fg-muted hover:bg-well-strong border border-border-subtle'}`}>
                       {n} Año{n > 1 ? 's' : ''}
                     </button>
                   ))}
@@ -137,7 +144,7 @@ export default function PromoteToFirstTeamModal({ player, onClose }) {
               </div>
               <div className="space-y-1 relative">
                 <label className="text-[9px] font-black text-fg-muted ml-1">Cláusula de Rescisión (€) — Opcional</label>
-                <input type="text" inputMode="numeric" placeholder="Ej: 150.000.000" onKeyDown={blockEnterKey} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-blue-400 font-black text-base md:text-sm text-fg text-center placeholder:text-fg-faint" value={releaseClause} onChange={formatMoneyField(setReleaseClause)} />
+                <input type="text" inputMode="numeric" placeholder="Ej: 150.000.000" onKeyDown={blockEnterKey} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-blue-400 font-black text-base md:text-sm text-fg text-center placeholder:text-fg-faint" value={releaseClause} onChange={(e) => setReleaseClause(formatMoneyLive(e.target.value))} />
               </div>
             </div>
           </div>
@@ -160,8 +167,8 @@ export default function PromoteToFirstTeamModal({ player, onClose }) {
             <h3 className="text-lg font-black uppercase italic mb-2 text-fg">¿Deseas salir?</h3>
             <p className="text-[10px] text-fg-muted mb-6 font-bold uppercase tracking-widest">Se perderán los datos del contrato introducidos.</p>
             <div className="flex gap-3">
-              <button type="button" onClick={() => setShowDiscardConfirm(false)} className="flex-1 py-4 rounded-2xl bg-well text-fg-muted font-black uppercase text-[10px] hover:bg-well-strong transition-all touch-manipulation">Cancelar</button>
-              <button type="button" onClick={onClose} className="flex-1 py-4 rounded-2xl bg-red-500 text-black font-black uppercase text-[10px] shadow-lg shadow-red-500/20 hover:bg-red-400 transition-all touch-manipulation">Salir y Descartar</button>
+              <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowDiscardConfirm(false); }} className="flex-1 py-4 rounded-2xl bg-well text-fg-muted font-black uppercase text-[10px] hover:bg-well-strong transition-all touch-manipulation">Cancelar</button>
+              <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClose(); }} className="flex-1 py-4 rounded-2xl bg-red-500 text-black font-black uppercase text-[10px] shadow-lg shadow-red-500/20 hover:bg-red-400 transition-all touch-manipulation">Salir y Descartar</button>
             </div>
           </div>
         </div>
