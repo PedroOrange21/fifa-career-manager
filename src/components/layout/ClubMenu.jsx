@@ -38,13 +38,13 @@ export default function ClubMenu({ setActiveTab, onSwitchClub }) {
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-72 bg-surface border border-border rounded-3xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-          <div className="p-4 border-b border-border-subtle bg-canvas/50 flex items-center gap-3">
+          <button onClick={goProfile} className="w-full p-4 border-b border-border-subtle bg-canvas/50 flex items-center gap-3 cursor-pointer hover:bg-well transition-colors text-left" title="Mi Perfil / Ajustes">
             {user.photoURL ? <img src={user.photoURL} alt="Avatar" className="w-10 h-10 rounded-full object-cover border border-border-subtle" /> : <div className="w-10 h-10 rounded-full bg-well flex items-center justify-center border border-border-subtle"><User size={20} className="text-fg-faint" /></div>}
             <div className="flex flex-col min-w-0">
               <span className="text-sm font-black uppercase truncate text-fg">{user.displayName || 'Míster'}</span>
               <span className="text-[9px] text-fg-muted truncate">{user.email}</span>
             </div>
-          </div>
+          </button>
 
           <div className="max-h-[50vh] overflow-y-auto no-scrollbar">
             <div className="p-3">
