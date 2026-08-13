@@ -381,7 +381,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           <span className="text-[8px] font-black uppercase">Editar</span>
         </button>
         {onPromote ? (
-          <button type="button" onClick={() => { onPromote(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-blue-500 text-white active:bg-blue-400 touch-manipulation">
+          <button type="button" onClick={() => { onPromote(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
             <ArrowUpCircle size={18} />
             <span className="text-[8px] font-black uppercase leading-tight text-center">Subir</span>
           </button>

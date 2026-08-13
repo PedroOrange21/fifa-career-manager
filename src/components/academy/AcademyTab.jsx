@@ -1,23 +1,35 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { TrendingUp, TrendingDown, Calendar, ArrowUpDown, ArrowUpCircle, Edit2, Trash2, MoreHorizontal, ShieldAlert } from 'lucide-react';
+import { TrendingUp, Calendar, ArrowUpDown, ArrowUp, ArrowDown, ArrowUpCircle, Edit2, Trash2, MoreHorizontal, ShieldAlert, Star, DollarSign, ArrowDownAZ, LayoutGrid } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useUiChrome } from '../../context/UiChromeContext';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import { useSwipeReveal } from '../../hooks/useSwipeReveal';
 import { getCardStyle } from '../../utils/cardStyle';
 import { parsePotentialRange } from '../../utils/format';
+import { ALL_POSITIONS } from '../../constants/positions';
 import PlayerForm from '../squad/PlayerForm';
 import ConfirmModal from '../common/ConfirmModal';
 import UpdateRatingModal from './UpdateRatingModal';
 import PromoteToFirstTeamModal from './PromoteToFirstTeamModal';
 
-const SORT_OPTIONS = [
-  { id: 'potential-desc', label: 'Mayor Potencial', icon: TrendingUp },
-  { id: 'potential-asc', label: 'Menor Potencial', icon: TrendingDown },
-  { id: 'age-desc', label: 'Mayor Edad', icon: Calendar },
-  { id: 'age-asc', label: 'Menor Edad', icon: Calendar },
+// Mismo criterio de filtros que la Plantilla (PlayerList.jsx): una fila por criterio con
+// etiqueta + botones mayor/menor, en vez de un desplegable plano de opciones sueltas.
+const SORT_GROUPS = [
+  { label: 'Potencial', descId: 'potential-desc', ascId: 'potential-asc', icon: TrendingUp },
+  { label: 'Media', descId: 'rating-desc', ascId: 'rating-asc', icon: Star },
+  { label: 'Valor', descId: 'value-desc', ascId: 'value-asc', icon: DollarSign },
+  { label: 'Edad', descId: 'age-desc', ascId: 'age-asc', icon: Calendar },
+  { label: 'Nombre', descId: 'name-desc', ascId: 'name-asc', icon: ArrowDownAZ },
+  { label: 'Posición', descId: 'position-desc', ascId: 'position-asc', icon: LayoutGrid },
 ];
+
+// Orden táctico natural en el terreno de juego (Portero → Defensas → Centrocampistas →
+// Delanteros), mismo criterio que ALL_POSITIONS ya usa en la Plantilla.
+const getPositionOrder = (p) => {
+  const idx = ALL_POSITIONS.indexOf(p.positions?.[0]);
+  return idx === -1 ? ALL_POSITIONS.length : idx;
+};
 
 // Ancho del panel de swipe con solo 2 botones (Borrar/Editar, sin "Más"): 2×64px.
 const ROW_ACTION_WIDTH = 128;
@@ -196,8 +208,16 @@ export default function AcademyTab() {
     const sorted = [...list];
     if (sortOrder === 'potential-desc') sorted.sort((a, b) => getPotentialSortValue(b) - getPotentialSortValue(a));
     else if (sortOrder === 'potential-asc') sorted.sort((a, b) => getPotentialSortValue(a) - getPotentialSortValue(b));
+    else if (sortOrder === 'rating-desc') sorted.sort((a, b) => b.rating - a.rating);
+    else if (sortOrder === 'rating-asc') sorted.sort((a, b) => a.rating - b.rating);
+    else if (sortOrder === 'value-desc') sorted.sort((a, b) => (b.marketValue || b.value || 0) - (a.marketValue || a.value || 0));
+    else if (sortOrder === 'value-asc') sorted.sort((a, b) => (a.marketValue || a.value || 0) - (b.marketValue || b.value || 0));
     else if (sortOrder === 'age-desc') sorted.sort((a, b) => b.age - a.age);
     else if (sortOrder === 'age-asc') sorted.sort((a, b) => a.age - b.age);
+    else if (sortOrder === 'name-asc') sorted.sort((a, b) => a.name.localeCompare(b.name));
+    else if (sortOrder === 'name-desc') sorted.sort((a, b) => b.name.localeCompare(a.name));
+    else if (sortOrder === 'position-asc') sorted.sort((a, b) => getPositionOrder(a) - getPositionOrder(b));
+    else if (sortOrder === 'position-desc') sorted.sort((a, b) => getPositionOrder(b) - getPositionOrder(a));
     return sorted;
   };
 
@@ -219,11 +239,19 @@ export default function AcademyTab() {
             <ArrowUpDown size={14} />
           </button>
           {showSort && (
-            <div className="absolute right-0 top-full mt-2 w-48 bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150 p-1.5">
-              {SORT_OPTIONS.map(({ id, label, icon: Icon }) => (
-                <button key={id} onClick={() => { setSortOrder(id); setShowSort(false); }} className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${sortOrder === id ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
-                  <Icon size={14} /> {label}
-                </button>
+            <div className="absolute right-0 top-full mt-2 w-56 bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150 p-1.5">
+              {SORT_GROUPS.map(({ label, descId, ascId, icon: Icon }) => (
+                <div key={label} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl">
+                  <span className="flex items-center gap-2 text-xs font-bold text-fg-secondary"><Icon size={14} className="shrink-0" /> {label}</span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button type="button" onClick={() => { setSortOrder(descId); setShowSort(false); }} title="Mayor a menor" className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all ${sortOrder === descId ? 'bg-green-500/10 text-green-500' : 'text-fg-faint hover:bg-well hover:text-fg-secondary'}`}>
+                      <ArrowUp size={14} />
+                    </button>
+                    <button type="button" onClick={() => { setSortOrder(ascId); setShowSort(false); }} title="Menor a mayor" className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all ${sortOrder === ascId ? 'bg-green-500/10 text-green-500' : 'text-fg-faint hover:bg-well hover:text-fg-secondary'}`}>
+                      <ArrowDown size={14} />
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
           )}
