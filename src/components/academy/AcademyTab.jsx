@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { TrendingUp, TrendingDown, Calendar, ArrowUpDown, ChevronDown, Sprout, ShieldCheck, ArrowUpCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Calendar, ArrowUpDown, ChevronDown, ShieldCheck, ArrowUpCircle } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useUiChrome } from '../../context/UiChromeContext';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
@@ -107,7 +107,7 @@ export default function AcademyTab() {
   return (
     <div className="space-y-4 animate-in fade-in">
       <div className="flex justify-between items-center px-2 gap-2">
-        <span className="text-[10px] text-fg-muted font-black uppercase tracking-widest flex items-center gap-2 min-w-0"><Sprout size={14} className="shrink-0" /> <span className="truncate">{allYouth.length} Jugadores de Cantera</span></span>
+        <span className="text-[10px] text-fg-muted font-black uppercase tracking-widest min-w-0"><span className="truncate">{allYouth.length} Jugadores de Cantera</span></span>
         <div className="relative shrink-0" ref={sortRef}>
           <button type="button" onClick={() => setShowSort((o) => !o)} className={`h-8 w-8 flex items-center justify-center rounded-xl border transition-all ${showSort ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:text-fg'}`} title="Ordenar">
             <ArrowUpDown size={14} />
@@ -126,7 +126,7 @@ export default function AcademyTab() {
 
       <div>
         <div className="px-2 flex items-center justify-between gap-2 mb-2 text-fg-muted">
-          <div className="flex items-center gap-2"><Sprout size={14} /><h3 className="text-[10px] font-black uppercase tracking-widest italic">En la Cantera</h3></div>
+          <h3 className="text-[10px] font-black uppercase tracking-widest italic">En la Cantera</h3>
           <button type="button" onClick={() => setCollapsedAcademy((v) => !v)} title={collapsedAcademy ? 'Mostrar sección' : 'Ocultar sección'} className="p-1 rounded-lg text-fg-faint hover:text-fg hover:bg-well transition-colors">
             <ChevronDown size={14} className={`transition-transform duration-200 ${collapsedAcademy ? '-rotate-90' : ''}`} />
           </button>
@@ -142,7 +142,7 @@ export default function AcademyTab() {
       {promoted.length > 0 && (
         <div>
           <div className="px-2 flex items-center justify-between gap-2 mb-2 text-blue-400">
-            <div className="flex items-center gap-2"><ShieldCheck size={14} /><h3 className="text-[10px] font-black uppercase tracking-widest italic">Juegan en el Primer Equipo</h3></div>
+            <h3 className="text-[10px] font-black uppercase tracking-widest italic">Juegan en el Primer Equipo</h3>
             <button type="button" onClick={() => setCollapsedPromoted((v) => !v)} title={collapsedPromoted ? 'Mostrar sección' : 'Ocultar sección'} className="p-1 rounded-lg text-blue-400/70 hover:text-blue-400 hover:bg-well transition-colors">
               <ChevronDown size={14} className={`transition-transform duration-200 ${collapsedPromoted ? '-rotate-90' : ''}`} />
             </button>
