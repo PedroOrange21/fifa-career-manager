@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { TrendingUp, Calendar, ArrowUpDown, ArrowUp, ArrowDown, ArrowUpCircle, Edit2, Trash2, MoreHorizontal, ShieldAlert, Star, DollarSign, ArrowDownAZ, LayoutGrid } from 'lucide-react';
+import { TrendingUp, Calendar, ArrowUpDown, ArrowUp, ArrowDown, ArrowUpCircle, Edit2, Trash2, MoreHorizontal, ShieldAlert, Star, DollarSign, ArrowDownAZ, LayoutGrid, Plus, Search } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useUiChrome } from '../../context/UiChromeContext';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
@@ -13,15 +13,23 @@ import ConfirmModal from '../common/ConfirmModal';
 import UpdateRatingModal from './UpdateRatingModal';
 import PromoteToFirstTeamModal from './PromoteToFirstTeamModal';
 
-// Mismo criterio de filtros que la Plantilla (PlayerList.jsx): una fila por criterio con
-// etiqueta + botones mayor/menor, en vez de un desplegable plano de opciones sueltas.
+// Escritorio (ratón real): el texto se revela con :hover y un solo clic abre el formulario.
+// Táctil: el primer toque despliega el texto (sin abrir) y el segundo lo confirma — mismo
+// patrón que el botón "Fichar Jugador" de la Plantilla.
+const HAS_HOVER = typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+// Mismo criterio de filtros que la Plantilla (PlayerList.jsx): Potencial/Media/Valor con
+// botones mayor/menor; Edad/Nombre/Posición como opciones sueltas, sin dirección.
 const SORT_GROUPS = [
   { label: 'Potencial', descId: 'potential-desc', ascId: 'potential-asc', icon: TrendingUp },
   { label: 'Media', descId: 'rating-desc', ascId: 'rating-asc', icon: Star },
   { label: 'Valor', descId: 'value-desc', ascId: 'value-asc', icon: DollarSign },
-  { label: 'Edad', descId: 'age-desc', ascId: 'age-asc', icon: Calendar },
-  { label: 'Nombre', descId: 'name-desc', ascId: 'name-asc', icon: ArrowDownAZ },
-  { label: 'Posición', descId: 'position-desc', ascId: 'position-asc', icon: LayoutGrid },
+];
+
+const SORT_OPTIONS = [
+  { id: 'age-asc', label: 'Edad', icon: Calendar },
+  { id: 'name-asc', label: 'Nombre (A-Z)', icon: ArrowDownAZ },
+  { id: 'position-asc', label: 'Posición en el Campo', icon: LayoutGrid },
 ];
 
 // Orden táctico natural en el terreno de juego (Portero → Defensas → Centrocampistas →
@@ -179,10 +187,16 @@ export default function AcademyTab() {
   const [promotingPlayer, setPromotingPlayer] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
+  const [formPrefill, setFormPrefill] = useState(null);
+  const [formInitialStep, setFormInitialStep] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState('potential-desc');
   const [showSort, setShowSort] = useState(false);
   const sortRef = useRef(null);
   useOnClickOutside(sortRef, () => setShowSort(false), showSort);
+  const [ficharConfirming, setFicharConfirming] = useState(false);
+  const ficharRef = useRef(null);
+  useOnClickOutside(ficharRef, () => setFicharConfirming(false), ficharConfirming);
 
   // Pantalla limpia mientras cualquiera de los modales está abierto: oculta cabecera y
   // barra de navegación inferior, igual que hace PlayerForm en su wizard.
@@ -212,31 +226,48 @@ export default function AcademyTab() {
     else if (sortOrder === 'rating-asc') sorted.sort((a, b) => a.rating - b.rating);
     else if (sortOrder === 'value-desc') sorted.sort((a, b) => (b.marketValue || b.value || 0) - (a.marketValue || a.value || 0));
     else if (sortOrder === 'value-asc') sorted.sort((a, b) => (a.marketValue || a.value || 0) - (b.marketValue || b.value || 0));
-    else if (sortOrder === 'age-desc') sorted.sort((a, b) => b.age - a.age);
     else if (sortOrder === 'age-asc') sorted.sort((a, b) => a.age - b.age);
     else if (sortOrder === 'name-asc') sorted.sort((a, b) => a.name.localeCompare(b.name));
-    else if (sortOrder === 'name-desc') sorted.sort((a, b) => b.name.localeCompare(a.name));
     else if (sortOrder === 'position-asc') sorted.sort((a, b) => getPositionOrder(a) - getPositionOrder(b));
-    else if (sortOrder === 'position-desc') sorted.sort((a, b) => getPositionOrder(b) - getPositionOrder(a));
     return sorted;
   };
 
   // Al promover con contrato (PromoteToFirstTeamModal), el jugador pasa a tipo "Comprado" y
   // deja de ser de Cantera, así que ya no hace falta distinguir aquí entre canteranos
   // convocados o no: la Academia es, simplemente, todo jugador de tipo "Cantera".
-  const allYouth = players.filter((p) => p.type === 'Cantera');
+  const allYouth = players.filter((p) => p.type === 'Cantera' && p.name.toLowerCase().includes(searchQuery.toLowerCase()));
   const sortedYouth = sortPlayers(allYouth);
 
   // Editar desde la Academia abre directamente el Paso 4, igual que desde la Plantilla.
-  const openEditForm = (p) => { setEditingPlayer(p); setShowForm(true); };
+  const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormInitialStep(4); setShowForm(true); };
+  // Fichar nuevo canterano: mismo asistente que "Fichar Jugador" de la Plantilla, con el
+  // Tipo de Adquisición precargado en "Cantera" al llegar al Paso 3.
+  const openNewForm = () => { setEditingPlayer(null); setFormPrefill({ type: 'Cantera' }); setFormInitialStep(1); setShowForm(true); };
+
+  const handleFicharClick = () => {
+    if (HAS_HOVER) { openNewForm(); return; }
+    if (ficharConfirming) { openNewForm(); setFicharConfirming(false); }
+    else { setFicharConfirming(true); }
+  };
 
   return (
     <div className="space-y-4 animate-in fade-in">
-      <div className="flex justify-between items-center px-2 gap-2">
-        <span className="text-[10px] text-fg-muted font-black uppercase tracking-widest min-w-0"><span className="truncate">{allYouth.length} Jugadores en la Academia</span></span>
+      <div className="bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl flex items-center gap-2">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-faint" size={14} />
+          <input type="text" placeholder="Buscar canterano..." className="w-full h-9 bg-well pl-9 pr-3 rounded-xl border border-border-subtle outline-none focus:border-green-500 text-sm font-bold text-fg placeholder:text-fg-faint max-md:placeholder:text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+        </div>
+        <div ref={ficharRef} className="group/fichar shrink-0">
+          <button type="button" onClick={handleFicharClick} title="Fichar Canterano" className={`flex items-center h-9 pl-3 pr-3 rounded-xl font-black uppercase text-[10px] shadow-lg shadow-green-500/20 transition-colors duration-300 active:scale-95 ${ficharConfirming ? 'bg-green-400 text-black' : 'bg-green-500 text-black hover:bg-green-400'}`}>
+            <Plus size={14} className="shrink-0" />
+            <span className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${ficharConfirming ? 'max-w-[120px] ml-1.5' : 'max-w-0 ml-0 group-hover/fichar:max-w-[120px] group-hover/fichar:ml-1.5'}`}>
+              Fichar Canterano
+            </span>
+          </button>
+        </div>
         <div className="relative shrink-0" ref={sortRef}>
-          <button type="button" onClick={() => setShowSort((o) => !o)} className={`h-8 w-8 flex items-center justify-center rounded-xl border transition-all ${showSort ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:text-fg'}`} title="Ordenar">
-            <ArrowUpDown size={14} />
+          <button onClick={() => setShowSort((o) => !o)} className={`h-9 w-9 flex items-center justify-center rounded-xl border transition-all ${showSort ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:text-fg'}`} title="Ordenar">
+            <ArrowUpDown size={16} />
           </button>
           {showSort && (
             <div className="absolute right-0 top-full mt-2 w-56 bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150 p-1.5">
@@ -253,13 +284,23 @@ export default function AcademyTab() {
                   </div>
                 </div>
               ))}
+              <div className="h-px bg-border-subtle my-1 mx-1" />
+              {SORT_OPTIONS.map(({ id, label, icon: Icon }) => (
+                <button key={id} onClick={() => { setSortOrder(id); setShowSort(false); }} className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl text-xs font-bold transition-all ${sortOrder === id ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
+                  <Icon size={14} /> {label}
+                </button>
+              ))}
             </div>
           )}
         </div>
       </div>
 
+      <div className="flex justify-between items-center px-2">
+        <span className="text-[10px] text-fg-muted font-black uppercase tracking-widest min-w-0"><span className="truncate">{allYouth.length} Jugadores en la Academia</span></span>
+      </div>
+
       <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
-        {sortedYouth.length === 0 && (<div className="p-16 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Sin jugadores en la academia</div>)}
+        {sortedYouth.length === 0 && (<div className="p-16 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">{searchQuery ? 'No se encontraron canteranos' : 'Sin jugadores en la academia'}</div>)}
         {sortedYouth.map((p) => (
           <YouthPlayerRow
             key={p.id} p={p}
@@ -271,7 +312,7 @@ export default function AcademyTab() {
 
       {updatingPlayer && <UpdateRatingModal player={updatingPlayer} onClose={() => setUpdatingPlayer(null)} />}
       {promotingPlayer && <PromoteToFirstTeamModal player={promotingPlayer} onClose={() => setPromotingPlayer(null)} />}
-      {showForm && <PlayerForm editingPlayer={editingPlayer} initialStep={4} onClose={() => setShowForm(false)} />}
+      {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} initialStep={formInitialStep} onClose={() => setShowForm(false)} />}
 
       {playerToDelete && (
         <ConfirmModal
