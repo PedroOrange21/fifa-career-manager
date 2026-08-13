@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap, Undo2, LayoutGrid } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap, Undo2, LayoutGrid, ArrowUpCircle } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
+import { useUiChrome } from '../../context/UiChromeContext';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue, formatLoanDuration } from '../../utils/format';
@@ -11,6 +12,7 @@ import PlayerForm from './PlayerForm';
 import ConfirmModal from '../common/ConfirmModal';
 import SellPlayerModal from '../economy/SellPlayerModal';
 import LoanOutModal from '../economy/LoanOutModal';
+import PromoteToFirstTeamModal from '../academy/PromoteToFirstTeamModal';
 
 // Escritorio (ratón real): el texto se revela con :hover y un solo clic abre el formulario.
 // Táctil: el primer toque despliega el texto (sin abrir) y el segundo lo confirma, igual que
@@ -41,6 +43,7 @@ const getPositionOrder = (p) => {
 
 export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pendingPrefill, onConsumePendingPrefill }) {
   const { players, lineup, bench, playerToDelete, setPlayerToDelete, confirmDeletePlayer, setPlayerTransferStatus } = useClubData();
+  const { hide: hideChrome, show: showChrome } = useUiChrome();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('rating-desc');
   const [showForm, setShowForm] = useState(false);
@@ -51,6 +54,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [sellingPlayer, setSellingPlayer] = useState(null);
   const [loaningPlayer, setLoaningPlayer] = useState(null);
   const [endingLoanPlayer, setEndingLoanPlayer] = useState(null);
+  const [promotingPlayer, setPromotingPlayer] = useState(null);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const sortMenuRef = useRef(null);
   useOnClickOutside(sortMenuRef, () => setShowSortMenu(false), showSortMenu);
@@ -68,6 +72,15 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       onConsumePendingEdit();
     }
   }, [pendingEditPlayer, onConsumePendingEdit]);
+
+  // Pantalla limpia mientras el modal de contrato de promoción está abierto (accesible desde
+  // la sección Academia de esta misma vista), igual que en la propia pestaña Academia.
+  useEffect(() => {
+    if (!promotingPlayer) return;
+    hideChrome();
+    return () => showChrome();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promotingPlayer]);
 
   useEffect(() => {
     if (pendingPrefill) {
@@ -215,6 +228,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
                 onSell={() => setSellingPlayer(p)}
                 onLoan={() => setLoaningPlayer(p)}
                 onEndLoan={() => { setEndingLoanPlayer(p); setPlayerToDelete(p.id); }}
+                onPromote={setPromotingPlayer}
               />
             ))}
           </div>
@@ -239,6 +253,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} sourceScoutId={formSourceScoutId} initialStep={formInitialStep} onClose={() => setShowForm(false)} />}
       {sellingPlayer && <SellPlayerModal player={sellingPlayer} onClose={() => setSellingPlayer(null)} />}
       {loaningPlayer && <LoanOutModal player={loaningPlayer} onClose={() => setLoaningPlayer(null)} />}
+      {promotingPlayer && <PromoteToFirstTeamModal player={promotingPlayer} onClose={() => setPromotingPlayer(null)} />}
 
       {playerToDelete && !endingLoanPlayer && (
         <ConfirmModal
@@ -271,7 +286,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   );
 }
 
-function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onMarkCedible, onSell, onLoan, onEndLoan }) {
+function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onMarkCedible, onSell, onLoan, onEndLoan, onPromote }) {
   const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
@@ -348,10 +363,14 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
   return (
     <div className="relative overflow-hidden">
       {/* Panel de swipe: solo en móvil (sm:hidden). Orden en el flex: Borrar primero, Editar
-          en el centro y "..." al final. El panel está anclado a la derecha, así que el
-          ÚLTIMO hijo del flex queda más pegado al borde del contenido y por tanto es el
-          primero en asomar al deslizar — de ahí que "..." se revele antes que Editar, y
-          este antes que Borrar (de izquierda a derecha ya desplegado: Borrar · Editar · "..."). */}
+          en el centro y el tercer botón al final. El panel está anclado a la derecha, así que
+          el ÚLTIMO hijo del flex queda más pegado al borde del contenido y por tanto es el
+          primero en asomar al deslizar (de izquierda a derecha ya desplegado: Borrar · Editar
+          · tercero). Para los canteranos de la sección Academia (onPromote presente), ese
+          tercer botón sustituye por completo el "..."/Más por un acceso directo a "Subir al
+          Primer Equipo", que abre ya mismo el modal de contrato de promoción — no tiene
+          sentido ofrecer el menú de mercado (siempre deshabilitado para ellos) como paso
+          intermedio. El resto de jugadores mantiene el "..." con el menú completo. */}
       <div className="absolute inset-y-0 right-0 flex sm:hidden">
         <button type="button" onClick={() => { onDelete(p.id); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-red-500 text-white active:bg-red-400 touch-manipulation">
           <Trash2 size={18} />
@@ -361,10 +380,17 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           <Edit2 size={18} />
           <span className="text-[8px] font-black uppercase">Editar</span>
         </button>
-        <button ref={moreBtnMobileRef} type="button" onClick={(e) => toggleMore(e, 'mobile')} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
-          <MoreHorizontal size={18} />
-          <span className="text-[8px] font-black uppercase">Más</span>
-        </button>
+        {onPromote ? (
+          <button type="button" onClick={() => { onPromote(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-blue-500 text-white active:bg-blue-400 touch-manipulation">
+            <ArrowUpCircle size={18} />
+            <span className="text-[8px] font-black uppercase leading-tight text-center">Subir</span>
+          </button>
+        ) : (
+          <button ref={moreBtnMobileRef} type="button" onClick={(e) => toggleMore(e, 'mobile')} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
+            <MoreHorizontal size={18} />
+            <span className="text-[8px] font-black uppercase">Más</span>
+          </button>
+        )}
       </div>
       <div
         ref={rowRef}
