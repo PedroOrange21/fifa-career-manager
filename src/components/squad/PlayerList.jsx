@@ -553,7 +553,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
 // escritorio, en vez de dos botones sueltos, se agrupan en un único "..." con las acciones
 // propias de un jugador cedido fuera (Recuperar, Editar, Borrar).
 function LoanedPlayerRow({ p, onEdit, onDelete, onRecall }) {
-  const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(onDelete);
+  const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(onDelete, ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
   const moreBtnRef = useRef(null);
@@ -597,6 +597,10 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall }) {
         <button type="button" onClick={() => { onEdit(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well text-fg-muted active:bg-well-strong touch-manipulation">
           <Edit2 size={18} />
           <span className="text-[8px] font-black uppercase">Editar</span>
+        </button>
+        <button type="button" onClick={() => { onRecall(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-blue-500 text-white active:bg-blue-400 touch-manipulation">
+          <ArrowRightLeft size={18} />
+          <span className="text-[8px] font-black uppercase leading-tight text-center">Recuperar</span>
         </button>
       </div>
       <div
