@@ -1,16 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { TrendingUp, TrendingDown, Calendar, ArrowUpDown, ArrowUpCircle, Edit2, Trash2, MoreHorizontal, Tag, ArrowRightLeft, DollarSign, Handshake, ShieldAlert } from 'lucide-react';
+import { TrendingUp, TrendingDown, Calendar, ArrowUpDown, ArrowUpCircle, Edit2, Trash2, MoreHorizontal, ShieldAlert } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useUiChrome } from '../../context/UiChromeContext';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
-import { useSwipeReveal, ROW_ACTION_WIDTH } from '../../hooks/useSwipeReveal';
+import { useSwipeReveal } from '../../hooks/useSwipeReveal';
 import { getCardStyle } from '../../utils/cardStyle';
 import { parsePotentialRange } from '../../utils/format';
 import PlayerForm from '../squad/PlayerForm';
 import ConfirmModal from '../common/ConfirmModal';
-import SellPlayerModal from '../economy/SellPlayerModal';
-import LoanOutModal from '../economy/LoanOutModal';
 import UpdateRatingModal from './UpdateRatingModal';
 import PromoteToFirstTeamModal from './PromoteToFirstTeamModal';
 
@@ -20,6 +18,9 @@ const SORT_OPTIONS = [
   { id: 'age-desc', label: 'Mayor Edad', icon: Calendar },
   { id: 'age-asc', label: 'Menor Edad', icon: Calendar },
 ];
+
+// Ancho del panel de swipe con solo 2 botones (Borrar/Editar, sin "Más"): 2×64px.
+const ROW_ACTION_WIDTH = 128;
 
 function PotentialBar({ rating, potential }) {
   // Con un rango ("64-88") la barra apunta al techo superior del rango, no a la media: es la
@@ -46,26 +47,19 @@ function EvolutionTimeline({ history }) {
   );
 }
 
-// Mismo gesto de deslizar y menú "..." que las filas de la Plantilla (PlayerList.jsx):
-// swipe a la izquierda en móvil revela Borrar/Editar/Más; en escritorio, el cuerpo se
-// desplaza a la derecha al hacer hover para revelar el "..." fijo a la izquierda. Todo
-// canterano de esta lista es, por definición, un "isUnpromotedCantera" (no ha subido al
-// primer equipo todavía), así que las 4 acciones de mercado del menú "Más" se muestran
-// deshabilitadas, con el mismo criterio ya usado en la Plantilla — se habilitan solas en
-// cuanto el jugador deja de ser de tipo Cantera al promocionarlo con contrato.
-function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onMarkTransferible, onMarkCedible, onSell, onLoan }) {
+// Mismo gesto de deslizar y menú "..." que las filas de la Plantilla (PlayerList.jsx), pero
+// simplificado: un canterano no participa del mercado, así que aquí solo hay Editar y Borrar
+// (sin transferible/cedible/vender/ceder ni la opción "Más" intermedia en móvil).
+function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete }) {
   const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
-  const [moreContext, setMoreContext] = useState('desktop');
-  const moreBtnMobileRef = useRef(null);
   const moreBtnDesktopRef = useRef(null);
   const moreMenuRef = useRef(null);
 
   useEffect(() => {
     if (!showMore) return;
     const handler = (e) => {
-      if (moreBtnMobileRef.current?.contains(e.target)) return;
       if (moreBtnDesktopRef.current?.contains(e.target)) return;
       if (moreMenuRef.current?.contains(e.target)) return;
       setShowMore(false);
@@ -78,30 +72,21 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onMarkTransf
     };
   }, [showMore]);
 
-  const toggleMore = (e, context) => {
+  const toggleMore = (e) => {
     if (showMore) { setShowMore(false); return; }
     const rect = e.currentTarget.getBoundingClientRect();
-    setMoreRect({ top: rect.bottom + 4, right: window.innerWidth - rect.right, width: 240 });
-    setMoreContext(context);
+    setMoreRect({ top: rect.bottom + 4, right: window.innerWidth - rect.right, width: 200 });
     setShowMore(true);
   };
 
-  const MARKET_ACTIONS = [
-    { key: 'transferible', icon: Tag, label: 'Añadir a Transferibles', onClick: onMarkTransferible, disabled: true },
-    { key: 'cedible', icon: ArrowRightLeft, label: 'Añadir a Cedibles', onClick: onMarkCedible, disabled: true },
-    { key: 'sell', icon: DollarSign, label: 'Vender Jugador', onClick: onSell, disabled: true },
-    { key: 'loan', icon: Handshake, label: 'Ceder Jugador', onClick: onLoan, disabled: true },
+  const MORE_ACTIONS = [
+    { key: 'edit', icon: Edit2, label: 'Editar Jugador', onClick: () => onEdit(p) },
+    { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete(p.id) },
   ];
-  // Móvil: solo las acciones de mercado (Editar/Eliminar van por swipe).
-  // Escritorio: las mismas más Editar y Borrar al final, único punto de acceso a esas dos.
-  const MORE_ACTIONS = moreContext === 'mobile'
-    ? MARKET_ACTIONS
-    : [...MARKET_ACTIONS, { key: 'edit', icon: Edit2, label: 'Editar Jugador', onClick: () => onEdit(p) }, { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete(p.id) }];
 
   return (
     <div className="relative overflow-hidden">
-      {/* Panel de swipe: solo en móvil (sm:hidden), mismo orden que en la Plantilla
-          (Borrar · Editar · "..." de izquierda a derecha ya desplegado). */}
+      {/* Panel de swipe: solo en móvil (sm:hidden), solo Borrar y Editar. */}
       <div className="absolute inset-y-0 right-0 flex sm:hidden">
         <button type="button" onClick={() => { onDelete(p.id); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-red-500 text-white active:bg-red-400 touch-manipulation">
           <Trash2 size={18} />
@@ -110,10 +95,6 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onMarkTransf
         <button type="button" onClick={() => { onEdit(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well text-fg-muted active:bg-well-strong touch-manipulation">
           <Edit2 size={18} />
           <span className="text-[8px] font-black uppercase">Editar</span>
-        </button>
-        <button ref={moreBtnMobileRef} type="button" onClick={(e) => toggleMore(e, 'mobile')} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
-          <MoreHorizontal size={18} />
-          <span className="text-[8px] font-black uppercase">Más</span>
         </button>
       </div>
 
@@ -140,7 +121,7 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onMarkTransf
             </div>
           </div>
 
-          <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
+          <button ref={moreBtnDesktopRef} type="button" onClick={toggleMore} title="Más opciones" className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
             <MoreHorizontal size={13} />
           </button>
         </div>
@@ -159,16 +140,16 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onMarkTransf
         )}
       </div>
 
-      {/* Menú "...": mismo patrón de portal que en la Plantilla (fuera de cualquier
-          overflow-hidden, posición fixed calculada desde el propio botón). */}
+      {/* Menú "...": mismo patrón de portal que en la Plantilla, simplificado a solo
+          Editar/Borrar (sin acciones de mercado, no aplicables a un canterano). */}
       {showMore && moreRect && createPortal(
         <div
           ref={moreMenuRef}
           style={{ position: 'fixed', top: moreRect.top, right: moreRect.right, width: moreRect.width }}
           className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
         >
-          {MORE_ACTIONS.map(({ key, icon: Icon, label, onClick, disabled }) => (
-            <button key={key} type="button" disabled={disabled} onClick={() => { if (disabled) return; onClick(); setShowMore(false); close(); }} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase whitespace-nowrap transition-all touch-manipulation ${disabled ? 'text-fg-faint opacity-40 pointer-events-none' : 'text-fg-secondary hover:bg-well'}`}>
+          {MORE_ACTIONS.map(({ key, icon: Icon, label, onClick }) => (
+            <button key={key} type="button" onClick={() => { onClick(); setShowMore(false); close(); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase whitespace-nowrap transition-all touch-manipulation text-fg-secondary hover:bg-well">
               <Icon size={14} className="shrink-0" /> {label}
             </button>
           ))}
@@ -180,14 +161,12 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onMarkTransf
 }
 
 export default function AcademyTab() {
-  const { players, playerToDelete, setPlayerToDelete, confirmDeletePlayer, setPlayerTransferStatus } = useClubData();
+  const { players, playerToDelete, setPlayerToDelete, confirmDeletePlayer } = useClubData();
   const { hide: hideChrome, show: showChrome } = useUiChrome();
   const [updatingPlayer, setUpdatingPlayer] = useState(null);
   const [promotingPlayer, setPromotingPlayer] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
-  const [sellingPlayer, setSellingPlayer] = useState(null);
-  const [loaningPlayer, setLoaningPlayer] = useState(null);
   const [sortOrder, setSortOrder] = useState('potential-desc');
   const [showSort, setShowSort] = useState(false);
   const sortRef = useRef(null);
@@ -251,17 +230,17 @@ export default function AcademyTab() {
         </div>
       </div>
 
-      <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
+      {/* Estilo "segundo plano" (atenuado): mismo tratamiento que los jugadores cedidos a
+          otros clubes en la Plantilla (PlayerList.jsx), reflejando que un canterano todavía
+          no es un activo del primer equipo. Se ilumina al pasar el ratón/tocar para poder
+          leerlo con normalidad. */}
+      <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300">
         {sortedYouth.length === 0 && (<div className="p-16 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Sin jugadores en la academia</div>)}
         {sortedYouth.map((p) => (
           <YouthPlayerRow
             key={p.id} p={p}
             onUpdate={setUpdatingPlayer} onPromote={setPromotingPlayer}
             onEdit={openEditForm} onDelete={setPlayerToDelete}
-            onMarkTransferible={() => setPlayerTransferStatus(p.id, 'Transferible')}
-            onMarkCedible={() => setPlayerTransferStatus(p.id, 'Cedible')}
-            onSell={() => setSellingPlayer(p)}
-            onLoan={() => setLoaningPlayer(p)}
           />
         ))}
       </div>
@@ -269,8 +248,6 @@ export default function AcademyTab() {
       {updatingPlayer && <UpdateRatingModal player={updatingPlayer} onClose={() => setUpdatingPlayer(null)} />}
       {promotingPlayer && <PromoteToFirstTeamModal player={promotingPlayer} onClose={() => setPromotingPlayer(null)} />}
       {showForm && <PlayerForm editingPlayer={editingPlayer} initialStep={4} onClose={() => setShowForm(false)} />}
-      {sellingPlayer && <SellPlayerModal player={sellingPlayer} onClose={() => setSellingPlayer(null)} />}
-      {loaningPlayer && <LoanOutModal player={loaningPlayer} onClose={() => setLoaningPlayer(null)} />}
 
       {playerToDelete && (
         <ConfirmModal
