@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, ShieldAlert, Camera, RefreshCcw, User, ChevronLeft, ChevronRight, Check, Globe2, Pencil } from 'lucide-react';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { flagEmoji, detectCountry } from '../../constants/countries';
-import { formatValueInput, parseValue, formatCurrency } from '../../utils/format';
+import { formatValueInput, parseValue, formatCurrency, isValidPotentialInput } from '../../utils/format';
 import { resizeImageToDataUrl } from '../../utils/image';
 import { getCardStyle } from '../../utils/cardStyle';
 import { useClubData } from '../../context/ClubDataContext';
@@ -90,7 +90,7 @@ const toFormState = (p) => {
     hasBuyOption: !!p?.buyOption,
     buyOption: formatValueInput(String(p?.buyOption || '')),
     wagePercentage: p?.wagePercentage != null ? String(p.wagePercentage) : '',
-    potential: p?.potential || '',
+    potential: p?.potential != null ? String(p.potential) : '',
     wage: formatValueInput(String(p?.wage || '')),
     releaseClause: formatValueInput(String(p?.releaseClause || '')),
     contractYears: p?.contractYears || '',
@@ -251,6 +251,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
     set({ secondaryPositions: form.secondaryPositions.includes(pos) ? form.secondaryPositions.filter((p) => p !== pos) : [...form.secondaryPositions, pos] });
   };
 
+  // Potencial admite un número único ("88") o un rango de texto ("64-88"): se deja escribir
+  // libremente dígitos y un guion, y la validación real de formato ocurre al avanzar de paso
+  // (isValidPotentialInput), no aquí carácter a carácter.
+  const onPotentialChange = (e) => set({ potential: e.target.value.replace(/[^\d-]/g, '') });
+
   // Formatea los campos monetarios (puntos de miles) sin que el cursor salte al final
   // del texto al editar un dígito en medio del número.
   const formatMoneyField = (field) => (e) => {
@@ -306,7 +311,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
       if (form.type === 'Comprado' && (!form.value || parseValue(form.value) <= 0)) return 'Precio de compra obligatorio.';
       if (form.type === 'Cedido' && !form.originClub.trim()) return 'Club de origen obligatorio.';
       if (form.type === 'Cedido' && form.hasBuyOption && (!form.buyOption || parseValue(form.buyOption) <= 0)) return 'Introduce el precio de la opción de compra.';
-      if (form.type === 'Cantera' && form.potential && (isNaN(form.potential) || form.potential < 1 || form.potential > 99)) return 'Potencial entre 1 y 99.';
+      if (form.type === 'Cantera' && form.potential && !isValidPotentialInput(form.potential)) return 'Potencial entre 1 y 99, o un rango como 64-88.';
     }
     return '';
   };
@@ -356,7 +361,10 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
         // % de salario asumido y opción de compra).
         releaseClause: form.type === 'Comprado' ? (parseValue(form.releaseClause) || null) : null,
         contractYears: form.type === 'Comprado' && form.contractYears ? parseInt(form.contractYears) : null,
-        potential: form.type === 'Cantera' && form.potential ? parseInt(form.potential) : null,
+        // Se guarda como texto (no parseInt) para conservar rangos como "64-88" tal cual;
+        // parsePotentialRange() normaliza este campo donde haga falta un número (listas,
+        // filtros, barra de progreso).
+        potential: form.type === 'Cantera' && form.potential ? form.potential.trim() : null,
       }, editingPlayer?.id);
       if (!editingPlayer && sourceScoutId) {
         try { await deleteScout(sourceScoutId); } catch (err) { console.error(err); }
@@ -528,8 +536,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       cláusula — un canterano todavía no tiene términos económicos. */}
                   {form.type === 'Cantera' && (
                     <div className="space-y-1 relative">
-                      <label className="text-[9px] font-black text-fg-muted ml-1">Potencial (1-99)</label>
-                      <input type="number" min="1" max="99" placeholder="Ej: 88" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.potential} onChange={(e) => set({ potential: e.target.value })} />
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Potencial (1-99 o rango, ej: 64-88)</label>
+                      <input type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.potential} onChange={onPotentialChange} />
                     </div>
                   )}
 
@@ -781,8 +789,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     )}
 
                     {form.type === 'Cantera' && (
-                      <ReviewRow label="Potencial (1-99)" active={editField === 'potential'} onOpen={() => setEditField('potential')} display={form.potential || 'Sin definir'}>
-                        <input autoFocus type="number" min="1" max="99" placeholder="Ej: 88" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.potential} onChange={(e) => set({ potential: e.target.value })} />
+                      <ReviewRow label="Potencial" active={editField === 'potential'} onOpen={() => setEditField('potential')} display={form.potential || 'Sin definir'}>
+                        <input autoFocus type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.potential} onChange={onPotentialChange} />
                       </ReviewRow>
                     )}
                   </div>

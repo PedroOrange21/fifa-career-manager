@@ -4,6 +4,7 @@ import { useClubData } from '../../context/ClubDataContext';
 import { useUiChrome } from '../../context/UiChromeContext';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import { getCardStyle } from '../../utils/cardStyle';
+import { parsePotentialRange } from '../../utils/format';
 import ConfirmModal from '../common/ConfirmModal';
 import UpdateRatingModal from './UpdateRatingModal';
 
@@ -15,8 +16,11 @@ const SORT_OPTIONS = [
 ];
 
 function PotentialBar({ rating, potential }) {
-  if (!potential || potential <= rating) return null;
-  const pct = Math.max(0, Math.min(100, ((rating - 40) / (potential - 40)) * 100));
+  // Con un rango ("64-88") la barra apunta al techo superior del rango, no a la media: es la
+  // lectura más intuitiva de "cuánto le queda por crecer como máximo".
+  const ceiling = parsePotentialRange(potential)?.max;
+  if (!ceiling || ceiling <= rating) return null;
+  const pct = Math.max(0, Math.min(100, ((rating - 40) / (ceiling - 40)) * 100));
   return (
     <div className="w-full h-1.5 bg-well-strong rounded-full overflow-hidden mt-2">
       <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
@@ -100,10 +104,14 @@ export default function AcademyTab() {
     setPromotingPlayer(null);
   };
 
+  // Para ordenar por Potencial se usa la media del rango (p.ej. "64-88" → 76) cuando el
+  // canterano tiene un rango en vez de un número único, para no romper la ordenación.
+  const getPotentialSortValue = (p) => parsePotentialRange(p.potential)?.sortValue ?? p.rating;
+
   const sortPlayers = (list) => {
     const sorted = [...list];
-    if (sortOrder === 'potential-desc') sorted.sort((a, b) => (b.potential || b.rating) - (a.potential || a.rating));
-    else if (sortOrder === 'potential-asc') sorted.sort((a, b) => (a.potential || a.rating) - (b.potential || b.rating));
+    if (sortOrder === 'potential-desc') sorted.sort((a, b) => getPotentialSortValue(b) - getPotentialSortValue(a));
+    else if (sortOrder === 'potential-asc') sorted.sort((a, b) => getPotentialSortValue(a) - getPotentialSortValue(b));
     else if (sortOrder === 'age-desc') sorted.sort((a, b) => b.age - a.age);
     else if (sortOrder === 'age-asc') sorted.sort((a, b) => a.age - b.age);
     return sorted;
