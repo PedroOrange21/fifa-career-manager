@@ -228,10 +228,38 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
     set({ secondaryPositions: form.secondaryPositions.includes(pos) ? form.secondaryPositions.filter((p) => p !== pos) : [...form.secondaryPositions, pos] });
   };
 
-  // Potencial admite un número único ("88") o un rango de texto ("64-88"): se deja escribir
-  // libremente dígitos y un guion, y la validación real de formato ocurre al avanzar de paso
-  // (isValidPotentialInput), no aquí carácter a carácter.
-  const onPotentialChange = (e) => set({ potential: e.target.value.replace(/[^\d-]/g, '') });
+  // Potencial admite un número único ("88") o un rango de texto ("64-88"): se limpia todo lo
+  // que no sea dígito y, en cuanto hay 2 dígitos escritos, se inserta automáticamente el guion
+  // ("64-") para poder seguir tecleando del tirón los 2 dígitos superiores. Máximo 4 dígitos
+  // (2+2), es decir 5 caracteres con el guion incluido.
+  const onPotentialChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 4);
+    const formatted = digits.length >= 3 ? `${digits.slice(0, 2)}-${digits.slice(2)}` : digits.length === 2 ? `${digits}-` : digits;
+    set({ potential: formatted });
+  };
+
+  // Backspace sobre el guion recién autoinsertado: sin este manejo, borrar la última posición
+  // de "64-" elimina solo el guion y onPotentialChange lo vuelve a añadir al instante (los 2
+  // dígitos siguen ahí), dejando el campo "atascado" sin poder borrar más. Al detectar que el
+  // cursor está justo tras un guion final, se borra también el dígito anterior en el mismo
+  // golpe de tecla ("64-" -> "6").
+  const onPotentialKeyDown = (e) => {
+    blockEnterKey(e);
+    if (e.key !== 'Backspace') return;
+    const { value, selectionStart, selectionEnd } = e.target;
+    if (selectionStart !== selectionEnd) return;
+    if (selectionStart === value.length && value.endsWith('-')) {
+      e.preventDefault();
+      set({ potential: value.slice(0, -2) });
+    }
+  };
+
+  // Si el campo se abandona con el guion autoinsertado pero sin el segundo número (p. ej. solo
+  // se escribieron "64" y no se completó el rango), se quita ese guion suelto al perder el
+  // foco para no dejar guardado un valor a medias como "64-".
+  const onPotentialBlur = (e) => {
+    if (e.target.value.endsWith('-')) set({ potential: e.target.value.slice(0, -1) });
+  };
 
   // Formatea los campos monetarios (puntos de miles) sin que el cursor salte al final
   // del texto al editar un dígito en medio del número.
@@ -514,7 +542,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                   {form.type === 'Cantera' && (
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Potencial (1-99 o rango, ej: 64-88)</label>
-                      <input type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.potential} onChange={onPotentialChange} />
+                      <input type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={onPotentialKeyDown} onBlur={onPotentialBlur} className={FIELD_CLASS} value={form.potential} onChange={onPotentialChange} />
                     </div>
                   )}
 
@@ -767,7 +795,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
                     {form.type === 'Cantera' && (
                       <ReviewRow label="Potencial" active={editField === 'potential'} onOpen={() => setEditField('potential')} display={form.potential || 'Sin definir'}>
-                        <input autoFocus type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.potential} onChange={onPotentialChange} />
+                        <input autoFocus type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={onPotentialKeyDown} onBlur={(e) => { onPotentialBlur(e); setEditField(null); }} className={`${FIELD_CLASS} h-11`} value={form.potential} onChange={onPotentialChange} />
                       </ReviewRow>
                     )}
                   </div>
