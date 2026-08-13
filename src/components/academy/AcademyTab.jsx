@@ -18,16 +18,16 @@ import PromoteToFirstTeamModal from './PromoteToFirstTeamModal';
 // patrón que el botón "Fichar Jugador" de la Plantilla.
 const HAS_HOVER = typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
-// Mismo criterio de filtros que la Plantilla (PlayerList.jsx): Potencial/Media/Valor con
-// botones mayor/menor; Edad/Nombre/Posición como opciones sueltas, sin dirección.
+// Grupo superior con botones mayor/menor: Potencial, Media, Valor y Edad.
+// Grupo inferior sin dirección (opción única en lista): Nombre y Posición.
 const SORT_GROUPS = [
   { label: 'Potencial', descId: 'potential-desc', ascId: 'potential-asc', icon: TrendingUp },
   { label: 'Media', descId: 'rating-desc', ascId: 'rating-asc', icon: Star },
   { label: 'Valor', descId: 'value-desc', ascId: 'value-asc', icon: DollarSign },
+  { label: 'Edad', descId: 'age-desc', ascId: 'age-asc', icon: Calendar },
 ];
 
 const SORT_OPTIONS = [
-  { id: 'age-asc', label: 'Edad', icon: Calendar },
   { id: 'name-asc', label: 'Nombre (A-Z)', icon: ArrowDownAZ },
   { id: 'position-asc', label: 'Posición en el Campo', icon: LayoutGrid },
 ];
@@ -226,6 +226,7 @@ export default function AcademyTab() {
     else if (sortOrder === 'rating-asc') sorted.sort((a, b) => a.rating - b.rating);
     else if (sortOrder === 'value-desc') sorted.sort((a, b) => (b.marketValue || b.value || 0) - (a.marketValue || a.value || 0));
     else if (sortOrder === 'value-asc') sorted.sort((a, b) => (a.marketValue || a.value || 0) - (b.marketValue || b.value || 0));
+    else if (sortOrder === 'age-desc') sorted.sort((a, b) => b.age - a.age);
     else if (sortOrder === 'age-asc') sorted.sort((a, b) => a.age - b.age);
     else if (sortOrder === 'name-asc') sorted.sort((a, b) => a.name.localeCompare(b.name));
     else if (sortOrder === 'position-asc') sorted.sort((a, b) => getPositionOrder(a) - getPositionOrder(b));
