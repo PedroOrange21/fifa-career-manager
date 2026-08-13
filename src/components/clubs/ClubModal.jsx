@@ -5,7 +5,7 @@ import { resizeImageToDataUrl } from '../../utils/image';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { formatCurrency, formatValueInput, parseValue } from '../../utils/format';
 
-const BUDGET_PRESETS = [0, 5000000, 15000000, 30000000, 60000000];
+const BUDGET_PRESETS = [1000000, 5000000, 10000000, 50000000, 100000000, 200000000, 500000000, 1000000000];
 
 // Asistente paso a paso (solo para crear un club nuevo, primero o adicional): identidad,
 // presupuesto inicial de fichajes y un resumen final antes de guardar en Firestore. Editar un
@@ -18,7 +18,8 @@ function CreateClubWizard({ onClose, onFirstClubCreated }) {
   const [name, setName] = useState('');
   const [logo, setLogo] = useState('');
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
-  const [budget, setBudget] = useState(0);
+  const [budget, setBudget] = useState(BUDGET_PRESETS[0]);
+  const [customMode, setCustomMode] = useState(false);
   const [customBudget, setCustomBudget] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -39,7 +40,8 @@ function CreateClubWizard({ onClose, onFirstClubCreated }) {
     }
   };
 
-  const pickPreset = (amount) => { setBudget(amount); setCustomBudget(''); };
+  const pickPreset = (amount) => { setCustomMode(false); setCustomBudget(''); setBudget(amount); };
+  const pickCustom = () => { setCustomMode(true); setBudget(parseValue(customBudget)); };
   const onCustomBudgetChange = (raw) => {
     const formatted = formatValueInput(raw);
     setCustomBudget(formatted);
@@ -47,8 +49,15 @@ function CreateClubWizard({ onClose, onFirstClubCreated }) {
   };
 
   const canGoNextFromStep1 = name.trim().length > 0;
+  // Personalizado exige un importe válido y positivo antes de poder continuar; los presets
+  // siempre son válidos porque ya son cifras positivas fijas.
+  const canGoNextFromStep2 = !customMode || parseValue(customBudget) > 0;
 
-  const goNext = () => { if (step === 1 && !canGoNextFromStep1) return; setStep((s) => Math.min(totalSteps, s + 1)); };
+  const goNext = () => {
+    if (step === 1 && !canGoNextFromStep1) return;
+    if (step === 2 && !canGoNextFromStep2) return;
+    setStep((s) => Math.min(totalSteps, s + 1));
+  };
   const goBack = () => setStep((s) => Math.max(1, s - 1));
 
   const handleCreate = async () => {
@@ -111,15 +120,21 @@ function CreateClubWizard({ onClose, onFirstClubCreated }) {
           </div>
           <div className="grid grid-cols-3 gap-2 mb-4">
             {BUDGET_PRESETS.map((amount) => (
-              <button key={amount} type="button" onClick={() => pickPreset(amount)} className={`py-3 rounded-xl text-[10px] font-black uppercase border transition-all ${budget === amount && !customBudget ? 'bg-green-500 text-black border-green-500' : 'bg-well border-border-subtle text-fg-secondary hover:border-fg-muted'}`}>
-                {amount === 0 ? 'Sin fondos' : abbreviateBudget(amount)}
+              <button key={amount} type="button" onClick={() => pickPreset(amount)} className={`py-3 rounded-xl text-[10px] font-black uppercase border transition-all ${!customMode && budget === amount ? 'bg-green-500 text-black border-green-500' : 'bg-well border-border-subtle text-fg-secondary hover:border-fg-muted'}`}>
+                {abbreviateBudget(amount)}
               </button>
             ))}
+            <button type="button" onClick={pickCustom} className={`py-3 rounded-xl text-[10px] font-black uppercase border transition-all ${customMode ? 'bg-green-500 text-black border-green-500' : 'bg-well border-border-subtle text-fg-secondary hover:border-fg-muted'}`}>
+              Personalizar
+            </button>
           </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">O introduce una cantidad personalizada</label>
-            <input type="text" inputMode="numeric" placeholder="Ej: 20.000.000" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={customBudget} onChange={(e) => onCustomBudgetChange(e.target.value)} />
-          </div>
+          {customMode && (
+            <div className="space-y-2 animate-in fade-in duration-150">
+              <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Cantidad Personalizada</label>
+              <input type="text" inputMode="numeric" autoFocus placeholder="Ej: 20.000.000" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={customBudget} onChange={(e) => onCustomBudgetChange(e.target.value)} />
+              {!canGoNextFromStep2 && <p className="text-[9px] font-black text-red-400 uppercase tracking-wide ml-1">Introduce una cantidad mayor que cero.</p>}
+            </div>
+          )}
         </div>
       )}
 
@@ -151,7 +166,7 @@ function CreateClubWizard({ onClose, onFirstClubCreated }) {
           </button>
         )}
         {step < totalSteps ? (
-          <button type="button" onClick={goNext} disabled={step === 1 && !canGoNextFromStep1} className="flex-1 bg-green-500 text-black p-4 rounded-2xl font-black uppercase text-xs md:text-sm tracking-wider shadow-lg shadow-green-500/20 active:scale-95 transition-all hover:bg-green-400 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2">
+          <button type="button" onClick={goNext} disabled={(step === 1 && !canGoNextFromStep1) || (step === 2 && !canGoNextFromStep2)} className="flex-1 bg-green-500 text-black p-4 rounded-2xl font-black uppercase text-xs md:text-sm tracking-wider shadow-lg shadow-green-500/20 active:scale-95 transition-all hover:bg-green-400 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2">
             Siguiente <ChevronRight size={16} />
           </button>
         ) : (
@@ -165,7 +180,7 @@ function CreateClubWizard({ onClose, onFirstClubCreated }) {
 }
 
 function abbreviateBudget(amount) {
-  if (amount >= 1000000) return `${amount / 1000000}M €`;
+  if (amount >= 1000000) return `${(amount / 1000000).toLocaleString('es-ES')}M €`;
   if (amount >= 1000) return `${amount / 1000}Mil €`;
   return `${amount} €`;
 }
