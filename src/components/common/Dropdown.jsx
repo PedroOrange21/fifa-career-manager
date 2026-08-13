@@ -30,11 +30,23 @@ export default function Dropdown({ value, options, onChange, placeholder = 'Sele
     };
   }, [open]);
 
-  const toggle = () => {
+  // e.stopPropagation() en todos los eventos de apertura/selección: el panel de opciones se
+  // pinta con un portal directamente en document.body, fuera del árbol DOM de cualquier
+  // modal contenedor. Sin cortar la propagación aquí, un modal cuyo fondo cierra al clicar
+  // (onClick en el backdrop) puede recibir el clic/touch de una opción recién seleccionada y
+  // cerrarse él entero por accidente, además del propio desplegable.
+  const toggle = (e) => {
+    e.stopPropagation();
     if (open) { setOpen(false); return; }
     const r = btnRef.current?.getBoundingClientRect();
     if (r) setRect({ top: r.bottom + 4, left: r.left, width: r.width });
     setOpen(true);
+  };
+
+  const selectOption = (e, optValue) => {
+    e.stopPropagation();
+    onChange(optValue);
+    setOpen(false);
   };
 
   const selected = options.find((o) => o.value === value);
@@ -48,11 +60,13 @@ export default function Dropdown({ value, options, onChange, placeholder = 'Sele
       {open && rect && createPortal(
         <div
           ref={panelRef}
+          onClick={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
           style={{ position: 'fixed', top: rect.top, left: rect.left, width: rect.width }}
           className="bg-surface border border-border rounded-xl shadow-2xl overflow-y-auto max-h-56 no-scrollbar z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
         >
           {options.map((opt) => (
-            <button key={opt.value} type="button" onClick={() => { onChange(opt.value); setOpen(false); }} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${value === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
+            <button key={opt.value} type="button" onClick={(e) => selectOption(e, opt.value)} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${value === opt.value ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
               {opt.icon} {opt.label}
             </button>
           ))}
