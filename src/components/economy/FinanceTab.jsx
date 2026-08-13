@@ -1,8 +1,21 @@
 import { useState } from 'react';
-import { Wallet, TrendingUp, TrendingDown, ArrowRightLeft, Users2, Edit2, Check, X } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, ArrowRightLeft, Users2, Edit2, Check, X, List } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency, formatValueInput, parseValue } from '../../utils/format';
+import WageBreakdownModal from './WageBreakdownModal';
+
+// Sueldo mensual que realmente carga a nuestro club: el total del jugador, salvo que esté
+// cedido fuera, caso en el que solo pesa el porcentaje que asumimos nosotros. Se usa tanto
+// para el total de la tarjeta como para cada línea del desglose, así ambos números siempre
+// cuadran entre sí.
+const getEffectiveWage = (p) => {
+  if (p.transferStatus === 'CedidoFuera') {
+    const pct = p.outboundLoan?.wagePercentage ?? 0;
+    return (p.wage || 0) * (pct / 100);
+  }
+  return p.wage || 0;
+};
 
 export default function FinanceTab() {
   const { activeClub, setBudget } = useClubs();
@@ -10,14 +23,15 @@ export default function FinanceTab() {
 
   const [editingBudget, setEditingBudget] = useState(false);
   const [budgetInput, setBudgetInput] = useState('');
+  const [showWageBreakdown, setShowWageBreakdown] = useState(false);
 
-  const wageBill = players.reduce((sum, p) => {
-    if (p.transferStatus === 'CedidoFuera') {
-      const pct = p.outboundLoan?.wagePercentage ?? 0;
-      return sum + (p.wage || 0) * (pct / 100);
-    }
-    return sum + (p.wage || 0);
-  }, 0);
+  const wageBill = players.reduce((sum, p) => sum + getEffectiveWage(p), 0);
+  // De mayor a menor sueldo individual; se excluyen los que no cargan nada al club (p. ej.
+  // canteranos sin contrato todavía) para no llenar el desglose de líneas a 0 €.
+  const wageBreakdown = players
+    .map((p) => ({ ...p, effectiveWage: getEffectiveWage(p) }))
+    .filter((p) => p.effectiveWage > 0)
+    .sort((a, b) => b.effectiveWage - a.effectiveWage);
   const transferBudget = activeClub?.transferBudget || 0;
 
   const startEditingBudget = () => { setBudgetInput(formatValueInput(String(transferBudget))); setEditingBudget(true); };
@@ -47,7 +61,12 @@ export default function FinanceTab() {
       </div>
 
       <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
-        <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted flex items-center gap-2 mb-2"><Users2 size={14} /> Masa Salarial Mensual</span>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted flex items-center gap-2"><Users2 size={14} /> Masa Salarial Mensual</span>
+          <button type="button" onClick={() => setShowWageBreakdown(true)} title="Ver desglose" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-well text-fg-muted hover:text-fg hover:bg-well-strong transition-colors text-[9px] font-black uppercase tracking-widest">
+            <List size={12} /> Ver Desglose
+          </button>
+        </div>
         <div className="text-xl md:text-2xl font-black italic tracking-tighter text-fg">{formatCurrency(wageBill)}</div>
         <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest mt-1">Suma de salarios de la plantilla activa</p>
       </div>
@@ -70,6 +89,8 @@ export default function FinanceTab() {
           ))}
         </div>
       </div>
+
+      {showWageBreakdown && <WageBreakdownModal players={wageBreakdown} total={wageBill} onClose={() => setShowWageBreakdown(false)} />}
     </div>
   );
 }
