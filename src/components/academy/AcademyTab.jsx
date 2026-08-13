@@ -57,8 +57,8 @@ function YouthPlayerRow({ p, onUpdate, onPromote }) {
       </div>
       <EvolutionTimeline history={p.evolutionHistory} />
       <div className="flex gap-2 mt-1">
-        <button onClick={() => onUpdate(p)} className="flex-1 py-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 font-black uppercase text-[10px] hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/20"><TrendingUp size={14} /> Actualizar Media</button>
-        <button onClick={() => onPromote(p)} className="flex-1 py-2.5 rounded-xl bg-blue-500/10 text-blue-400 font-black uppercase text-[10px] hover:bg-blue-500/20 transition-all flex items-center justify-center gap-2 border border-blue-500/20"><ArrowUpCircle size={14} /> Subir al Primer Equipo</button>
+        <button type="button" onClick={() => onUpdate(p)} className="flex-1 py-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 font-black uppercase text-[10px] hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/20 touch-manipulation"><TrendingUp size={14} /> Actualizar Media</button>
+        <button type="button" onClick={() => onPromote(p)} className="flex-1 py-2.5 rounded-xl bg-blue-500/10 text-blue-400 font-black uppercase text-[10px] hover:bg-blue-500/20 transition-all flex items-center justify-center gap-2 border border-blue-500/20 touch-manipulation"><ArrowUpCircle size={14} /> Subir al Primer Equipo</button>
       </div>
     </div>
   );
