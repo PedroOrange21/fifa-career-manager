@@ -1,15 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Mail, Lock, User, ShieldAlert, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export default function AuthScreen() {
-  const { handleGoogleLogin, handleEmailAuth } = useAuth();
+  const { handleGoogleLogin, handleEmailAuth, googleRedirectError } = useAuth();
   const [authMode, setAuthMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [authError, setAuthError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // En Safari/móvil, el login con Google usa redirección completa: el error (si lo hay) llega
+  // aquí tras volver a montar la app, no dentro de onGoogleLogin.
+  useEffect(() => {
+    if (googleRedirectError) setAuthError(googleRedirectError);
+  }, [googleRedirectError]);
 
   const onGoogleLogin = async () => {
     setAuthError('');
