@@ -83,6 +83,15 @@ export default function AcademyTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [promotingPlayer]);
 
+  // Misma ocultación de cabecera/navegación mientras la tarjeta de "Actualizar Media" está
+  // abierta, para que quede en pantalla limpia igual que el resto de modales de esta tab.
+  useEffect(() => {
+    if (!updatingPlayer) return;
+    hideChrome();
+    return () => showChrome();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updatingPlayer]);
+
   const isPromoted = (p) => Object.values(lineup).includes(p.id) || Object.values(bench).includes(p.id);
 
   const confirmPromote = () => {

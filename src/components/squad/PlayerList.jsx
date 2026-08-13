@@ -380,11 +380,15 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
   // "Finalizar Cesión", que sí es una acción válida y propia de este tipo de jugador.
   const isIncomingLoan = p.type === 'Cedido';
   const isCalledUp = Object.values(lineup).includes(p.id) || Object.values(bench).includes(p.id);
+  // Un canterano que todavía no ha subido al primer equipo no participa del mercado: no puede
+  // marcarse transferible/cedible ni venderse/cederse hasta que esté promocionado (convocado
+  // al 11 o al banquillo). Una vez promocionado, se gestiona como cualquier otro jugador.
+  const isUnpromotedCantera = p.type === 'Cantera' && !isCalledUp;
   const MARKET_ACTIONS = [
-    { key: 'transferible', icon: Tag, label: 'Añadir a Transferibles', onClick: onMarkTransferible, disabled: isIncomingLoan },
-    { key: 'cedible', icon: ArrowRightLeft, label: 'Añadir a Cedibles', onClick: onMarkCedible, disabled: isIncomingLoan },
-    { key: 'sell', icon: DollarSign, label: 'Vender Jugador', onClick: onSell, disabled: isIncomingLoan },
-    { key: 'loan', icon: Handshake, label: 'Ceder Jugador', onClick: onLoan, disabled: isIncomingLoan },
+    { key: 'transferible', icon: Tag, label: 'Añadir a Transferibles', onClick: onMarkTransferible, disabled: isIncomingLoan || isUnpromotedCantera },
+    { key: 'cedible', icon: ArrowRightLeft, label: 'Añadir a Cedibles', onClick: onMarkCedible, disabled: isIncomingLoan || isUnpromotedCantera },
+    { key: 'sell', icon: DollarSign, label: 'Vender Jugador', onClick: onSell, disabled: isIncomingLoan || isUnpromotedCantera },
+    { key: 'loan', icon: Handshake, label: 'Ceder Jugador', onClick: onLoan, disabled: isIncomingLoan || isUnpromotedCantera },
   ];
   const endLoanAction = { key: 'endLoan', icon: Undo2, label: 'Finalizar Cesión', onClick: () => onEndLoan(p) };
   const marketWithEndLoan = isIncomingLoan ? [endLoanAction, ...MARKET_ACTIONS] : MARKET_ACTIONS;

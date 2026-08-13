@@ -19,7 +19,7 @@ const ACTION_STYLES = {
 
 export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onReplace, hideMarketStatus = false }) {
   useBodyScrollLock();
-  const { bench, assignPlayerToSlot, setPlayerTransferStatus, setPlayerToDelete, confirmDeletePlayer } = useClubData();
+  const { lineup, bench, assignPlayerToSlot, setPlayerTransferStatus, setPlayerToDelete, confirmDeletePlayer } = useClubData();
   const [current, setCurrent] = useState(player);
   const [showSellModal, setShowSellModal] = useState(false);
   const [showLoanModal, setShowLoanModal] = useState(false);
@@ -69,10 +69,14 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
   // Un jugador cedido a nuestro club (type 'Cedido') no es propiedad del club: nunca puede
   // venderse, cederse ni marcarse como transferible/cedible.
   const isIncomingLoan = current.type === 'Cedido';
+  // Un canterano que aún no ha subido al primer equipo (ni en el 11 ni en el banquillo) no
+  // participa del mercado — misma regla que en PlayerList.jsx.
+  const isCalledUp = Object.values(lineup).includes(current.id) || Object.values(bench).includes(current.id);
+  const isUnpromotedCantera = current.type === 'Cantera' && !isCalledUp;
 
   // Contexto genérico (Plantilla / Mercado): un único grid con todas las acciones.
   const actions = [{ key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit(current), color: 'blue' }];
-  if (current.transferStatus !== 'CedidoFuera' && !isIncomingLoan) actions.push({ key: 'sell', icon: Tag, label: 'Vender', onClick: () => setShowSellModal(true), color: 'red' });
+  if (current.transferStatus !== 'CedidoFuera' && !isIncomingLoan && !isUnpromotedCantera) actions.push({ key: 'sell', icon: Tag, label: 'Vender', onClick: () => setShowSellModal(true), color: 'red' });
   if (canSendToBench) actions.push({ key: 'bench', icon: Armchair, label: 'Al Banquillo', onClick: () => { assignPlayerToSlot(`bench-${emptyBenchIdx}`, current.id); onClose(); }, color: 'yellow' });
   if (!isUncalledZone(infoSlot)) {
     actions.push({ key: 'replace', icon: RefreshCcw, label: 'Reemplazar', onClick: () => onReplace(infoSlot), color: 'neutral' });
@@ -85,10 +89,10 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
   // y esas 4 opciones deshabilitadas — con exactamente la misma lógica condicional que en la
   // Plantilla (ver PlayerList.jsx: isIncomingLoan = type === 'Cedido').
   const marketMoreActions = [
-    { key: 'transferible', icon: Tag, label: 'Mandar a Transferibles', onClick: () => changeStatus('Transferible'), disabled: isIncomingLoan },
-    { key: 'cedible', icon: ArrowRightLeft, label: 'Mandar a Cedibles', onClick: () => changeStatus('Cedible'), disabled: isIncomingLoan },
-    { key: 'sell', icon: Tag, label: 'Vender Jugador', onClick: () => setShowSellModal(true), disabled: current.transferStatus === 'CedidoFuera' || isIncomingLoan },
-    { key: 'loan', icon: ArrowRightLeft, label: 'Ceder Jugador', onClick: () => setShowLoanModal(true), disabled: current.transferStatus === 'CedidoFuera' || isIncomingLoan },
+    { key: 'transferible', icon: Tag, label: 'Mandar a Transferibles', onClick: () => changeStatus('Transferible'), disabled: isIncomingLoan || isUnpromotedCantera },
+    { key: 'cedible', icon: ArrowRightLeft, label: 'Mandar a Cedibles', onClick: () => changeStatus('Cedible'), disabled: isIncomingLoan || isUnpromotedCantera },
+    { key: 'sell', icon: Tag, label: 'Vender Jugador', onClick: () => setShowSellModal(true), disabled: current.transferStatus === 'CedidoFuera' || isIncomingLoan || isUnpromotedCantera },
+    { key: 'loan', icon: ArrowRightLeft, label: 'Ceder Jugador', onClick: () => setShowLoanModal(true), disabled: current.transferStatus === 'CedidoFuera' || isIncomingLoan || isUnpromotedCantera },
   ];
   const moreMenuItems = isIncomingLoan
     ? [{ key: 'endLoan', icon: Undo2, label: 'Finalizar Cesión', onClick: requestEndLoan }, ...marketMoreActions]
@@ -118,9 +122,9 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
             <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted block">Estado de Mercado</span>
             <div className="grid grid-cols-2 gap-2">
               <button type="button" onClick={() => changeStatus('Activo')} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${current.transferStatus === 'Activo' || !current.transferStatus ? 'bg-green-500 text-black border-green-500' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Activo</button>
-              <button type="button" onClick={() => changeStatus('Cedible')} disabled={isIncomingLoan} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${isIncomingLoan ? 'opacity-40 pointer-events-none bg-transparent border-border text-fg-faint' : current.transferStatus === 'Cedible' ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Cedible</button>
-              <button type="button" onClick={() => changeStatus('Transferible')} disabled={isIncomingLoan} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${isIncomingLoan ? 'opacity-40 pointer-events-none bg-transparent border-border text-fg-faint' : current.transferStatus === 'Transferible' ? 'bg-red-500 text-black border-red-500' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Venta</button>
-              <button type="button" onClick={() => changeStatus('CedidoFuera')} disabled={isIncomingLoan} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${isIncomingLoan ? 'opacity-40 pointer-events-none bg-transparent border-border text-fg-faint' : current.transferStatus === 'CedidoFuera' ? 'bg-zinc-600 text-white border-zinc-600' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Cedido Fuera</button>
+              <button type="button" onClick={() => changeStatus('Cedible')} disabled={isIncomingLoan || isUnpromotedCantera} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${isIncomingLoan || isUnpromotedCantera ? 'opacity-40 pointer-events-none bg-transparent border-border text-fg-faint' : current.transferStatus === 'Cedible' ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Cedible</button>
+              <button type="button" onClick={() => changeStatus('Transferible')} disabled={isIncomingLoan || isUnpromotedCantera} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${isIncomingLoan || isUnpromotedCantera ? 'opacity-40 pointer-events-none bg-transparent border-border text-fg-faint' : current.transferStatus === 'Transferible' ? 'bg-red-500 text-black border-red-500' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Venta</button>
+              <button type="button" onClick={() => changeStatus('CedidoFuera')} disabled={isIncomingLoan || isUnpromotedCantera} className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${isIncomingLoan || isUnpromotedCantera ? 'opacity-40 pointer-events-none bg-transparent border-border text-fg-faint' : current.transferStatus === 'CedidoFuera' ? 'bg-zinc-600 text-white border-zinc-600' : 'bg-transparent border-border text-fg-secondary hover:border-fg-muted'}`}>Cedido Fuera</button>
             </div>
           </div>
         )}

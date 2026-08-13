@@ -6,11 +6,15 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 export default function AddOperationPlayerModal({ status, title, onClose }) {
   useBodyScrollLock();
-  const { players, setPlayerTransferStatus } = useClubData();
+  const { players, lineup, bench, setPlayerTransferStatus } = useClubData();
   const [search, setSearch] = useState('');
 
+  // Un canterano que aún no ha subido al primer equipo no participa del mercado — misma
+  // regla que en PlayerList.jsx / PlayerInfoModal.jsx.
+  const isUnpromotedCantera = (p) => p.type === 'Cantera' && !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id);
+
   const eligible = players
-    .filter((p) => p.transferStatus !== status && p.transferStatus !== 'CedidoFuera' && p.type !== 'Cedido')
+    .filter((p) => p.transferStatus !== status && p.transferStatus !== 'CedidoFuera' && p.type !== 'Cedido' && !isUnpromotedCantera(p))
     .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => b.rating - a.rating);
 
