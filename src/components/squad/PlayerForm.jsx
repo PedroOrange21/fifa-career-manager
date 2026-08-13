@@ -8,6 +8,7 @@ import { resizeImageToDataUrl } from '../../utils/image';
 import { getCardStyle } from '../../utils/cardStyle';
 import { useClubData } from '../../context/ClubDataContext';
 import { useUiChrome } from '../../context/UiChromeContext';
+import { usePreventBackdropTouch } from '../../hooks/usePreventBackdropTouch';
 import Dropdown from '../common/Dropdown';
 
 const STEP_TITLES = ['Identidad', 'Atributos', 'Términos Económicos', 'Revisión Final'];
@@ -102,24 +103,6 @@ const toFormState = (p) => {
 
 const emptyPlayer = toFormState(null);
 const playerToFormState = toFormState;
-
-// Bloquea el "scroll chaining" hacia la página de fondo cuando el usuario arrastra sobre
-// el backdrop del modal (la zona sin contenido scrolleable, fuera de la tarjeta). Usa un
-// listener nativo con { passive: false } porque React registra los onTouchMove sintéticos
-// como pasivos por defecto y no deja llamar a preventDefault() desde la prop JSX. Solo actúa
-// si el toque empezó exactamente sobre el backdrop (e.target === el), nunca si empezó dentro
-// de la tarjeta, para no interferir con su scroll interno (overflow-y-auto propio).
-function usePreventBackdropTouch(active) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!active || !el) return;
-    const handleTouchMove = (e) => { if (e.target === el) e.preventDefault(); };
-    el.addEventListener('touchmove', handleTouchMove, { passive: false });
-    return () => el.removeEventListener('touchmove', handleTouchMove);
-  }, [active]);
-  return ref;
-}
 
 // Fila de edición del resumen (Paso 4): muestra el valor + lápiz, y al pulsar despliega el
 // control de edición en el sitio, sin salir de la pantalla. Definido fuera de PlayerForm
