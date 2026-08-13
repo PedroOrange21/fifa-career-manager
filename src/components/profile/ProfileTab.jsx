@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
-import { User, Camera, RefreshCcw, ShieldCheck, ShieldAlert, Eye, EyeOff, LogOut } from 'lucide-react';
+import { User, Camera, RefreshCcw, ShieldCheck, ShieldAlert, Eye, EyeOff, LogOut, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-export default function ProfileTab() {
+export default function ProfileTab({ onClose }) {
   const { user, handleUpdateName, handleUpdatePassword, handlePhotoUpload, handleLogout } = useAuth();
 
   const [profileName, setProfileName] = useState(user.displayName || user.email.split('@')[0]);
@@ -35,7 +35,10 @@ export default function ProfileTab() {
   return (
     <div className="space-y-4 animate-in fade-in">
       <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl space-y-6">
-        <h2 className="text-xl font-black uppercase italic tracking-tighter text-fg text-center md:text-left">Perfil de Usuario</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-black uppercase italic tracking-tighter text-fg">Perfil de Usuario</h2>
+          <button onClick={onClose} className="p-2.5 bg-well rounded-full hover:bg-well-strong transition-all text-fg-muted hover:text-fg active:scale-95" title="Cerrar"><X size={18} /></button>
+        </div>
         <div className="flex flex-col items-center gap-4 mb-6">
           <div className="relative group cursor-pointer" onClick={() => !isUploadingPhoto && fileInputRef.current?.click()}>
             {user.photoURL ? <img src={user.photoURL} alt="Avatar" className="w-24 h-24 rounded-full border-4 border-border object-cover shadow-2xl" /> : <div className="w-24 h-24 rounded-full bg-well border-4 border-border flex items-center justify-center shadow-2xl"><User size={40} className="text-fg-muted" /></div>}

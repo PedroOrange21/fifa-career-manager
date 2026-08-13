@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { RefreshCcw, Shield, ShieldAlert } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { ClubDataProvider } from '../../context/ClubDataContext';
@@ -19,7 +19,14 @@ export default function ClubShell() {
     clubToDelete, setClubToDelete, confirmDeleteClub, editingClub, setEditingClub,
   } = useClubs();
 
-  const [activeTab, setActiveTab] = useState('club');
+  const [activeTab, setActiveTabRaw] = useState('club');
+  // Recuerda la última pestaña visitada antes de entrar a Perfil, para que el botón de
+  // cerrar ("X") pueda devolver al usuario exactamente a la vista anterior.
+  const lastTabRef = useRef('club');
+  const setActiveTab = useCallback((tab) => {
+    setActiveTabRaw((prev) => { if (prev !== 'profile') lastTabRef.current = prev; return tab; });
+  }, []);
+  const closeProfile = useCallback(() => setActiveTab(lastTabRef.current || 'club'), [setActiveTab]);
   const [clubSubTab, setClubSubTab] = useState('squad');
   const [marketSubTab, setMarketSubTab] = useState('scouting');
   const [officeSubTab, setOfficeSubTab] = useState('finance');
@@ -72,7 +79,7 @@ export default function ClubShell() {
               {activeTab === 'office' && activeClubId && (
                 <OfficeTab subTab={officeSubTab} setSubTab={setOfficeSubTab} onCreatePlayer={requestNewPlayer} />
               )}
-              {activeTab === 'profile' && <ProfileTab />}
+              {activeTab === 'profile' && <ProfileTab onClose={closeProfile} />}
             </>
           )}
         </main>
