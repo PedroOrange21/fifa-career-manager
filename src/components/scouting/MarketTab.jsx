@@ -61,9 +61,9 @@ export default function MarketTab({ onSignScout }) {
               <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider border shrink-0 ${PRIORITY_STYLE[s.priority] || PRIORITY_STYLE.Media}`}>{s.priority || 'Media'}</span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              {s.age && <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{s.age} Años</span>}
-              {s.rating && <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">Media {s.rating}</span>}
-              {s.potential && <span className="text-[8px] md:text-[9px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">Potencial {s.potential}</span>}
+              {s.age ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{s.age} Años</span> : null}
+              {s.rating ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">Media {s.rating}</span> : null}
+              {s.potential ? <span className="text-[8px] md:text-[9px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">Potencial {s.potential}</span> : null}
               {s.estimatedValue > 0 && <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(s.estimatedValue)}</span>}
             </div>
             {s.notes && <p className="text-xs text-fg-secondary italic">{s.notes}</p>}

@@ -19,7 +19,10 @@ const blockEnterKey = (e) => { if (e.key === 'Enter') e.preventDefault(); };
 const formatMoneyLive = (raw) => {
   const digits = raw.replace(/\D/g, '');
   if (!digits) return '';
-  return Number(digits).toLocaleString('es-ES');
+  // useGrouping: true explícito: el valor por defecto ("auto") omite el punto de miles en
+  // números de exactamente 4 cifras (ej. 5000 -> "5000") en navegadores recientes, verificado
+  // en local — justo el rango típico de un sueldo mensual.
+  return Number(digits).toLocaleString('es-ES', { useGrouping: true });
 };
 
 // Misma estructura de contenedor/overlay/tarjeta que "Fichar Jugador" (PlayerForm.jsx): backdrop

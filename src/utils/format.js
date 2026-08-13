@@ -1,8 +1,13 @@
+// useGrouping: true se pasa explícitamente en todos los toLocaleString('es-ES') de este
+// archivo: el valor por defecto ("auto") de Intl.NumberFormat en navegadores recientes puede
+// omitir el punto de miles precisamente en números de 4 cifras (ej. 5000 -> "5000" en vez de
+// "5.000"), un caso límite verificado en local que rompía el formateo justo en los importes
+// más habituales al escribir un sueldo o presupuesto.
 export const formatValueInput = (val) => {
   if (!val) return '';
   const num = val.replace(/\./g, '').replace(/\D/g, '');
   if (!num) return '';
-  return Number(num).toLocaleString('es-ES');
+  return Number(num).toLocaleString('es-ES', { useGrouping: true });
 };
 
 export const parseValue = (val) => {
@@ -12,7 +17,7 @@ export const parseValue = (val) => {
 
 export const formatCurrency = (val) => {
   const num = parseValue(String(val ?? 0));
-  return num.toLocaleString('es-ES') + ' €';
+  return num.toLocaleString('es-ES', { useGrouping: true }) + ' €';
 };
 
 export const abbreviateValue = (val) => {

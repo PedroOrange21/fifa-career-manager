@@ -180,7 +180,7 @@ function CreateClubWizard({ onClose, onFirstClubCreated }) {
 }
 
 function abbreviateBudget(amount) {
-  if (amount >= 1000000) return `${(amount / 1000000).toLocaleString('es-ES')}M €`;
+  if (amount >= 1000000) return `${(amount / 1000000).toLocaleString('es-ES', { useGrouping: true })}M €`;
   if (amount >= 1000) return `${amount / 1000}Mil €`;
   return `${amount} €`;
 }
