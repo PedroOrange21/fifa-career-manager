@@ -3,14 +3,36 @@ import { X, ShieldCheck, ShieldAlert, Check } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { usePreventBackdropTouch } from '../../hooks/usePreventBackdropTouch';
 import { formatValueInput, parseValue } from '../../utils/format';
-import Dropdown from '../common/Dropdown';
 
-const CONTRACT_YEAR_OPTIONS = [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `${n} Año${n > 1 ? 's' : ''}` }));
+const CONTRACT_YEARS_CHOICES = [1, 2, 3, 4, 5];
 const DEFAULT_CONTRACT_YEARS = '3';
 
 // Ningún campo de esta tarjeta se envía con Enter (no hay <form>, igual que en PlayerForm):
 // se bloquea explícitamente para que nunca dispare un cierre ni acción inesperada.
 const blockEnterKey = (e) => { if (e.key === 'Enter') e.preventDefault(); };
+
+// Formatea los campos monetarios (puntos de miles, ej. 20.000) sin que el cursor salte al
+// final del texto al editar un dígito en medio del número — mismo patrón que PlayerForm.
+const formatMoneyField = (setter) => (e) => {
+  const input = e.target;
+  const raw = input.value;
+  const cursorPos = input.selectionStart ?? raw.length;
+  const digitsBeforeCursor = raw.slice(0, cursorPos).replace(/\D/g, '').length;
+  const formatted = formatValueInput(raw);
+  setter(formatted);
+  requestAnimationFrame(() => {
+    if (!input.isConnected) return;
+    let seen = 0; let pos = formatted.length;
+    if (digitsBeforeCursor === 0) { pos = 0; }
+    else {
+      for (let i = 0; i < formatted.length; i++) {
+        if (/\d/.test(formatted[i])) seen++;
+        if (seen === digitsBeforeCursor) { pos = i + 1; break; }
+      }
+    }
+    try { input.setSelectionRange(pos, pos); } catch (err) { /* input puede haber perdido el foco */ }
+  });
+};
 
 // Misma estructura de contenedor/overlay/tarjeta que "Fichar Jugador" (PlayerForm.jsx): backdrop
 // con guard de touchmove, tarjeta flex-col con cabecera y pie fijos y solo el cuerpo central con
@@ -98,15 +120,24 @@ export default function PromoteToFirstTeamModal({ player, onClose }) {
 
               <div className="space-y-1 relative">
                 <label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Mensual (€) *</label>
-                <input autoFocus type="text" inputMode="numeric" required placeholder="Ej: 500.000" onKeyDown={blockEnterKey} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-blue-400 font-black text-base md:text-sm text-fg text-center placeholder:text-fg-faint" value={wage} onChange={(e) => setWage(formatValueInput(e.target.value))} />
+                <input autoFocus type="text" inputMode="numeric" required placeholder="Ej: 500.000" onKeyDown={blockEnterKey} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-blue-400 font-black text-base md:text-sm text-fg text-center placeholder:text-fg-faint" value={wage} onChange={formatMoneyField(setWage)} />
               </div>
+              {/* Botones fijos en vez de un desplegable: sin portal ni listeners globales de
+                  "clic fuera", así que no hay ningún elemento que pueda quedar interceptando
+                  los toques del resto de la tarjeta en móvil. */}
               <div className="space-y-1 relative">
                 <label className="text-[9px] font-black text-fg-muted ml-1">Años de Contrato *</label>
-                <Dropdown value={contractYears} options={CONTRACT_YEAR_OPTIONS} onChange={setContractYears} />
+                <div className="grid grid-cols-5 gap-1.5">
+                  {CONTRACT_YEARS_CHOICES.map((n) => (
+                    <button key={n} type="button" onClick={() => setContractYears(String(n))} className={`py-3 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${contractYears === String(n) ? 'bg-blue-500 text-black shadow-lg shadow-blue-500/30' : 'bg-well text-fg-muted hover:bg-well-strong border border-border-subtle'}`}>
+                      {n} Año{n > 1 ? 's' : ''}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="space-y-1 relative">
                 <label className="text-[9px] font-black text-fg-muted ml-1">Cláusula de Rescisión (€) — Opcional</label>
-                <input type="text" inputMode="numeric" placeholder="Ej: 150.000.000" onKeyDown={blockEnterKey} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-blue-400 font-black text-base md:text-sm text-fg text-center placeholder:text-fg-faint" value={releaseClause} onChange={(e) => setReleaseClause(formatValueInput(e.target.value))} />
+                <input type="text" inputMode="numeric" placeholder="Ej: 150.000.000" onKeyDown={blockEnterKey} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-blue-400 font-black text-base md:text-sm text-fg text-center placeholder:text-fg-faint" value={releaseClause} onChange={formatMoneyField(setReleaseClause)} />
               </div>
             </div>
           </div>
