@@ -598,7 +598,7 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall }) {
           <Edit2 size={18} />
           <span className="text-[8px] font-black uppercase">Editar</span>
         </button>
-        <button type="button" onClick={() => { onRecall(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well text-fg-muted active:bg-well-strong touch-manipulation">
+        <button type="button" onClick={() => { onRecall(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
           <ArrowRightLeft size={18} />
           <span className="text-[8px] font-black uppercase leading-tight text-center">Recuperar</span>
         </button>
