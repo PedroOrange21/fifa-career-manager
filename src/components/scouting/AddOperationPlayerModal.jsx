@@ -3,9 +3,11 @@ import { X, Search } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { getCardStyle } from '../../utils/cardStyle';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
 export default function AddOperationPlayerModal({ status, title, onClose }) {
   useBodyScrollLock();
+  useAutoHideChrome();
   const { players, lineup, bench, setPlayerTransferStatus } = useClubData();
   const [search, setSearch] = useState('');
 

@@ -1,6 +1,5 @@
-import { useLayoutEffect, useState } from 'react';
+import { useState } from 'react';
 import { useClubData } from '../../context/ClubDataContext';
-import { useUiChrome } from '../../context/UiChromeContext';
 import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { getCardStyle } from '../../utils/cardStyle';
 import SavedFormationsBar from './SavedFormationsBar';
@@ -16,8 +15,6 @@ export default function TacticsTab({ onNavigateToScouting }) {
   const dnd = useDragAndDrop({ players, executeMove });
   const { floatingDrag } = dnd;
 
-  const { hide: hideChrome, show: showChrome } = useUiChrome();
-
   const [pickingSlot, setPickingSlot] = useState(null);
   const [selectedPlayerInfo, setSelectedPlayerInfo] = useState(null);
   const [infoSlot, setInfoSlot] = useState(null);
@@ -25,27 +22,8 @@ export default function TacticsTab({ onNavigateToScouting }) {
 
   const openInfo = (player, slot) => { setSelectedPlayerInfo(player); setInfoSlot(slot); };
 
-  // Ficha del jugador a pantalla limpia: oculta cabecera y barra de navegación mientras
-  // está abierta, igual que el resto de modales de pantalla completa de la app.
-  // useLayoutEffect (no useEffect) a propósito: se ejecuta de forma síncrona antes de que
-  // el navegador pinte el fotograma, así que cabecera/nav desaparecen en el mismo pintado
-  // en que aparece el modal, sin un frame intermedio donde ambos convivan en pantalla.
-  useLayoutEffect(() => {
-    if (!selectedPlayerInfo) return;
-    hideChrome();
-    return () => showChrome();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPlayerInfo]);
-
-  // Modal "Colocar Jugador" también a pantalla limpia. chromeHiddenCount es un contador,
-  // así que se apila sin conflicto con el hide de la ficha del jugador (p. ej. al pulsar
-  // "Reemplazar", que cierra la ficha y abre este modal en el mismo render).
-  useLayoutEffect(() => {
-    if (pickingSlot === null) return;
-    hideChrome();
-    return () => showChrome();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickingSlot]);
+  // PlayerInfoModal y PickingSlotModal ocultan la cabecera y la navegación por sí mismos
+  // (useAutoHideChrome), así que aquí ya no hace falta gestionarlo desde el padre.
 
   return (
     <div className="space-y-4 animate-in fade-in">

@@ -3,6 +3,7 @@ import { X, Shield, Camera, RefreshCcw, ShieldAlert, Trash2, Wallet, ChevronLeft
 import { useClubs } from '../../context/ClubsContext';
 import { resizeImageToDataUrl } from '../../utils/image';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import { formatCurrency, formatValueInput, parseValue } from '../../utils/format';
 
 const BUDGET_PRESETS = [1000000, 5000000, 10000000, 50000000, 100000000, 200000000, 500000000, 1000000000];
@@ -258,6 +259,7 @@ function EditClubForm({ editingClub, onClose }) {
 
 export default function ClubModal({ editingClub, onClose, onFirstClubCreated }) {
   useBodyScrollLock();
+  useAutoHideChrome();
   const { setShowClubModal } = useClubs();
   const handleClose = () => { if (onClose) onClose(); else setShowClubModal(false); };
 

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { TrendingUp, Calendar, ArrowUpDown, ArrowUp, ArrowDown, ArrowUpCircle, Edit2, Trash2, MoreHorizontal, ShieldAlert, Star, DollarSign, ArrowDownAZ, LayoutGrid, Plus, Search } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
-import { useUiChrome } from '../../context/UiChromeContext';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import { useSwipeReveal } from '../../hooks/useSwipeReveal';
 import { getCardStyle } from '../../utils/cardStyle';
@@ -182,7 +181,6 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete }) {
 
 export default function AcademyTab() {
   const { players, playerToDelete, setPlayerToDelete, confirmDeletePlayer } = useClubData();
-  const { hide: hideChrome, show: showChrome } = useUiChrome();
   const [updatingPlayer, setUpdatingPlayer] = useState(null);
   const [promotingPlayer, setPromotingPlayer] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -198,21 +196,9 @@ export default function AcademyTab() {
   const ficharRef = useRef(null);
   useOnClickOutside(ficharRef, () => setFicharConfirming(false), ficharConfirming);
 
-  // Pantalla limpia mientras cualquiera de los modales está abierto: oculta cabecera y
-  // barra de navegación inferior, igual que hace PlayerForm en su wizard.
-  useEffect(() => {
-    if (!promotingPlayer) return;
-    hideChrome();
-    return () => showChrome();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [promotingPlayer]);
-
-  useEffect(() => {
-    if (!updatingPlayer) return;
-    hideChrome();
-    return () => showChrome();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [updatingPlayer]);
+  // Cada modal (PromoteToFirstTeamModal, UpdateRatingModal, PlayerForm) oculta la cabecera y
+  // la barra de navegación por sí mismo (useAutoHideChrome), así que aquí ya no hace falta
+  // gestionarlo desde el padre.
 
   // Para ordenar por Potencial se usa la media del rango (p.ej. "64-88" → 76) cuando el
   // canterano tiene un rango en vez de un número único, para no romper la ordenación.

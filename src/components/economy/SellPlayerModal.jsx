@@ -3,9 +3,11 @@ import { X, Tag } from 'lucide-react';
 import { formatValueInput, parseValue } from '../../utils/format';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
 export default function SellPlayerModal({ player, onClose }) {
   useBodyScrollLock();
+  useAutoHideChrome();
   const { sellPlayer } = useClubData();
   const [price, setPrice] = useState(formatValueInput(String(player.marketValue || player.value || '')));
 

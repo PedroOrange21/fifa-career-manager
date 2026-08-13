@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { X, TrendingUp } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
 export default function UpdateRatingModal({ player, onClose }) {
   useBodyScrollLock();
+  useAutoHideChrome();
   const { updateYouthRating } = useClubData();
   const [rating, setRating] = useState(String(player.rating));
   const [error, setError] = useState('');

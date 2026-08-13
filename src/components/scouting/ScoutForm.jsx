@@ -4,6 +4,7 @@ import { ALL_POSITIONS } from '../../constants/positions';
 import { formatValueInput, parseValue } from '../../utils/format';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
 const emptyScout = { name: '', positions: [], age: '', rating: '', potential: '', originClub: '', estimatedValue: '', notes: '', priority: 'Media' };
 
@@ -14,6 +15,7 @@ const scoutToFormState = (s) => ({
 
 export default function ScoutForm({ editingScout, onClose }) {
   useBodyScrollLock();
+  useAutoHideChrome();
   const { addOrUpdateScout } = useClubData();
   const [scout, setScout] = useState(editingScout ? scoutToFormState(editingScout) : emptyScout);
   const [formError, setFormError] = useState('');

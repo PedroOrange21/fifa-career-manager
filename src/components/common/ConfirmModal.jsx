@@ -1,4 +1,5 @@
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
 export default function ConfirmModal({
   icon: Icon, iconClassName = 'text-red-500', title, message,
@@ -7,6 +8,7 @@ export default function ConfirmModal({
   onConfirm, onCancel,
 }) {
   useBodyScrollLock();
+  useAutoHideChrome();
   return (
     <div className={`fixed inset-0 bg-black/95 ${zIndexClassName} flex items-center justify-center p-4 animate-in fade-in duration-200`} onClick={onCancel}>
       <div className={`bg-surface border ${borderClassName} p-6 rounded-[32px] w-full max-w-sm text-center shadow-2xl`} onClick={(e) => e.stopPropagation()}>

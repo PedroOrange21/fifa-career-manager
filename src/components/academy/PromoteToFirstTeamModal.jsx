@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, ShieldCheck, ShieldAlert, Check } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { usePreventBackdropTouch } from '../../hooks/usePreventBackdropTouch';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import { parseValue } from '../../utils/format';
 
 const CONTRACT_YEARS_CHOICES = [1, 2, 3, 4, 5];
@@ -36,6 +37,7 @@ const formatMoneyLive = (raw) => {
 // no participa de las reglas de Cantera) y pierde su rango de potencial numérico, que deja de
 // aplicar una vez es un profesional del primer equipo con contrato propio.
 export default function PromoteToFirstTeamModal({ player, onClose }) {
+  useAutoHideChrome();
   const { bench, assignPlayerToSlot, addOrUpdatePlayer } = useClubData();
   const [wage, setWage] = useState('');
   const [contractYears, setContractYears] = useState(DEFAULT_CONTRACT_YEARS);

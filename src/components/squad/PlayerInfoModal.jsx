@@ -6,6 +6,7 @@ import { abbreviateValue, formatLoanDuration } from '../../utils/format';
 import { isUncalledZone } from '../../utils/slots';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import ConfirmModal from '../common/ConfirmModal';
 import SellPlayerModal from '../economy/SellPlayerModal';
 import LoanOutModal from '../economy/LoanOutModal';
@@ -19,6 +20,7 @@ const ACTION_STYLES = {
 
 export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onReplace, hideMarketStatus = false }) {
   useBodyScrollLock();
+  useAutoHideChrome();
   const { lineup, bench, assignPlayerToSlot, setPlayerTransferStatus, setPlayerToDelete, confirmDeletePlayer } = useClubData();
   const [current, setCurrent] = useState(player);
   const [showSellModal, setShowSellModal] = useState(false);

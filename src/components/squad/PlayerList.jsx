@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap, Undo2, LayoutGrid, ArrowUpCircle } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
-import { useUiChrome } from '../../context/UiChromeContext';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue, formatLoanDuration } from '../../utils/format';
@@ -43,7 +42,6 @@ const getPositionOrder = (p) => {
 
 export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pendingPrefill, onConsumePendingPrefill }) {
   const { players, lineup, bench, playerToDelete, setPlayerToDelete, confirmDeletePlayer, setPlayerTransferStatus } = useClubData();
-  const { hide: hideChrome, show: showChrome } = useUiChrome();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('rating-desc');
   const [showForm, setShowForm] = useState(false);
@@ -73,14 +71,8 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
     }
   }, [pendingEditPlayer, onConsumePendingEdit]);
 
-  // Pantalla limpia mientras el modal de contrato de promoción está abierto (accesible desde
-  // la sección Academia de esta misma vista), igual que en la propia pestaña Academia.
-  useEffect(() => {
-    if (!promotingPlayer) return;
-    hideChrome();
-    return () => showChrome();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [promotingPlayer]);
+  // El modal de contrato de promoción (accesible desde la sección Academia de esta misma
+  // vista) oculta la cabecera y la navegación por sí mismo (useAutoHideChrome).
 
   useEffect(() => {
     if (pendingPrefill) {

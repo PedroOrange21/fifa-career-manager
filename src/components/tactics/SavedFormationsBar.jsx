@@ -35,13 +35,8 @@ export default function SavedFormationsBar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renaming]);
 
-  // Confirmación de borrado de táctica, también a pantalla limpia.
-  useEffect(() => {
-    if (!formationToDelete) return;
-    hideChrome();
-    return () => showChrome();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formationToDelete]);
+  // La confirmación de borrado de táctica usa el ConfirmModal compartido, que ya oculta la
+  // cabecera y la navegación por sí mismo (useAutoHideChrome) — no hace falta gestionarlo aquí.
 
   // Sin táctica activa (primer guardado) no hay nada que "actualizar", así que el modal se
   // abre directamente en modo "nueva formación" — ahí es donde ahora se define el nombre.

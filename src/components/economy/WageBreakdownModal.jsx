@@ -1,12 +1,14 @@
 import { X, Users2 } from 'lucide-react';
 import { formatCurrency } from '../../utils/format';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
 // Lista de solo lectura con el sueldo mensual individual de cada jugador que compone la masa
 // salarial (ya ordenada de mayor a menor y con el total al final), para que el usuario pueda
 // verificar exactamente cómo se forma la cifra mostrada en la tarjeta de Finanzas.
 export default function WageBreakdownModal({ players, total, onClose }) {
   useBodyScrollLock();
+  useAutoHideChrome();
 
   return (
     <div className="fixed inset-0 bg-black/95 z-[160] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>

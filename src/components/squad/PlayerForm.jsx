@@ -7,7 +7,7 @@ import { formatValueInput, parseValue, formatCurrency, isValidPotentialInput } f
 import { resizeImageToDataUrl } from '../../utils/image';
 import { getCardStyle } from '../../utils/cardStyle';
 import { useClubData } from '../../context/ClubDataContext';
-import { useUiChrome } from '../../context/UiChromeContext';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import { usePreventBackdropTouch } from '../../hooks/usePreventBackdropTouch';
 import Dropdown from '../common/Dropdown';
 
@@ -140,12 +140,7 @@ function SectionHeader({ emoji, title }) {
 
 export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onClose, initialStep = 1 }) {
   const { addOrUpdatePlayer, deleteScout } = useClubData();
-  const { hide: hideChrome, show: showChrome } = useUiChrome();
-  useEffect(() => {
-    hideChrome();
-    return () => showChrome();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useAutoHideChrome();
 
   const [form, setForm] = useState(() => toFormState(editingPlayer || prefill || null));
   const initialFormRef = useRef(form);

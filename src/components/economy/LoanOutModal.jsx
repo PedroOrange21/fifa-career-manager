@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { X, ArrowRightLeft } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
-import { useUiChrome } from '../../context/UiChromeContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import Dropdown from '../common/Dropdown';
 
 const LOAN_DURATION_OPTIONS = [
@@ -13,20 +13,12 @@ const LOAN_DURATION_OPTIONS = [
 
 export default function LoanOutModal({ player, onClose }) {
   useBodyScrollLock();
+  useAutoHideChrome();
   const { cedePlayer } = useClubData();
-  const { hide: hideChrome, show: showChrome } = useUiChrome();
   const [destinationClub, setDestinationClub] = useState('');
   const [duration, setDuration] = useState('1 Temporada');
   const [wagePercentage, setWagePercentage] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Pantalla limpia mientras el modal está abierto: oculta cabecera y barra de navegación
-  // flotante inferior para dejar la interfaz enfocada solo en los campos de la cesión.
-  useEffect(() => {
-    hideChrome();
-    return () => showChrome();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

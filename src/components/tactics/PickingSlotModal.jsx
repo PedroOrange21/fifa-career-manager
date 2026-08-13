@@ -3,9 +3,11 @@ import { FORMATIONS } from '../../constants/formations';
 import { getCardStyle } from '../../utils/cardStyle';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
 export default function PickingSlotModal({ pickingSlot, onClose, onNavigateToScouting }) {
   useBodyScrollLock();
+  useAutoHideChrome();
   const { players, formation, lineup, bench, assignPlayerToSlot } = useClubData();
 
   const pick = (playerId) => {
