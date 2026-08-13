@@ -230,11 +230,7 @@ export default function AcademyTab() {
         </div>
       </div>
 
-      {/* Estilo "segundo plano" (atenuado): mismo tratamiento que los jugadores cedidos a
-          otros clubes en la Plantilla (PlayerList.jsx), reflejando que un canterano todavía
-          no es un activo del primer equipo. Se ilumina al pasar el ratón/tocar para poder
-          leerlo con normalidad. */}
-      <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300">
+      <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
         {sortedYouth.length === 0 && (<div className="p-16 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Sin jugadores en la academia</div>)}
         {sortedYouth.map((p) => (
           <YouthPlayerRow

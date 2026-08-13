@@ -118,7 +118,13 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
     });
   }
 
-  const activePlayers = filteredPlayers.filter((p) => p.transferStatus !== 'CedidoFuera');
+  // Los canteranos (type 'Cantera') se muestran aparte, en su propia sección atenuada entre
+  // los activos y los cedidos fuera — ya no se mezclan dentro de "Jugadores Activos" — para
+  // reflejar visualmente que todavía no son activos del primer equipo (hasta promocionarlos
+  // con contrato desde la Academia, momento en el que pasan a type 'Comprado' y aparecen aquí
+  // como cualquier otro jugador activo).
+  const activePlayers = filteredPlayers.filter((p) => p.transferStatus !== 'CedidoFuera' && p.type !== 'Cantera');
+  const academyPlayers = filteredPlayers.filter((p) => p.type === 'Cantera');
   const loanedOutPlayers = filteredPlayers.filter((p) => p.transferStatus === 'CedidoFuera');
 
   const openNewForm = () => { setEditingPlayer(null); setFormPrefill(null); setFormSourceScoutId(null); setFormInitialStep(1); setShowForm(true); };
@@ -195,6 +201,25 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
           />
         ))}
       </div>
+
+      {academyPlayers.length > 0 && (
+        <div className="mt-8 pt-6 border-t border-border space-y-3 opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300">
+          <div className="px-2 flex items-center gap-2 text-emerald-400"><GraduationCap size={14} /><h3 className="text-xs font-black uppercase tracking-widest italic">Jugadores de la Academia</h3></div>
+          <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
+            {academyPlayers.map((p) => (
+              <PlayerRow
+                key={p.id} p={p} lineup={lineup} bench={bench}
+                onEdit={openEditForm} onDelete={setPlayerToDelete}
+                onMarkTransferible={() => setPlayerTransferStatus(p.id, 'Transferible')}
+                onMarkCedible={() => setPlayerTransferStatus(p.id, 'Cedible')}
+                onSell={() => setSellingPlayer(p)}
+                onLoan={() => setLoaningPlayer(p)}
+                onEndLoan={() => { setEndingLoanPlayer(p); setPlayerToDelete(p.id); }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {loanedOutPlayers.length > 0 && (
         <div className="mt-8 pt-6 border-t border-border space-y-3 opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300">
