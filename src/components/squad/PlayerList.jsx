@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap, Undo2 } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap, Undo2, LayoutGrid } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
+import { ALL_POSITIONS } from '../../constants/positions';
 import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue, formatLoanDuration } from '../../utils/format';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
@@ -27,7 +28,15 @@ const SORT_OPTIONS = [
   { id: 'name-asc', label: 'Nombre (A-Z)', icon: ArrowDownAZ },
   { id: 'status-role', label: 'Rol en Equipo', icon: Shirt },
   { id: 'ownership', label: 'Propiedad del Club', icon: ShieldCheck },
+  { id: 'position', label: 'Posición en el Campo', icon: LayoutGrid },
 ];
+
+// Orden táctico natural en el terreno de juego (Portero → Defensas → Centrocampistas →
+// Delanteros), reutilizando el mismo orden ya definido en ALL_POSITIONS.
+const getPositionOrder = (p) => {
+  const idx = ALL_POSITIONS.indexOf(p.positions?.[0]);
+  return idx === -1 ? ALL_POSITIONS.length : idx;
+};
 
 export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pendingPrefill, onConsumePendingPrefill }) {
   const { players, lineup, bench, playerToDelete, setPlayerToDelete, confirmDeletePlayer, setPlayerTransferStatus } = useClubData();
@@ -99,6 +108,12 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
     filteredPlayers.sort((a, b) => {
       const scoreA = getOwnershipScore(a); const scoreB = getOwnershipScore(b);
       if (scoreA !== scoreB) return scoreA - scoreB; return b.rating - a.rating;
+    });
+  }
+  if (filterType === 'position') {
+    filteredPlayers.sort((a, b) => {
+      const posA = getPositionOrder(a); const posB = getPositionOrder(b);
+      if (posA !== posB) return posA - posB; return b.rating - a.rating;
     });
   }
 
