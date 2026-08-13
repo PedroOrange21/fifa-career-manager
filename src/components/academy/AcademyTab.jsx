@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { TrendingUp, TrendingDown, Calendar, ArrowUpDown, ArrowUpCircle } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { TrendingUp, TrendingDown, Calendar, ArrowUpDown, ArrowUpCircle, Edit2, Trash2, MoreHorizontal, Tag, ArrowRightLeft, DollarSign, Handshake, ShieldAlert } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useUiChrome } from '../../context/UiChromeContext';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
+import { useSwipeReveal, ROW_ACTION_WIDTH } from '../../hooks/useSwipeReveal';
 import { getCardStyle } from '../../utils/cardStyle';
 import { parsePotentialRange } from '../../utils/format';
+import PlayerForm from '../squad/PlayerForm';
+import ConfirmModal from '../common/ConfirmModal';
+import SellPlayerModal from '../economy/SellPlayerModal';
+import LoanOutModal from '../economy/LoanOutModal';
 import UpdateRatingModal from './UpdateRatingModal';
 import PromoteToFirstTeamModal from './PromoteToFirstTeamModal';
 
@@ -40,41 +46,154 @@ function EvolutionTimeline({ history }) {
   );
 }
 
-function YouthPlayerRow({ p, onUpdate, onPromote }) {
+// Mismo gesto de deslizar y menú "..." que las filas de la Plantilla (PlayerList.jsx):
+// swipe a la izquierda en móvil revela Borrar/Editar/Más; en escritorio, el cuerpo se
+// desplaza a la derecha al hacer hover para revelar el "..." fijo a la izquierda. Todo
+// canterano de esta lista es, por definición, un "isUnpromotedCantera" (no ha subido al
+// primer equipo todavía), así que las 4 acciones de mercado del menú "Más" se muestran
+// deshabilitadas, con el mismo criterio ya usado en la Plantilla — se habilitan solas en
+// cuanto el jugador deja de ser de tipo Cantera al promocionarlo con contrato.
+function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onMarkTransferible, onMarkCedible, onSell, onLoan }) {
+  const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
+  const [showMore, setShowMore] = useState(false);
+  const [moreRect, setMoreRect] = useState(null);
+  const [moreContext, setMoreContext] = useState('desktop');
+  const moreBtnMobileRef = useRef(null);
+  const moreBtnDesktopRef = useRef(null);
+  const moreMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!showMore) return;
+    const handler = (e) => {
+      if (moreBtnMobileRef.current?.contains(e.target)) return;
+      if (moreBtnDesktopRef.current?.contains(e.target)) return;
+      if (moreMenuRef.current?.contains(e.target)) return;
+      setShowMore(false);
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [showMore]);
+
+  const toggleMore = (e, context) => {
+    if (showMore) { setShowMore(false); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMoreRect({ top: rect.bottom + 4, right: window.innerWidth - rect.right, width: 240 });
+    setMoreContext(context);
+    setShowMore(true);
+  };
+
+  const MARKET_ACTIONS = [
+    { key: 'transferible', icon: Tag, label: 'Añadir a Transferibles', onClick: onMarkTransferible, disabled: true },
+    { key: 'cedible', icon: ArrowRightLeft, label: 'Añadir a Cedibles', onClick: onMarkCedible, disabled: true },
+    { key: 'sell', icon: DollarSign, label: 'Vender Jugador', onClick: onSell, disabled: true },
+    { key: 'loan', icon: Handshake, label: 'Ceder Jugador', onClick: onLoan, disabled: true },
+  ];
+  // Móvil: solo las acciones de mercado (Editar/Eliminar van por swipe).
+  // Escritorio: las mismas más Editar y Borrar al final, único punto de acceso a esas dos.
+  const MORE_ACTIONS = moreContext === 'mobile'
+    ? MARKET_ACTIONS
+    : [...MARKET_ACTIONS, { key: 'edit', icon: Edit2, label: 'Editar Jugador', onClick: () => onEdit(p) }, { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete(p.id) }];
+
   return (
-    <div className="p-3 md:p-4 flex flex-col gap-2">
-      <div className="flex items-center gap-3 md:gap-4">
-        <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
-        <div className="flex-1 min-w-0">
-          <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div>
-          <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div>
-          <PotentialBar rating={p.rating} potential={p.potential} />
-        </div>
-        <div className="flex flex-col items-end gap-1.5 shrink-0">
-          <span className="text-[8px] text-fg-faint font-black uppercase tracking-widest">{p.age} Años</span>
-          {p.potential ? <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Pot. {p.potential}</span> : null}
-        </div>
+    <div className="relative overflow-hidden">
+      {/* Panel de swipe: solo en móvil (sm:hidden), mismo orden que en la Plantilla
+          (Borrar · Editar · "..." de izquierda a derecha ya desplegado). */}
+      <div className="absolute inset-y-0 right-0 flex sm:hidden">
+        <button type="button" onClick={() => { onDelete(p.id); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-red-500 text-white active:bg-red-400 touch-manipulation">
+          <Trash2 size={18} />
+          <span className="text-[8px] font-black uppercase">Borrar</span>
+        </button>
+        <button type="button" onClick={() => { onEdit(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well text-fg-muted active:bg-well-strong touch-manipulation">
+          <Edit2 size={18} />
+          <span className="text-[8px] font-black uppercase">Editar</span>
+        </button>
+        <button ref={moreBtnMobileRef} type="button" onClick={(e) => toggleMore(e, 'mobile')} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
+          <MoreHorizontal size={18} />
+          <span className="text-[8px] font-black uppercase">Más</span>
+        </button>
       </div>
-      <EvolutionTimeline history={p.evolutionHistory} />
-      <div className="flex gap-2 mt-1">
-        <button type="button" onClick={() => onUpdate(p)} className="flex-1 py-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 font-black uppercase text-[10px] hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/20 touch-manipulation"><TrendingUp size={14} /> Actualizar Media</button>
-        <button type="button" onClick={() => onPromote(p)} className="flex-1 py-2.5 rounded-xl bg-blue-500/10 text-blue-400 font-black uppercase text-[10px] hover:bg-blue-500/20 transition-all flex items-center justify-center gap-2 border border-blue-500/20 touch-manipulation"><ArrowUpCircle size={14} /> Subir al Primer Equipo</button>
+
+      <div
+        ref={rowRef}
+        onClick={() => { if (offset < 0) close(); }}
+        style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
+        className="relative bg-surface p-3 md:p-4 flex flex-col gap-2 touch-pan-y group"
+      >
+        {/* Franja de identidad (avatar + info): se desplaza a la derecha al hacer hover en
+            escritorio (mismo patrón que PlayerRow) para revelar el "..." fijo a la izquierda,
+            oculto detrás en reposo. El resto de la tarjeta (evolución + botones) no se mueve. */}
+        <div className="relative flex items-center gap-3 md:gap-4">
+          <div className="relative flex items-center gap-3 md:gap-4 flex-1 min-w-0 md:transition-transform md:duration-300 md:ease-in-out md:group-hover:translate-x-11">
+            <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
+            <div className="flex-1 min-w-0">
+              <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div>
+              <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div>
+              <PotentialBar rating={p.rating} potential={p.potential} />
+            </div>
+            <div className="flex flex-col items-end gap-1.5 shrink-0">
+              <span className="text-[8px] text-fg-faint font-black uppercase tracking-widest">{p.age} Años</span>
+              {p.potential ? <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Pot. {p.potential}</span> : null}
+            </div>
+          </div>
+
+          <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
+            <MoreHorizontal size={13} />
+          </button>
+        </div>
+
+        <EvolutionTimeline history={p.evolutionHistory} />
+        <div className="flex gap-2 mt-1">
+          <button type="button" onClick={() => onUpdate(p)} className="flex-1 py-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 font-black uppercase text-[10px] hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/20 touch-manipulation"><TrendingUp size={14} /> Actualizar Media</button>
+          <button type="button" onClick={() => onPromote(p)} className="flex-1 py-2.5 rounded-xl bg-blue-500/10 text-blue-400 font-black uppercase text-[10px] hover:bg-blue-500/20 transition-all flex items-center justify-center gap-2 border border-blue-500/20 touch-manipulation"><ArrowUpCircle size={14} /> Subir al Primer Equipo</button>
+        </div>
+
+        {/* Umbral de borrado continuo (solo móvil), igual que en la Plantilla. */}
+        {pastThreshold && (
+          <div className="absolute inset-0 z-10 bg-red-500 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden">
+            <Trash2 size={18} /> Borrar
+          </div>
+        )}
       </div>
+
+      {/* Menú "...": mismo patrón de portal que en la Plantilla (fuera de cualquier
+          overflow-hidden, posición fixed calculada desde el propio botón). */}
+      {showMore && moreRect && createPortal(
+        <div
+          ref={moreMenuRef}
+          style={{ position: 'fixed', top: moreRect.top, right: moreRect.right, width: moreRect.width }}
+          className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
+        >
+          {MORE_ACTIONS.map(({ key, icon: Icon, label, onClick, disabled }) => (
+            <button key={key} type="button" disabled={disabled} onClick={() => { if (disabled) return; onClick(); setShowMore(false); close(); }} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase whitespace-nowrap transition-all touch-manipulation ${disabled ? 'text-fg-faint opacity-40 pointer-events-none' : 'text-fg-secondary hover:bg-well'}`}>
+              <Icon size={14} className="shrink-0" /> {label}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
 
 export default function AcademyTab() {
-  const { players } = useClubData();
+  const { players, playerToDelete, setPlayerToDelete, confirmDeletePlayer, setPlayerTransferStatus } = useClubData();
   const { hide: hideChrome, show: showChrome } = useUiChrome();
   const [updatingPlayer, setUpdatingPlayer] = useState(null);
   const [promotingPlayer, setPromotingPlayer] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editingPlayer, setEditingPlayer] = useState(null);
+  const [sellingPlayer, setSellingPlayer] = useState(null);
+  const [loaningPlayer, setLoaningPlayer] = useState(null);
   const [sortOrder, setSortOrder] = useState('potential-desc');
   const [showSort, setShowSort] = useState(false);
   const sortRef = useRef(null);
   useOnClickOutside(sortRef, () => setShowSort(false), showSort);
 
-  // Pantalla limpia mientras cualquiera de los dos modales está abierto: oculta cabecera y
+  // Pantalla limpia mientras cualquiera de los modales está abierto: oculta cabecera y
   // barra de navegación inferior, igual que hace PlayerForm en su wizard.
   useEffect(() => {
     if (!promotingPlayer) return;
@@ -109,6 +228,9 @@ export default function AcademyTab() {
   const allYouth = players.filter((p) => p.type === 'Cantera');
   const sortedYouth = sortPlayers(allYouth);
 
+  // Editar desde la Academia abre directamente el Paso 4, igual que desde la Plantilla.
+  const openEditForm = (p) => { setEditingPlayer(p); setShowForm(true); };
+
   return (
     <div className="space-y-4 animate-in fade-in">
       <div className="flex justify-between items-center px-2 gap-2">
@@ -131,11 +253,35 @@ export default function AcademyTab() {
 
       <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
         {sortedYouth.length === 0 && (<div className="p-16 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Sin jugadores en la academia</div>)}
-        {sortedYouth.map((p) => <YouthPlayerRow key={p.id} p={p} onUpdate={setUpdatingPlayer} onPromote={setPromotingPlayer} />)}
+        {sortedYouth.map((p) => (
+          <YouthPlayerRow
+            key={p.id} p={p}
+            onUpdate={setUpdatingPlayer} onPromote={setPromotingPlayer}
+            onEdit={openEditForm} onDelete={setPlayerToDelete}
+            onMarkTransferible={() => setPlayerTransferStatus(p.id, 'Transferible')}
+            onMarkCedible={() => setPlayerTransferStatus(p.id, 'Cedible')}
+            onSell={() => setSellingPlayer(p)}
+            onLoan={() => setLoaningPlayer(p)}
+          />
+        ))}
       </div>
 
       {updatingPlayer && <UpdateRatingModal player={updatingPlayer} onClose={() => setUpdatingPlayer(null)} />}
       {promotingPlayer && <PromoteToFirstTeamModal player={promotingPlayer} onClose={() => setPromotingPlayer(null)} />}
+      {showForm && <PlayerForm editingPlayer={editingPlayer} initialStep={4} onClose={() => setShowForm(false)} />}
+      {sellingPlayer && <SellPlayerModal player={sellingPlayer} onClose={() => setSellingPlayer(null)} />}
+      {loaningPlayer && <LoanOutModal player={loaningPlayer} onClose={() => setLoaningPlayer(null)} />}
+
+      {playerToDelete && (
+        <ConfirmModal
+          icon={ShieldAlert}
+          title="Eliminar Jugador"
+          message="¿Estás seguro de que deseas eliminar este jugador?"
+          confirmLabel="Eliminar"
+          onCancel={() => setPlayerToDelete(null)}
+          onConfirm={confirmDeletePlayer}
+        />
+      )}
     </div>
   );
 }
