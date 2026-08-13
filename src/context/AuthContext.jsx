@@ -28,6 +28,24 @@ const POPUP_FALLBACK_CODES = [
   'auth/operation-not-supported-in-this-environment',
 ];
 
+// Marca propia (independiente de Firebase) de que se acaba de iniciar una redirección a
+// Google: sobrevive a la navegación completa porque sessionStorage persiste en la misma
+// pestaña. Sirve para distinguir, al volver, entre "no había ninguna redirección pendiente"
+// (getRedirectResult(null) es normal) y "SÍ la había pero Firebase no logró detectarla" (el
+// síntoma típico de Safari/iOS con ITP: Google completa el login pero la app nunca recibe el
+// resultado), caso en el que merece la pena reintentar y avisar explícitamente al usuario en
+// vez de devolverlo en silencio a la pantalla de Login.
+const REDIRECT_PENDING_KEY = 'fifa-manager-google-redirect-pending';
+const markRedirectPending = () => { try { sessionStorage.setItem(REDIRECT_PENDING_KEY, '1'); } catch { /* Safari privado puede bloquear sessionStorage; no es crítico. */ } };
+const consumeRedirectPending = () => {
+  try {
+    const wasPending = sessionStorage.getItem(REDIRECT_PENDING_KEY) === '1';
+    sessionStorage.removeItem(REDIRECT_PENDING_KEY);
+    return wasPending;
+  } catch { return false; }
+};
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loadingApp, setLoadingApp] = useState(true);
@@ -60,21 +78,43 @@ export function AuthProvider({ children }) {
   // que eso se considere un error). Los errores se registran para depuración y se muestran al
   // usuario, pero nunca bloquean el arranque de la app.
   useEffect(() => {
-    getRedirectResult(auth)
-      .then((result) => {
-        // Defensivo: en algunos casos de Safari/iOS con ITP, onAuthStateChanged puede tardar
-        // en reflejar el resultado de la redirección. Si getRedirectResult ya trae un usuario
-        // válido, se guarda aquí directamente en vez de esperar a ese otro disparo.
-        if (result?.user) setUser(result.user);
-      })
-      .catch((err) => {
-        console.error('Error al procesar getRedirectResult:', err);
+    const resolveRedirect = async () => {
+      const wasPending = consumeRedirectPending();
+      try {
+        let result = await getRedirectResult(auth);
+        console.info('[Auth] getRedirectResult (1er intento):', result ? `usuario ${result.user?.email}` : 'sin resultado', '| redirección esperada:', wasPending);
+
+        // Si esperábamos un resultado (se marcó justo antes de redirigir) pero llegó vacío,
+        // puede ser una carrera de timing en Safari/iOS: se reintenta una vez tras una breve
+        // espera antes de asumir que Firebase realmente no detectó la vuelta de Google.
+        if (!result?.user && wasPending) {
+          await wait(400);
+          result = await getRedirectResult(auth);
+          console.info('[Auth] getRedirectResult (2º intento tras espera):', result ? `usuario ${result.user?.email}` : 'sin resultado');
+        }
+
+        if (result?.user) {
+          // Defensivo: en algunos casos de Safari/iOS con ITP, onAuthStateChanged puede
+          // tardar en reflejar el resultado. Si getRedirectResult ya trae un usuario válido,
+          // se guarda aquí directamente en vez de esperar a ese otro disparo.
+          setUser(result.user);
+        } else if (wasPending) {
+          // Google completó el login (se navegó y se volvió), pero Firebase no logró asociar
+          // el resultado con esta sesión — típico bloqueo de ITP sobre el iframe de authDomain
+          // en Safari/iOS. Se avisa explícitamente en vez de devolver al usuario en silencio a
+          // un formulario de Login vacío sin explicación.
+          console.warn('[Auth] Se esperaba resultado de redirección de Google y no llegó ninguno (posible bloqueo de ITP en Safari/iOS).');
+          setGoogleRedirectError('Safari bloqueó la respuesta de Google. Inténtalo de nuevo o desactiva "Impedir seguimiento entre sitios" para este sitio.');
+        }
+      } catch (err) {
+        console.error('[Auth] Error al procesar getRedirectResult:', err?.code || err?.message || err);
         setGoogleRedirectError('No se pudo iniciar sesión con Google.');
-      })
-      .finally(() => {
+      } finally {
         redirectCheckedRef.current = true;
         finishLoadingIfReady();
-      });
+      }
+    };
+    resolveRedirect();
   }, []);
 
   const handleGoogleLogin = async () => {
@@ -89,6 +129,7 @@ export function AuthProvider({ children }) {
       // terceros que necesita para completarse), así que se va directo a redirección
       // completa. La navegación fuera de la página corta la ejecución aquí; el resultado
       // (éxito o error) se recoge en el useEffect de getRedirectResult al volver.
+      markRedirectPending();
       await signInWithRedirect(auth, googleProvider);
       return;
     }
@@ -99,9 +140,11 @@ export function AuthProvider({ children }) {
       // Si el popup fue bloqueado o cerrado antes de completarse, se reintenta con
       // redirección completa en vez de mostrar un error directamente.
       if (POPUP_FALLBACK_CODES.includes(err?.code)) {
+        markRedirectPending();
         await signInWithRedirect(auth, googleProvider);
         return;
       }
+      console.error('[Auth] signInWithPopup falló:', err?.code || err?.message || err);
       throw new Error('No se pudo iniciar sesión con Google.');
     }
   };
