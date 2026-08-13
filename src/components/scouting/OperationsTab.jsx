@@ -45,7 +45,7 @@ export default function OperationsTab({ onRequestEditPlayer }) {
           {forSale.map((p) => (
             <OperationRow key={p.id} player={p} onClick={() => openInfo(p, 'forSale')} chipClassName="bg-red-500/5 border-red-500/10" chipTextClassName="text-red-400">
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[8px] text-red-400 font-black uppercase">{abbreviateValue(p.marketValue || p.value)}</span>
+                {(p.marketValue || p.value) ? <span className="text-[8px] text-red-400 font-black uppercase">{abbreviateValue(p.marketValue || p.value)}</span> : null}
                 <button onClick={(e) => { e.stopPropagation(); setSellingPlayer(p); }} className="bg-red-500 text-black px-3 py-1.5 rounded-lg text-[9px] font-black uppercase shadow-sm flex items-center gap-1"><Tag size={11} /> Vender</button>
               </div>
             </OperationRow>
