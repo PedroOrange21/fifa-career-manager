@@ -11,6 +11,9 @@ export default function AuthScreen() {
   const [authError, setAuthError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+  // ⚠️ NO MODIFICAR: debe llamar a handleGoogleLogin() (signInWithPopup) como reacción
+  // directa a este onClick, sin ningún await ni tarea asíncrona por delante — un popup
+  // abierto fuera del gesto directo del usuario queda bloqueado por Safari/iOS.
   const onGoogleLogin = async () => {
     setAuthError('');
     try { await handleGoogleLogin(); } catch (err) { setAuthError(err.message); }

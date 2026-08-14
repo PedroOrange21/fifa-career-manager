@@ -20,6 +20,11 @@ export function AuthProvider({ children }) {
     return () => unsubscribe();
   }, []);
 
+  // ⚠️ ADVERTENCIA — NO MODIFICAR: usar SIEMPRE signInWithPopup, NUNCA signInWithRedirect.
+  // El flujo de redirect ya se probó en este proyecto y falla en Safari/iOS (la sesión se
+  // pierde al volver de Google). Debe dispararse como reacción directa al clic del usuario
+  // (ver onGoogleLogin en AuthScreen.jsx), sin awaits previos, para que el navegador no
+  // bloquee el popup. Ver regla inmutable en CLAUDE.md.
   const handleGoogleLogin = async () => {
     try {
       const cred = await signInWithPopup(auth, googleProvider);
