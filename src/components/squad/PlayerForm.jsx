@@ -138,7 +138,14 @@ function SectionHeader({ emoji, title }) {
   );
 }
 
-export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onClose, initialStep = 1 }) {
+// lockedType / restrictTypes / hidePurchasePrice: variantes usadas por el asistente de
+// bienvenida (OnboardingWizard) para reutilizar este mismo formulario "Fichar Jugador" sin
+// duplicar su lógica — lockedType oculta por completo el selector de Tipo de Adquisición
+// (p. ej. canteranos, siempre 'Cantera'); restrictTypes limita qué botones se muestran sin
+// bloquear la elección (p. ej. plantilla ya existente: solo Comprado/Cedido, sin Cantera);
+// hidePurchasePrice oculta el Precio de Compra para jugadores "base" del club que nunca se
+// compraron por una cifra (siguen teniendo Valor de Mercado, Sueldo, etc.).
+export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onClose, initialStep = 1, lockedType = null, restrictTypes = null, hidePurchasePrice = false }) {
   const { addOrUpdatePlayer, deleteScout } = useClubData();
   useAutoHideChrome();
 
@@ -199,6 +206,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
   // el tipo de adquisición a 'Cedido' se limpia cualquier estado de mercado previo (no puede
   // quedar marcado como Transferible/Cedible/CedidoFuera de un club que no es el suyo).
   const selectAcquisitionType = (t) => {
+    if (lockedType) return;
     const patch = { type: t, contractYears: '' };
     if (t === 'Cedido') { patch.transferStatus = 'Activo'; patch.outboundLoan = null; }
     // La Cantera no maneja términos económicos: se limpian para no arrastrar en silencio un
@@ -308,7 +316,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
     }
     if (s === 3) {
       if (form.type !== 'Cantera' && (!form.marketValue || parseValue(form.marketValue) <= 0)) return 'Valor de mercado obligatorio.';
-      if (form.type === 'Comprado' && (!form.value || parseValue(form.value) <= 0)) return 'Precio de compra obligatorio.';
+      if (form.type === 'Comprado' && !hidePurchasePrice && (!form.value || parseValue(form.value) <= 0)) return 'Precio de compra obligatorio.';
       if (form.type === 'Cedido' && !form.originClub.trim()) return 'Club de origen obligatorio.';
       if (form.type === 'Cedido' && form.hasBuyOption && (!form.buyOption || parseValue(form.buyOption) <= 0)) return 'Introduce el precio de la opción de compra.';
       if (form.type === 'Cantera' && form.potential && !isValidPotentialInput(form.potential)) return 'Potencial entre 1 y 99, o un rango como 64-88.';
@@ -523,14 +531,24 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
               {step === 3 && (
                 <>
-                  <div className="space-y-1 relative">
-                    <label className="text-[9px] font-black text-fg-muted ml-1">Tipo de Adquisición</label>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => selectAcquisitionType('Cantera')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Cantera' ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cantera</button>
-                      <button type="button" onClick={() => selectAcquisitionType('Cedido')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Cedido</button>
-                      <button type="button" onClick={() => selectAcquisitionType('Comprado')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === 'Comprado' ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Comprado</button>
+                  {/* lockedType (usado por el asistente de bienvenida para canteranos y
+                      jugadores base): oculta el selector por completo, el tipo ya viene fijado
+                      desde "prefill". restrictTypes limita qué botones se muestran sin bloquear
+                      la elección (p. ej. solo Comprado/Cedido al registrar una plantilla ya
+                      existente, sin la opción Cantera). */}
+                  {!lockedType && (
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Tipo de Adquisición</label>
+                      <div className="flex gap-2">
+                        {(restrictTypes || ['Cantera', 'Cedido', 'Comprado']).map((t) => {
+                          const activeClass = t === 'Cantera' ? 'bg-emerald-600 text-white' : t === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-blue-600 text-white';
+                          return (
+                            <button key={t} type="button" onClick={() => selectAcquisitionType(t)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === t ? activeClass : 'bg-well text-fg-muted hover:bg-well-strong'}`}>{t}</button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
+                  )}
                   {/* Cantera: la ficha ya recoge Media/Edad/Posición en el Paso 2; aquí solo
                       falta el Potencial. Sin valor de mercado, sueldo, años de contrato ni
                       cláusula — un canterano todavía no tiene términos económicos. */}
@@ -541,7 +559,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     </div>
                   )}
 
-                  {form.type === 'Comprado' && (
+                  {form.type === 'Comprado' && !hidePurchasePrice && (
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Precio de Compra (€) *</label>
                       <input type="text" inputMode="numeric" required placeholder="Ej: 50.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.value} onChange={formatMoneyField('value')} />
@@ -723,14 +741,16 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
 
                   <SectionHeader emoji="💰" title="Economía" />
                   <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
-                    <ReviewRow label="Adquisición" active={editField === 'type'} onOpen={() => setEditField('type')} display={form.type}>
-                      <div className="flex gap-2">
-                        {['Cantera', 'Cedido', 'Comprado'].map((t) => (
-                          <button key={t} type="button" onClick={() => selectAcquisitionType(t)} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${form.type === t ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>{t}</button>
-                        ))}
-                      </div>
-                      <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
-                    </ReviewRow>
+                    {!lockedType && (
+                      <ReviewRow label="Adquisición" active={editField === 'type'} onOpen={() => setEditField('type')} display={form.type}>
+                        <div className="flex gap-2">
+                          {(restrictTypes || ['Cantera', 'Cedido', 'Comprado']).map((t) => (
+                            <button key={t} type="button" onClick={() => selectAcquisitionType(t)} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${form.type === t ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>{t}</button>
+                          ))}
+                        </div>
+                        <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
+                      </ReviewRow>
+                    )}
 
                     {/* Valor de Mercado: oculto para Cantera, igual que en el Paso 3. */}
                     {form.type !== 'Cantera' && (
@@ -742,9 +762,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                     {/* Campos dinámicos: cambian según el Tipo de Adquisición elegido arriba. */}
                     {form.type === 'Comprado' && (
                       <>
-                        <ReviewRow label="Precio de Compra (€)" active={editField === 'value'} onOpen={() => setEditField('value')} display={`${form.value || '0'} €`}>
-                          <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.value} onChange={formatMoneyField('value')} />
-                        </ReviewRow>
+                        {!hidePurchasePrice && (
+                          <ReviewRow label="Precio de Compra (€)" active={editField === 'value'} onOpen={() => setEditField('value')} display={`${form.value || '0'} €`}>
+                            <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.value} onChange={formatMoneyField('value')} />
+                          </ReviewRow>
+                        )}
                         <ReviewRow label="Sueldo Mensual (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
                           <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
                         </ReviewRow>

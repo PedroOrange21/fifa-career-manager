@@ -87,12 +87,15 @@ export default function ClubShell() {
 
         {!chromeHidden && !hasNoClubs && !loadingClubs && activeClubId && <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />}
 
-        {showClubModal && <ClubModal onFirstClubCreated={() => { setActiveTab('club'); setClubSubTab('squad'); setPendingPrefill({}); }} />}
+        {showClubModal && <ClubModal onFirstClubCreated={() => { setActiveTab('club'); setClubSubTab('squad'); }} />}
         {editingClub && <ClubModal editingClub={editingClub} onClose={() => setEditingClub(null)} />}
 
         {/* Se autogestiona: decide internamente si corresponde mostrarse (club activo sin
-            plantilla y sin el onboarding ya resuelto) sin que ClubShell tenga que saberlo. */}
-        {activeClubId && !loadingClubs && <OnboardingWizard />}
+            plantilla y sin el onboarding ya resuelto) sin que ClubShell tenga que saberlo.
+            Se excluye mientras showClubModal está abierto: ese caso ya lo lleva el propio
+            asistente de creación (ClubModal -> OnboardingWizardModal clubExists=false), y
+            mostrar los dos a la vez duplicaría el modal para el mismo club recién creado. */}
+        {activeClubId && !loadingClubs && !showClubModal && <OnboardingWizard />}
 
         {clubToDelete && (
           <ConfirmModal

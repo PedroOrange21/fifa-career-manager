@@ -1,29 +1,27 @@
-import { useEffect, useState } from 'react';
-import { X, Check, ChevronLeft, ChevronRight, Plus, Trash2, Wallet, Users, Sparkles, RotateCcw } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { X, Check, ChevronLeft, ChevronRight, Plus, Wallet, Users, Sparkles, RotateCcw, Shield, Camera, RefreshCcw, ShieldAlert } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
-import { ALL_POSITIONS } from '../../constants/positions';
-import { formatValueInput, parseValue, formatCurrency, isValidPotentialInput } from '../../utils/format';
+import { formatCurrency, formatValueInput, parseValue } from '../../utils/format';
+import { resizeImageToDataUrl } from '../../utils/image';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
-import Dropdown from '../common/Dropdown';
+import PlayerForm from '../squad/PlayerForm';
 
-const POSITION_OPTIONS = ALL_POSITIONS.map((p) => ({ value: p, label: p }));
-const TOTAL_STEPS = 5;
+const BUDGET_PRESETS = [1000000, 5000000, 10000000, 50000000, 100000000, 200000000, 500000000, 1000000000];
 
-const newActiveRow = () => ({ id: crypto.randomUUID(), name: '', position: '', rating: '', age: '', wage: '', releaseClause: '' });
-const newAcademyRow = () => ({ id: crypto.randomUUID(), name: '', potential: '', rating: '', age: '', position: '' });
-const newLoanedRow = () => ({ id: crypto.randomUUID(), name: '', position: '', rating: '', age: '', destinationClub: '', wagePercentage: '' });
-
-// h-[52px]: misma altura que el componente Dropdown (fija, sin prop para personalizarla),
-// para que ambos queden alineados cuando comparten fila en un grid.
-const FIELD = 'w-full h-[52px] bg-well-strong px-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold text-fg text-sm placeholder:text-fg-faint';
-const FIELD_CENTER = `${FIELD} text-center`;
+function abbreviateBudget(amount) {
+  if (amount >= 1000000) return `${(amount / 1000000).toLocaleString('es-ES', { useGrouping: true })}M €`;
+  if (amount >= 1000) return `${amount / 1000}Mil €`;
+  return `${amount} €`;
+}
 
 // Puerta de entrada: decide si corresponde mostrar el asistente (sin montar sus hooks de
 // "pantalla limpia" salvo que realmente vaya a mostrarse) y, si es así, monta el modal.
 // Condición de activación: hay un club activo, ya se resolvió el primer snapshot de
 // jugadores (playersLoaded evita el falso positivo al cambiar de club), la plantilla está
 // realmente vacía y este club no tiene el onboarding ya resuelto (completado u omitido).
+// ClubShell la condiciona además a que no esté abierto el asistente de creación de club
+// (showClubModal), que es quien lleva el onboarding de un club recién creado.
 export default function OnboardingWizard() {
   const { activeClub } = useClubs();
   const { players, playersLoaded } = useClubData();
@@ -35,329 +33,349 @@ export default function OnboardingWizard() {
 
   const shouldShow = !!activeClub && playersLoaded && players.length === 0 && !activeClub.onboardingCompleted && !locallyDismissed;
   if (!shouldShow) return null;
-  return <OnboardingWizardModal onDismiss={() => setLocallyDismissed(true)} />;
+  return <OnboardingWizardModal clubExists onDismiss={() => setLocallyDismissed(true)} />;
 }
 
-function OnboardingWizardModal({ onDismiss }) {
-  useAutoHideChrome();
-  const { setBudget, completeOnboarding } = useClubs();
-  const { addOrUpdatePlayer } = useClubData();
+// h-[52px]: misma altura que el componente Dropdown, para que ambos queden alineados cuando
+// comparten fila en un grid.
+const FIELD = 'w-full h-[52px] bg-well-strong px-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold text-fg text-sm placeholder:text-fg-faint';
 
-  const [step, setStep] = useState(1);
+// Asistente unificado: identidad + fondos iniciales del club (solo si aún no existe, es decir
+// al crear un club nuevo, primero o adicional) seguido siempre por la distinción entre
+// "Empezar desde cero" y "Modo Carrera ya empezado", el registro de jugadores (reutilizando
+// literalmente PlayerForm, el mismo formulario de "Fichar Jugador") y un resumen final.
+// clubExists=false (invocado desde ClubModal al crear un club): añade los pasos de
+// identidad/fondos por delante y crea el club en Firestore al final del paso de fondos.
+// clubExists=true (invocado automáticamente por el wrapper de arriba): empieza directamente
+// en el paso de "Estado de la Partida", ya que el club y su presupuesto ya existen.
+export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClubCreated }) {
+  useAutoHideChrome();
+  const { clubs, activeClubId, activeClub, createClub, completeOnboarding } = useClubs();
+  const { players } = useClubData();
+
+  const STEP_SEQUENCE = clubExists
+    ? ['status', 'active', 'academy', 'summary']
+    : ['identity', 'budget', 'status', 'active', 'academy', 'summary'];
+
+  const [step, setStep] = useState(0);
+  const currentStepId = STEP_SEQUENCE[step];
+
+  // --- Paso Identidad (solo clubExists=false) ---
+  const [name, setName] = useState('');
+  const [logo, setLogo] = useState('');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // --- Paso Fondos (solo clubExists=false) ---
+  const [budget, setBudget] = useState(BUDGET_PRESETS[0]);
+  const [customMode, setCustomMode] = useState(false);
+  const [customBudget, setCustomBudget] = useState('');
+  const [createdClubId, setCreatedClubId] = useState(null);
+
+  // --- Paso Estado de la Partida ---
   const [startType, setStartType] = useState(null); // 'scratch' | 'continue'
-  const [activePlayers, setActivePlayers] = useState([]);
+
+  // --- Paso Academia ---
   const [hasAcademy, setHasAcademy] = useState(null);
-  const [academyPlayers, setAcademyPlayers] = useState([]);
-  const [hasLoanedOut, setHasLoanedOut] = useState(null);
-  const [loanedPlayers, setLoanedPlayers] = useState([]);
-  const [initialBudget, setInitialBudget] = useState('');
+
+  // --- Registro de jugadores: abre PlayerForm (idéntico a "Fichar Jugador") por encima de
+  // este asistente; cada ficha se guarda directamente en Firestore, así que la lista que se
+  // muestra aquí simplemente lee "players" en vivo, sin estado local propio. ---
+  const [addingPlayerMode, setAddingPlayerMode] = useState(null); // 'active' | 'academy' | null
+
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const updateRow = (setter) => (id, field, value) => setter((rows) => rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
-  const addRow = (setter, factory) => () => setter((rows) => [...rows, factory()]);
-  const removeRow = (setter) => (id) => setter((rows) => rows.filter((r) => r.id !== id));
-
-  const updateActiveRow = updateRow(setActivePlayers);
-  const addActiveRow = addRow(setActivePlayers, newActiveRow);
-  const removeActiveRow = removeRow(setActivePlayers);
-
-  const updateAcademyRow = updateRow(setAcademyPlayers);
-  const addAcademyRow = addRow(setAcademyPlayers, newAcademyRow);
-  const removeAcademyRow = removeRow(setAcademyPlayers);
-
-  const updateLoanedRow = updateRow(setLoanedPlayers);
-  const addLoanedRow = addRow(setLoanedPlayers, newLoanedRow);
-  const removeLoanedRow = removeRow(setLoanedPlayers);
-
-  // "Por defecto sugiere entre 3 y 4": al responder que sí, se precargan 3 filas vacías
-  // listas para rellenar, en vez de obligar a pulsar "+" repetidamente.
-  const answerHasAcademy = (val) => {
-    setHasAcademy(val);
-    if (val) { if (academyPlayers.length === 0) setAcademyPlayers([newAcademyRow(), newAcademyRow(), newAcademyRow()]); }
-    else setAcademyPlayers([]);
-  };
-  const answerHasLoanedOut = (val) => {
-    setHasLoanedOut(val);
-    if (val) { if (loanedPlayers.length === 0) setLoanedPlayers([newLoanedRow()]); }
-    else setLoanedPlayers([]);
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    setIsUploadingLogo(true);
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, 150, 0.8);
+      setLogo(dataUrl);
+    } finally {
+      setIsUploadingLogo(false);
+    }
   };
 
-  // "Empezar desde cero" no tiene plantilla, academia ni cedidos que registrar: los pasos
-  // 2-4 se saltan por completo, yendo directos del Paso 1 al Paso 5 (Finanzas) y viceversa.
-  const goNext = () => {
+  const pickPreset = (amount) => { setCustomMode(false); setCustomBudget(''); setBudget(amount); };
+  const pickCustom = () => { setCustomMode(true); setBudget(parseValue(customBudget)); };
+  const onCustomBudgetChange = (raw) => {
+    const formatted = formatValueInput(raw);
+    setCustomBudget(formatted);
+    setBudget(parseValue(formatted));
+  };
+
+  const activeRosterPlayers = players.filter((p) => p.type !== 'Cantera');
+  const academyRosterPlayers = players.filter((p) => p.type === 'Cantera');
+
+  const canGoNext = () => {
+    if (currentStepId === 'identity') return name.trim().length > 0;
+    if (currentStepId === 'budget') return !customMode || parseValue(customBudget) > 0;
+    if (currentStepId === 'status') return !!startType;
+    if (currentStepId === 'academy') return hasAcademy !== null;
+    return true;
+  };
+
+  const goNext = async () => {
     setError('');
-    if (step === 1) {
-      if (!startType) { setError('Elige cómo quieres empezar.'); return; }
-      setStep(startType === 'scratch' ? 5 : 2);
+    if (!canGoNext()) {
+      if (currentStepId === 'identity') setError('El nombre del club es obligatorio.');
+      else if (currentStepId === 'budget') setError('Introduce una cantidad mayor que cero.');
+      else if (currentStepId === 'status') setError('Elige cómo quieres empezar.');
+      else if (currentStepId === 'academy') setError('Responde si tu club tiene canteranos.');
       return;
     }
-    setStep((s) => Math.min(TOTAL_STEPS, s + 1));
+    if (currentStepId === 'budget') {
+      if (isSaving) return;
+      setIsSaving(true);
+      try {
+        const result = await createClub(name, logo, budget);
+        setCreatedClubId(result?.clubId || null);
+        setIsSaving(false);
+        setStep((s) => s + 1);
+      } catch (err) {
+        console.error(err);
+        setError('No se pudo crear el club. Inténtalo de nuevo.');
+        setIsSaving(false);
+      }
+      return;
+    }
+    setStep((s) => Math.min(STEP_SEQUENCE.length - 1, s + 1));
   };
-  const goPrev = () => {
-    setError('');
-    if (step === 5 && startType === 'scratch') { setStep(1); return; }
-    setStep((s) => Math.max(1, s - 1));
-  };
+  const goPrev = () => { setError(''); setStep((s) => Math.max(0, s - 1)); };
 
+  // Solo se marca el onboarding como resuelto si este propio asistente llegó a tener un club
+  // real asociado (ya existía, o se acaba de crear aquí): omitir en los pasos de identidad o
+  // fondos, antes de crear el club, no debe tocar el onboarding de ningún otro club.
   const handleSkip = async () => {
-    onDismiss();
-    try { await completeOnboarding(); } catch (err) { console.error(err); }
+    onDismiss?.();
+    if (clubExists || createdClubId) {
+      try { await completeOnboarding(); } catch (err) { console.error(err); }
+    }
   };
 
   const handleFinish = async () => {
     if (isSaving) return;
-    setError('');
     setIsSaving(true);
     try {
-      const tasks = [];
-
-      for (const p of activePlayers) {
-        if (!p.name.trim()) continue;
-        tasks.push(addOrUpdatePlayer({
-          name: p.name.trim(),
-          positions: p.position ? [p.position] : [],
-          rating: parseInt(p.rating) || 1,
-          age: parseInt(p.age) || 18,
-          preferredFoot: 'Diestro',
-          type: 'Comprado',
-          value: 0,
-          marketValue: 0,
-          wage: parseValue(p.wage),
-          releaseClause: parseValue(p.releaseClause) || null,
-          transferStatus: 'Activo',
-        }));
-      }
-
-      for (const p of academyPlayers) {
-        if (!p.name.trim()) continue;
-        const potential = p.potential.trim();
-        tasks.push(addOrUpdatePlayer({
-          name: p.name.trim(),
-          positions: p.position ? [p.position] : [],
-          rating: parseInt(p.rating) || 1,
-          age: parseInt(p.age) || 16,
-          preferredFoot: 'Diestro',
-          type: 'Cantera',
-          value: 0,
-          marketValue: 0,
-          wage: 0,
-          potential: potential && isValidPotentialInput(potential) ? potential : null,
-          transferStatus: 'Activo',
-        }));
-      }
-
-      for (const p of loanedPlayers) {
-        if (!p.name.trim()) continue;
-        tasks.push(addOrUpdatePlayer({
-          name: p.name.trim(),
-          positions: p.position ? [p.position] : [],
-          rating: parseInt(p.rating) || 1,
-          age: parseInt(p.age) || 18,
-          preferredFoot: 'Diestro',
-          type: 'Comprado',
-          value: 0,
-          marketValue: 0,
-          wage: 0,
-          transferStatus: 'CedidoFuera',
-          outboundLoan: {
-            destinationClub: p.destinationClub.trim() || 'Club desconocido',
-            duration: '1 Temporada',
-            wagePercentage: parseInt(p.wagePercentage) || 0,
-          },
-        }));
-      }
-
-      if (initialBudget) tasks.push(setBudget(parseValue(initialBudget)));
-
-      await Promise.all(tasks);
-      onDismiss();
       await completeOnboarding();
+      onDismiss?.();
+      onFirstClubCreated?.();
     } catch (err) {
       console.error(err);
-      setError('No se pudo guardar todo. Inténtalo de nuevo.');
+      setError('No se pudo completar. Inténtalo de nuevo.');
       setIsSaving(false);
     }
   };
 
-  // Vista previa de la masa salarial mensual que arrastrará el club con los sueldos ya
-  // introducidos en el Paso 2 (informativa: la cifra real siempre se recalcula a partir de
-  // los jugadores guardados, igual que en Finanzas — aquí solo se anticipa el resultado).
-  const projectedWageBill = activePlayers.reduce((sum, p) => sum + (parseValue(p.wage) || 0), 0);
+  // Una vez creado el club (o si ya existía), "clubs.length > 0" es siempre cierto — el botón
+  // de cerrar solo se oculta durante identidad/fondos cuando este es el primer club del
+  // usuario (no puede quedarse sin ningún club activo).
+  const showDismiss = clubExists || clubs.length > 0;
 
-  const stepLabel = ['Tipo de Inicio', 'Plantilla Activa', 'Academia', 'Cedidos', 'Finanzas'][step - 1];
-  const isLastStep = step === TOTAL_STEPS;
+  const isScratch = startType === 'scratch';
+  const playerFormPropsFor = (mode) => {
+    if (mode === 'academy') return { prefill: { type: 'Cantera' }, lockedType: 'Cantera' };
+    if (isScratch) return { prefill: { type: 'Comprado' }, lockedType: 'Comprado', hidePurchasePrice: true };
+    return { prefill: { type: 'Comprado' }, restrictTypes: ['Comprado', 'Cedido'] };
+  };
+
+  const STEP_LABELS = {
+    identity: 'Escudo y Nombre',
+    budget: 'Fondos Iniciales',
+    status: 'Estado de la Partida',
+    active: isScratch ? 'Jugadores Base' : 'Plantilla Actual',
+    academy: 'Academia',
+    summary: 'Resumen',
+  };
+
+  const displayName = clubExists ? (activeClub?.name || '') : name;
+  const displayLogo = clubExists ? activeClub?.logo : logo;
+  const displayBudget = clubExists ? (activeClub?.transferBudget || 0) : budget;
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-surface border border-border rounded-[32px] w-full max-w-md shadow-2xl max-h-[90dvh] flex flex-col overflow-hidden">
-        <div className="shrink-0 bg-surface flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
-          <div className="min-w-0">
-            <h3 className="font-black italic text-green-500 text-sm uppercase flex items-center gap-2"><Sparkles size={16} className="shrink-0" /> Bienvenido a tu Club</h3>
-            <p className="text-[9px] font-black uppercase tracking-widest text-fg-faint mt-0.5">Paso {step} de {TOTAL_STEPS} · {stepLabel}</p>
+    <>
+      <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="bg-surface border border-border rounded-[32px] w-full max-w-md shadow-2xl max-h-[90dvh] flex flex-col overflow-hidden">
+          <div className="shrink-0 bg-surface flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
+            <div className="min-w-0">
+              <h3 className="font-black italic text-green-500 text-sm uppercase flex items-center gap-2"><Sparkles size={16} className="shrink-0" /> {clubExists ? 'Bienvenido a tu Club' : 'Crea tu Club'}</h3>
+              <p className="text-[9px] font-black uppercase tracking-widest text-fg-faint mt-0.5">Paso {step + 1} de {STEP_SEQUENCE.length} · {STEP_LABELS[currentStepId]}</p>
+            </div>
+            {showDismiss && (
+              <button type="button" onClick={handleSkip} title="Omitir y configurar más tarde" className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full text-fg-faint hover:text-fg hover:bg-well transition-colors text-[9px] font-black uppercase tracking-widest">
+                Omitir <X size={14} />
+              </button>
+            )}
           </div>
-          <button type="button" onClick={handleSkip} title="Omitir y configurar más tarde" className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full text-fg-faint hover:text-fg hover:bg-well transition-colors text-[9px] font-black uppercase tracking-widest">
-            Omitir <X size={14} />
-          </button>
-        </div>
 
-        <div className="px-5 pt-4">
-          <div className="flex items-center gap-1.5">
-            {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
-              <div key={n} className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${n <= step ? 'bg-green-500' : 'bg-well-strong'}`} />
-            ))}
+          <div className="px-5 pt-4">
+            <div className="flex items-center gap-1.5">
+              {STEP_SEQUENCE.map((id, i) => (
+                <div key={id} className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${i <= step ? 'bg-green-500' : 'bg-well-strong'}`} />
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div className="px-5 pt-4 flex-1 overflow-y-auto no-scrollbar">
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl mb-3 text-red-400 text-[10px] font-black">{error}</div>
-          )}
-
-          <div className="space-y-4 pb-4 animate-in fade-in duration-300">
-            {step === 1 && (
-              <div className="space-y-3">
-                <p className="text-xs font-bold text-fg-muted">¿Cómo quieres empezar tu Modo Carrera?</p>
-                <button type="button" onClick={() => setStartType('scratch')} className={`w-full p-4 rounded-2xl border text-left transition-all ${startType === 'scratch' ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:bg-well-strong'}`}>
-                  <div className="font-black uppercase text-sm flex items-center gap-2"><RotateCcw size={16} /> Empezar desde Cero</div>
-                  <div className="text-[10px] font-bold mt-1 opacity-70">Sin plantilla todavía — la irás fichando tú mismo desde la Plantilla y el Mercado.</div>
-                </button>
-                <button type="button" onClick={() => setStartType('continue')} className={`w-full p-4 rounded-2xl border text-left transition-all ${startType === 'continue' ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:bg-well-strong'}`}>
-                  <div className="font-black uppercase text-sm flex items-center gap-2"><Users size={16} /> Continuar un Modo Carrera ya Empezado</div>
-                  <div className="text-[10px] font-bold mt-1 opacity-70">Registra ahora tu plantilla, academia y cedidos actuales.</div>
-                </button>
+          <div className="px-5 pt-4 flex-1 overflow-y-auto no-scrollbar">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl mb-3 flex gap-2 text-red-400 text-[10px] font-black items-center animate-pulse">
+                <ShieldAlert size={14} className="shrink-0" /><span>{error}</span>
               </div>
             )}
 
-            {step === 2 && (
-              <div className="space-y-3">
-                <p className="text-xs font-bold text-fg-muted">Añade los jugadores de tu primer equipo. Puedes dejar filas vacías y completarlas más tarde.</p>
-                {activePlayers.map((r) => (
-                  <div key={r.id} className="bg-well rounded-2xl p-3 space-y-2 relative">
-                    <button type="button" onClick={() => removeActiveRow(r.id)} className="absolute top-2.5 right-2.5 p-1 text-fg-faint hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
-                    <input placeholder="Nombre del jugador" className={FIELD} value={r.name} onChange={(e) => updateActiveRow(r.id, 'name', e.target.value)} />
-                    <div className="grid grid-cols-3 gap-2">
-                      <Dropdown value={r.position} options={POSITION_OPTIONS} onChange={(v) => updateActiveRow(r.id, 'position', v)} placeholder="Pos." />
-                      <input placeholder="Media" inputMode="numeric" className={FIELD_CENTER} value={r.rating} onChange={(e) => updateActiveRow(r.id, 'rating', e.target.value.replace(/\D/g, ''))} />
-                      <input placeholder="Edad" inputMode="numeric" className={FIELD_CENTER} value={r.age} onChange={(e) => updateActiveRow(r.id, 'age', e.target.value.replace(/\D/g, ''))} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input placeholder="Sueldo mensual (€)" inputMode="numeric" className={FIELD} value={r.wage} onChange={(e) => updateActiveRow(r.id, 'wage', formatValueInput(e.target.value))} />
-                      <input placeholder="Cláusula (€) — opcional" inputMode="numeric" className={FIELD} value={r.releaseClause} onChange={(e) => updateActiveRow(r.id, 'releaseClause', formatValueInput(e.target.value))} />
+            <div key={currentStepId} className="space-y-4 pb-4 animate-in fade-in duration-300">
+              {currentStepId === 'identity' && (
+                <div className="space-y-4">
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="relative group cursor-pointer" onClick={() => !isUploadingLogo && fileInputRef.current?.click()}>
+                      {logo ? <img src={logo} alt="Logo" className="w-20 h-20 rounded-2xl border-2 border-border object-cover shadow-2xl" /> : <div className="w-20 h-20 rounded-2xl bg-well border-2 border-dashed border-border flex flex-col items-center justify-center shadow-2xl hover:border-green-500 transition-all text-fg-muted hover:text-green-500"><Shield size={28} /><span className="text-[8px] font-black uppercase mt-1">Escudo</span></div>}
+                      <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleLogoUpload} />
+                      <button type="button" disabled={isUploadingLogo} className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">{isUploadingLogo ? <RefreshCcw size={20} className="animate-spin text-white" /> : <Camera size={20} className="text-white" />}</button>
                     </div>
                   </div>
-                ))}
-                <button type="button" onClick={addActiveRow} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                  <Plus size={14} /> Añadir Jugador
-                </button>
-              </div>
-            )}
-
-            {step === 3 && (
-              <div className="space-y-3">
-                <p className="text-xs font-bold text-fg-muted">¿Tu club tiene canteranos en la Academia?</p>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => answerHasAcademy(true)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${hasAcademy === true ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Sí</button>
-                  <button type="button" onClick={() => answerHasAcademy(false)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${hasAcademy === false ? 'bg-well-strong text-fg' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>No</button>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Nombre del Club</label>
+                    <input type="text" autoFocus placeholder="Ej: CD Olvera" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); goNext(); } }} />
+                  </div>
                 </div>
-                {hasAcademy && (
-                  <>
-                    {academyPlayers.map((r) => (
-                      <div key={r.id} className="bg-well rounded-2xl p-3 space-y-2 relative">
-                        <button type="button" onClick={() => removeAcademyRow(r.id)} className="absolute top-2.5 right-2.5 p-1 text-fg-faint hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
-                        <input placeholder="Nombre del canterano" className={FIELD} value={r.name} onChange={(e) => updateAcademyRow(r.id, 'name', e.target.value)} />
-                        <div className="grid grid-cols-3 gap-2">
-                          <Dropdown value={r.position} options={POSITION_OPTIONS} onChange={(v) => updateAcademyRow(r.id, 'position', v)} placeholder="Pos." />
-                          <input placeholder="Media" inputMode="numeric" className={FIELD_CENTER} value={r.rating} onChange={(e) => updateAcademyRow(r.id, 'rating', e.target.value.replace(/\D/g, ''))} />
-                          <input placeholder="Edad" inputMode="numeric" className={FIELD_CENTER} value={r.age} onChange={(e) => updateAcademyRow(r.id, 'age', e.target.value.replace(/\D/g, ''))} />
-                        </div>
-                        <input placeholder="Potencial: 88 o rango 64-88" className={FIELD} value={r.potential} onChange={(e) => updateAcademyRow(r.id, 'potential', e.target.value.replace(/[^\d-]/g, ''))} />
+              )}
+
+              {currentStepId === 'budget' && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 p-3 rounded-2xl bg-well border border-border-subtle">
+                    <Wallet size={16} className="text-green-500 shrink-0" />
+                    <span className="text-xs font-bold text-fg-muted">Fondos para fichajes y masa salarial desde el primer día</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {BUDGET_PRESETS.map((amount) => (
+                      <button key={amount} type="button" onClick={() => pickPreset(amount)} className={`py-3 rounded-xl text-[10px] font-black uppercase border transition-all ${!customMode && budget === amount ? 'bg-green-500 text-black border-green-500' : 'bg-well border-border-subtle text-fg-secondary hover:border-fg-muted'}`}>
+                        {abbreviateBudget(amount)}
+                      </button>
+                    ))}
+                    <button type="button" onClick={pickCustom} className={`py-3 rounded-xl text-[10px] font-black uppercase border transition-all ${customMode ? 'bg-green-500 text-black border-green-500' : 'bg-well border-border-subtle text-fg-secondary hover:border-fg-muted'}`}>
+                      Personalizar
+                    </button>
+                  </div>
+                  {customMode && (
+                    <div className="space-y-2 animate-in fade-in duration-150">
+                      <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Cantidad Personalizada</label>
+                      <input type="text" inputMode="numeric" autoFocus placeholder="Ej: 20.000.000" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={customBudget} onChange={(e) => onCustomBudgetChange(e.target.value)} />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {currentStepId === 'status' && (
+                <div className="space-y-3">
+                  <p className="text-xs font-bold text-fg-muted">¿Cómo quieres empezar tu Modo Carrera?</p>
+                  <button type="button" onClick={() => setStartType('scratch')} className={`w-full p-4 rounded-2xl border text-left transition-all ${startType === 'scratch' ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:bg-well-strong'}`}>
+                    <div className="font-black uppercase text-sm flex items-center gap-2"><RotateCcw size={16} /> Empezar desde Cero</div>
+                    <div className="text-[10px] font-bold mt-1 opacity-70">Registra los jugadores base de tu club: sin precio de compra ni cesiones, solo sus datos deportivos y económicos.</div>
+                  </button>
+                  <button type="button" onClick={() => setStartType('continue')} className={`w-full p-4 rounded-2xl border text-left transition-all ${startType === 'continue' ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:bg-well-strong'}`}>
+                    <div className="font-black uppercase text-sm flex items-center gap-2"><Users size={16} /> Modo Carrera ya Empezado</div>
+                    <div className="text-[10px] font-bold mt-1 opacity-70">Registra tu plantilla actual, ficha a ficha, igual que en "Fichar Jugador" (Comprado o Cedido).</div>
+                  </button>
+                </div>
+              )}
+
+              {currentStepId === 'active' && (
+                <div className="space-y-3">
+                  <p className="text-xs font-bold text-fg-muted">{isScratch ? 'Añade los jugadores base de tu primer equipo.' : 'Añade tu plantilla actual, ficha a ficha.'}</p>
+                  <div className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+                    {activeRosterPlayers.length === 0 ? (
+                      <div className="p-4 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Aún no has añadido jugadores</div>
+                    ) : activeRosterPlayers.map((p) => (
+                      <div key={p.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
+                        <span className="text-xs font-black text-fg truncate">{p.name}</span>
+                        <span className="text-[9px] font-black text-fg-faint uppercase shrink-0 ml-2">{p.positions?.[0] || '—'} · {p.rating}</span>
                       </div>
                     ))}
-                    <button type="button" onClick={addAcademyRow} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                      <Plus size={14} /> Añadir Canterano
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-
-            {step === 4 && (
-              <div className="space-y-3">
-                <p className="text-xs font-bold text-fg-muted">¿Tienes jugadores cedidos actualmente en otros clubes?</p>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => answerHasLoanedOut(true)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${hasLoanedOut === true ? 'bg-blue-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Sí</button>
-                  <button type="button" onClick={() => answerHasLoanedOut(false)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${hasLoanedOut === false ? 'bg-well-strong text-fg' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>No</button>
+                  </div>
+                  <button type="button" onClick={() => setAddingPlayerMode('active')} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                    <Plus size={14} /> Añadir Jugador
+                  </button>
                 </div>
-                {hasLoanedOut && (
-                  <>
-                    {loanedPlayers.map((r) => (
-                      <div key={r.id} className="bg-well rounded-2xl p-3 space-y-2 relative">
-                        <button type="button" onClick={() => removeLoanedRow(r.id)} className="absolute top-2.5 right-2.5 p-1 text-fg-faint hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
-                        <input placeholder="Nombre del jugador" className={FIELD} value={r.name} onChange={(e) => updateLoanedRow(r.id, 'name', e.target.value)} />
-                        <div className="grid grid-cols-3 gap-2">
-                          <Dropdown value={r.position} options={POSITION_OPTIONS} onChange={(v) => updateLoanedRow(r.id, 'position', v)} placeholder="Pos." />
-                          <input placeholder="Media" inputMode="numeric" className={FIELD_CENTER} value={r.rating} onChange={(e) => updateLoanedRow(r.id, 'rating', e.target.value.replace(/\D/g, ''))} />
-                          <input placeholder="Edad" inputMode="numeric" className={FIELD_CENTER} value={r.age} onChange={(e) => updateLoanedRow(r.id, 'age', e.target.value.replace(/\D/g, ''))} />
-                        </div>
-                        <input placeholder="Club de destino" className={FIELD} value={r.destinationClub} onChange={(e) => updateLoanedRow(r.id, 'destinationClub', e.target.value)} />
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-black text-fg-faint ml-1 uppercase tracking-widest">% Salario asumido por tu club</label>
-                          <div className="flex items-center gap-3">
-                            <input type="range" min="0" max="100" step="5" className="flex-1 accent-blue-500" value={r.wagePercentage || 0} onChange={(e) => updateLoanedRow(r.id, 'wagePercentage', e.target.value)} />
-                            <span className="w-12 text-center font-black text-fg bg-well-strong rounded-lg py-1.5 text-xs shrink-0">{r.wagePercentage || 0}%</span>
+              )}
+
+              {currentStepId === 'academy' && (
+                <div className="space-y-3">
+                  <p className="text-xs font-bold text-fg-muted">¿Tu club tiene canteranos en la Academia?</p>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setHasAcademy(true)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${hasAcademy === true ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Sí</button>
+                    <button type="button" onClick={() => setHasAcademy(false)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${hasAcademy === false ? 'bg-well-strong text-fg' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>No</button>
+                  </div>
+                  {hasAcademy && (
+                    <>
+                      <div className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+                        {academyRosterPlayers.length === 0 ? (
+                          <div className="p-4 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Aún no has añadido canteranos</div>
+                        ) : academyRosterPlayers.map((p) => (
+                          <div key={p.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
+                            <span className="text-xs font-black text-fg truncate">{p.name}</span>
+                            <span className="text-[9px] font-black text-fg-faint uppercase shrink-0 ml-2">{p.positions?.[0] || '—'} · Pot. {p.potential || '—'}</span>
                           </div>
-                        </div>
+                        ))}
                       </div>
-                    ))}
-                    <button type="button" onClick={addLoanedRow} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                      <Plus size={14} /> Añadir Cedido
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-
-            {step === 5 && (
-              <div className="space-y-4">
-                <p className="text-xs font-bold text-fg-muted">Por último, ajusta las finanzas iniciales de tu club.</p>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1 flex items-center gap-1.5"><Wallet size={12} /> Presupuesto de Transferencias (€)</label>
-                  <input placeholder="Ej: 20.000.000" inputMode="numeric" className={FIELD} value={initialBudget} onChange={(e) => setInitialBudget(formatValueInput(e.target.value))} />
+                      <button type="button" onClick={() => setAddingPlayerMode('academy')} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                        <Plus size={14} /> Añadir Canterano
+                      </button>
+                    </>
+                  )}
                 </div>
-                {startType === 'continue' && projectedWageBill > 0 && (
-                  <div className="p-4 rounded-2xl bg-well border border-border-subtle">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-fg-faint flex items-center gap-1.5 mb-1"><Users size={12} /> Masa Salarial Mensual Estimada</span>
-                    <div className="text-lg font-black italic text-fg">{formatCurrency(projectedWageBill)}</div>
-                    <p className="text-[9px] text-fg-faint font-bold mt-1">Calculada con los sueldos introducidos en el Paso 2.</p>
+              )}
+
+              {currentStepId === 'summary' && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 rounded-2xl bg-well border border-border-subtle">
+                    {displayLogo ? <img src={displayLogo} alt="Logo" className="w-14 h-14 rounded-xl object-cover border border-border-subtle shrink-0" /> : <div className="w-14 h-14 rounded-xl bg-well-strong flex items-center justify-center shrink-0"><Shield size={22} className="text-fg-faint" /></div>}
+                    <div className="min-w-0">
+                      <div className="font-black uppercase italic text-base truncate text-fg">{displayName || 'Tu Club'}</div>
+                      <div className="flex items-center gap-1.5 text-green-500 font-black text-xs mt-0.5"><Wallet size={12} /> {formatCurrency(displayBudget)}</div>
+                    </div>
                   </div>
-                )}
-                <div className="p-4 rounded-2xl bg-green-500/10 border border-green-500/20 space-y-1.5">
-                  <div className="flex items-center gap-2 text-green-500 font-black text-[10px] uppercase tracking-widest"><Sparkles size={13} /> Todo Listo</div>
-                  <p className="text-[10px] font-bold text-fg-muted">Al confirmar, se guardará tu plantilla y podrás seguir gestionando todo desde Plantilla, Academia y Mercado.</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-xl bg-well border border-border-subtle text-center">
+                      <div className="text-lg font-black italic text-fg">{activeRosterPlayers.length}</div>
+                      <div className="text-[9px] uppercase text-fg-faint font-black tracking-widest">Jugadores</div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-well border border-border-subtle text-center">
+                      <div className="text-lg font-black italic text-fg">{academyRosterPlayers.length}</div>
+                      <div className="text-[9px] uppercase text-fg-faint font-black tracking-widest">Canteranos</div>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-green-500/10 border border-green-500/20 space-y-1.5">
+                    <div className="flex items-center gap-2 text-green-500 font-black text-[10px] uppercase tracking-widest"><Sparkles size={13} /> Todo Listo</div>
+                    <p className="text-[10px] font-bold text-fg-muted">Al entrar, podrás seguir gestionando todo desde Plantilla, Academia y Mercado.</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
 
-        <footer className="shrink-0 bg-surface border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-          {step > 1 && (
-            <button type="button" onClick={goPrev} disabled={isSaving} className="shrink-0 w-14 flex items-center justify-center bg-well text-fg-muted p-4 rounded-xl hover:bg-well-strong transition-all disabled:opacity-50">
-              <ChevronLeft size={18} />
-            </button>
-          )}
-          {!isLastStep ? (
-            <button type="button" onClick={goNext} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all">
-              Siguiente <ChevronRight size={16} />
-            </button>
-          ) : (
-            <button type="button" onClick={handleFinish} disabled={isSaving} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-2 hover:bg-green-400 transition-all disabled:opacity-50">
-              {isSaving ? 'Guardando...' : (<><Check size={16} /> Empezar mi Modo Carrera</>)}
-            </button>
-          )}
-        </footer>
+          <footer className="shrink-0 bg-surface border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+            {step > 0 && (
+              <button type="button" onClick={goPrev} disabled={isSaving} className="shrink-0 w-14 flex items-center justify-center bg-well text-fg-muted p-4 rounded-xl hover:bg-well-strong transition-all disabled:opacity-50">
+                <ChevronLeft size={18} />
+              </button>
+            )}
+            {currentStepId !== 'summary' ? (
+              <button type="button" onClick={goNext} disabled={isSaving} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all disabled:opacity-50">
+                {isSaving ? 'Creando...' : (<>Siguiente <ChevronRight size={16} /></>)}
+              </button>
+            ) : (
+              <button type="button" onClick={handleFinish} disabled={isSaving} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-2 hover:bg-green-400 transition-all disabled:opacity-50">
+                {isSaving ? 'Guardando...' : (<><Check size={16} /> Entrar a mi Club</>)}
+              </button>
+            )}
+          </footer>
+        </div>
       </div>
-    </div>
+
+      {addingPlayerMode && (
+        <PlayerForm {...playerFormPropsFor(addingPlayerMode)} onClose={() => setAddingPlayerMode(null)} />
+      )}
+    </>
   );
 }

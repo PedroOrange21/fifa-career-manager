@@ -60,7 +60,9 @@ export function ClubsProvider({ children }) {
       currentSeasonNumber: 1,
     });
     setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: budget, currentSeasonNumber: 1 }]));
-    setShowClubModal(false);
+    // No cierra showClubModal aquí: el asistente de creación (OnboardingWizardModal) sigue
+    // abierto tras crear el club para encadenar el registro de jugadores, y es él quien decide
+    // cuándo cerrarse (Omitir o Entrar a mi Club).
     setActiveClubId(clubId);
     return { clubId, isFirstClub };
   };
