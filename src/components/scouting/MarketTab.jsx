@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Plus, Edit2, Trash2, UserPlus, ShieldAlert, Target, Search, SlidersHorizontal, X, ChevronDown, MapPin } from 'lucide-react';
+import { Plus, Edit2, Trash2, UserPlus, ShieldAlert, Target, Search, SlidersHorizontal, X, MapPin } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { flagEmoji, detectCountry } from '../../constants/countries';
@@ -24,14 +24,12 @@ const emptyFilters = { position: '', status: '', ageMin: '', ageMax: '', ratingM
 const positionsOf = (t) => t.positions || (t.primaryPosition ? [t.primaryPosition, ...(t.secondaryPositions || [])] : []);
 
 // Misma línea visual que las tarjetas de Plantilla (PlayerRow): badge de Media/Posición,
-// nombre en italic uppercase junto a la bandera de nacionalidad, posición en verde debajo, y
-// una fila de etiquetas con los datos directos. Aquí, en vez de swipe, un icono de flecha
-// despliega/repliega un panel inferior con el resto de detalle.
+// nombre en italic uppercase junto a la bandera de nacionalidad, posición en verde debajo.
+// Tarjeta fija, sin acordeón: todo el detalle (club, economía) queda siempre visible y
+// compacto, sin necesidad de expandir nada.
 function TargetRow({ t, onSign, onEdit, onDelete }) {
-  const [expanded, setExpanded] = useState(false);
   const positions = positionsOf(t);
   const selectedCountry = detectCountry(t.nationality);
-  const secondaryPositions = t.secondaryPositions || positions.slice(1);
 
   return (
     <div className={`bg-surface p-3 md:p-4 border-l-4 ${STATUS_BORDER[t.status] || STATUS_BORDER.Seguimiento}`}>
@@ -47,43 +45,29 @@ function TargetRow({ t, onSign, onEdit, onDelete }) {
           </div>
           <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest truncate">{positions.join(' · ') || '—'}</div>
         </div>
-        <button type="button" onClick={() => setExpanded((e) => !e)} title={expanded ? 'Contraer' : 'Ver más detalle'} className="shrink-0 p-2 rounded-lg text-fg-faint hover:text-fg hover:bg-well transition-colors touch-manipulation">
-          <ChevronDown size={18} className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
-        </button>
+        {t.age ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded shrink-0">{t.age} Años</span> : null}
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-        {t.originClub && (
-          <span className="text-[8px] md:text-[9px] flex items-center gap-1 text-blue-400 font-black uppercase tracking-widest bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded">
-            <MapPin size={10} className="shrink-0" /> {t.originClub}
-          </span>
-        )}
-        {t.age ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{t.age} Años</span> : null}
-        {t.preferredFoot ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{t.preferredFoot}</span> : null}
-        {t.estimatedValue > 0 && <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(t.estimatedValue)}</span>}
-        {t.wage > 0 && <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(t.wage)}/mes</span>}
-      </div>
-
-      {expanded && (
-        <div className="mt-3 pt-3 border-t border-border-subtle space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[9px] font-black uppercase text-fg-faint tracking-widest">Estado</span>
-            <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider border ${STATUS_STYLE[t.status] || STATUS_STYLE.Seguimiento}`}>{STATUS_LABELS[t.status] || STATUS_LABELS.Seguimiento}</span>
-          </div>
-          {secondaryPositions.length > 0 && (
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[9px] font-black uppercase text-fg-faint tracking-widest">Posiciones Secundarias</span>
-              <span className="text-[10px] font-bold text-fg-secondary">{secondaryPositions.join(' · ')}</span>
-            </div>
-          )}
-          {t.notes && (
-            <div className="space-y-1">
-              <span className="text-[9px] font-black uppercase text-fg-faint tracking-widest">Notas de Seguimiento</span>
-              <p className="text-xs text-fg-secondary italic">{t.notes}</p>
-            </div>
-          )}
+      {/* Club actual: destacado en su propio bloque, bien diferenciado del resto de datos. */}
+      {t.originClub && (
+        <div className="mt-2.5 flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2">
+          <MapPin size={14} className="text-blue-400 shrink-0" />
+          <span className="text-xs font-black text-blue-400 uppercase tracking-wide truncate">{t.originClub}</span>
+          {t.preferredFoot && <span className="ml-auto shrink-0 text-[8px] font-black uppercase tracking-widest text-blue-300/80">{t.preferredFoot}</span>}
         </div>
       )}
+
+      {/* Economía: precio de mercado y salario, mostrados con claridad en bloques propios. */}
+      <div className="grid grid-cols-2 gap-2 mt-2.5">
+        <div className="bg-well rounded-xl px-3 py-2">
+          <div className="text-[8px] font-black uppercase text-fg-faint tracking-widest">Valor de Mercado</div>
+          <div className="text-sm font-black text-fg truncate">{t.estimatedValue > 0 ? abbreviateValue(t.estimatedValue) : 'Sin definir'}</div>
+        </div>
+        <div className="bg-well rounded-xl px-3 py-2">
+          <div className="text-[8px] font-black uppercase text-fg-faint tracking-widest">Salario</div>
+          <div className="text-sm font-black text-fg truncate">{t.wage > 0 ? `${abbreviateValue(t.wage)}/mes` : 'Sin definir'}</div>
+        </div>
+      </div>
 
       <div className="flex gap-2 mt-3">
         <button onClick={() => onSign(t)} className="flex-1 py-2.5 rounded-xl bg-green-500/10 text-green-500 font-black uppercase text-[10px] hover:bg-green-500/20 transition-all flex items-center justify-center gap-2 border border-green-500/20"><UserPlus size={14} /> Fichar</button>
