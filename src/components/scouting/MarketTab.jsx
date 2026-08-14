@@ -46,19 +46,16 @@ function TargetRow({ t, onSign, onEdit, onDelete }) {
           </div>
           <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest truncate">{positions.join(' · ') || '—'}</div>
         </div>
-        {/* Esquina superior derecha: Estado de seguimiento arriba, Edad justo debajo. */}
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider border ${STATUS_STYLE[t.status] || STATUS_STYLE.Seguimiento}`}>{STATUS_LABELS[t.status] || STATUS_LABELS.Seguimiento}</span>
-          {t.age ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{t.age} Años</span> : null}
-        </div>
+        {/* Esquina superior derecha: solo el Estado de seguimiento. */}
+        <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider border shrink-0 ${STATUS_STYLE[t.status] || STATUS_STYLE.Seguimiento}`}>{STATUS_LABELS[t.status] || STATUS_LABELS.Seguimiento}</span>
       </div>
 
-      {/* Club actual: destacado en su propio bloque, bien diferenciado del resto de datos. */}
-      {t.originClub && (
+      {/* Club actual: destacado en su propio bloque, bien diferenciado del resto de datos.
+          La Edad ocupa aquí el hueco donde antes iba el pie dominante (ya eliminado). */}
+      {(t.originClub || t.age) && (
         <div className="mt-2.5 flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2">
-          <MapPin size={14} className="text-blue-400 shrink-0" />
-          <span className="text-xs font-black text-blue-400 uppercase tracking-wide truncate">{t.originClub}</span>
-          {t.preferredFoot && <span className="ml-auto shrink-0 text-[8px] font-black uppercase tracking-widest text-blue-300/80">{t.preferredFoot}</span>}
+          {t.originClub && (<><MapPin size={14} className="text-blue-400 shrink-0" /><span className="text-xs font-black text-blue-400 uppercase tracking-wide truncate">{t.originClub}</span></>)}
+          {t.age ? <span className="ml-auto shrink-0 text-[8px] font-black uppercase tracking-widest text-blue-300/80">{t.age} Años</span> : null}
         </div>
       )}
 
