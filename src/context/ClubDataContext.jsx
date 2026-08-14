@@ -13,6 +13,12 @@ export function ClubDataProvider({ children }) {
   const { activeClubId, adjustBudget, activeClub, incrementSeasonNumber } = useClubs();
 
   const [players, setPlayers] = useState([]);
+  // Distingue "todavía no ha llegado el primer snapshot de jugadores" de "ya llegó y la
+  // plantilla está realmente vacía": sin este flag, el asistente de bienvenida (que se
+  // activa cuando players.length === 0) podría dispararse un instante en CADA cambio de
+  // club, incluso en uno con jugadores, porque el array se resetea a [] de forma síncrona
+  // antes de que el listener de Firestore entregue los datos reales.
+  const [playersLoaded, setPlayersLoaded] = useState(false);
   const [formation, setFormation] = useState('4-3-3');
   const [lineup, setLineup] = useState({});
   const [bench, setBench] = useState({});
@@ -40,6 +46,7 @@ export function ClubDataProvider({ children }) {
   useEffect(() => {
     if (!user || !activeClubId) {
       setPlayers([]);
+      setPlayersLoaded(false);
       setLineup({});
       setBench({});
       setTransactions([]);
@@ -49,11 +56,12 @@ export function ClubDataProvider({ children }) {
       return;
     }
 
-    setPlayers([]); setFormation('4-3-3'); setLineup({}); setBench({}); setSavedFormationsBoth([]); setActiveTacticName(null);
+    setPlayers([]); setPlayersLoaded(false); setFormation('4-3-3'); setLineup({}); setBench({}); setSavedFormationsBoth([]); setActiveTacticName(null);
     setTransactions([]); setShortlist([]); setMatches([]); setSeasons([]);
 
     const unsubPlayers = onSnapshot(playersCol(user.uid, activeClubId), (snap) => {
       setPlayers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setPlayersLoaded(true);
     }, (err) => console.error('Error fetching players:', err));
 
     const unsubTactics = onSnapshot(tacticsDoc(user.uid, activeClubId), (snap) => {
@@ -389,7 +397,7 @@ export function ClubDataProvider({ children }) {
   };
 
   const value = {
-    players, formation, lineup, bench, savedFormations, activeTacticName, transactions, shortlist, matches, seasons,
+    players, playersLoaded, formation, lineup, bench, savedFormations, activeTacticName, transactions, shortlist, matches, seasons,
     playerToDelete, setPlayerToDelete, formationToDelete, setFormationToDelete,
     scoutToDelete, setScoutToDelete,
     addOrUpdatePlayer, confirmDeletePlayer, removePlayerFromTactic, sellPlayer, cedePlayer,

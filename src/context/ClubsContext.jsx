@@ -101,13 +101,21 @@ export function ClubsProvider({ children }) {
     await updateDoc(clubDoc(user.uid, activeClubId), { currentSeasonNumber: increment(1) });
   };
 
+  // Marca el asistente de bienvenida (OnboardingWizard) como resuelto para este club —
+  // completado con datos o saltado con "Omitir" — para que no vuelva a aparecer en
+  // sesiones futuras aunque la plantilla siga vacía.
+  const completeOnboarding = async () => {
+    if (!user || !activeClubId) return;
+    await updateDoc(clubDoc(user.uid, activeClubId), { onboardingCompleted: true });
+  };
+
   const value = {
     clubs, loadingClubs, activeClubId, setActiveClubId, activeClub,
     showClubModal, setShowClubModal,
     clubToDelete, setClubToDelete,
     editingClub, setEditingClub,
     createClub, updateClub, confirmDeleteClub,
-    adjustBudget, setBudget, incrementSeasonNumber,
+    adjustBudget, setBudget, incrementSeasonNumber, completeOnboarding,
   };
 
   return <ClubsContext.Provider value={value}>{children}</ClubsContext.Provider>;

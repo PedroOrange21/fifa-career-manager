@@ -7,6 +7,7 @@ import Header from './Header';
 import BottomNav from './BottomNav';
 import ClubModal from '../clubs/ClubModal';
 import ConfirmModal from '../common/ConfirmModal';
+import OnboardingWizard from '../onboarding/OnboardingWizard';
 import ClubTab from '../club/ClubTab';
 import MatchTab from '../match/MatchTab';
 import MarketShell from '../scouting/MarketShell';
@@ -88,6 +89,10 @@ export default function ClubShell() {
 
         {showClubModal && <ClubModal onFirstClubCreated={() => { setActiveTab('club'); setClubSubTab('squad'); setPendingPrefill({}); }} />}
         {editingClub && <ClubModal editingClub={editingClub} onClose={() => setEditingClub(null)} />}
+
+        {/* Se autogestiona: decide internamente si corresponde mostrarse (club activo sin
+            plantilla y sin el onboarding ya resuelto) sin que ClubShell tenga que saberlo. */}
+        {activeClubId && !loadingClubs && <OnboardingWizard />}
 
         {clubToDelete && (
           <ConfirmModal
