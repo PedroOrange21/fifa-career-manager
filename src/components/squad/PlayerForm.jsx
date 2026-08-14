@@ -313,7 +313,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
       if (!form.primaryPosition) return 'Selecciona la posición principal.';
       if (!form.rating || isNaN(form.rating) || form.rating < 1 || form.rating > 99) return 'Media entre 1 y 99.';
       if (!form.age || isNaN(form.age) || form.age < 15 || form.age > 50) return 'Edad entre 15 y 50.';
-      if (form.potential && !isValidPotentialInput(form.potential)) return 'Potencial entre 1 y 99, o un rango como 64-88.';
+      if (form.type === 'Cantera' && form.potential && !isValidPotentialInput(form.potential)) return 'Potencial entre 1 y 99, o un rango como 64-88.';
     }
     if (s === 3) {
       if (form.type !== 'Cantera' && (!form.marketValue || parseValue(form.marketValue) <= 0)) return 'Valor de mercado obligatorio.';
@@ -383,11 +383,12 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
         // % de salario asumido y opción de compra).
         releaseClause: form.type === 'Comprado' ? (parseValue(form.releaseClause) || null) : null,
         contractYears: form.type === 'Comprado' && form.contractYears ? parseInt(form.contractYears) : null,
-        // Ahora vive en Atributos Deportivos (Paso 2), no en Economía: se guarda igual para
-        // cualquier tipo de jugador, no solo Cantera. Se guarda como texto (no parseInt) para
-        // conservar rangos como "64-88" tal cual; parsePotentialRange() normaliza este campo
-        // donde haga falta un número (listas, filtros, barra de progreso).
-        potential: form.potential ? form.potential.trim() : null,
+        // Vive en Atributos Deportivos (Paso 2), no en Economía, pero sigue siendo exclusivo
+        // de la Cantera: un jugador del primer equipo no tiene rango de potencial. Se guarda
+        // como texto (no parseInt) para conservar rangos como "64-88" tal cual;
+        // parsePotentialRange() normaliza este campo donde haga falta un número (listas,
+        // filtros, barra de progreso).
+        potential: form.type === 'Cantera' && form.potential ? form.potential.trim() : null,
       }, editingPlayer?.id);
       if (!editingPlayer && sourceScoutId) {
         try { await deleteScout(sourceScoutId); } catch (err) { console.error(err); }
@@ -541,12 +542,15 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       <input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="23" min="15" max="50" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.age} onChange={(e) => set({ age: e.target.value })} />
                     </div>
                   </div>
-                  {/* Potencial: perfil deportivo, no económico — vive aquí junto a Media/Edad
-                      para cualquier jugador, no solo Cantera (que ya no tiene Paso de Economía). */}
-                  <div className="space-y-1 relative">
-                    <label className="text-[9px] font-black text-fg-muted ml-1">Potencial (opcional, 1-99 o rango, ej: 64-88)</label>
-                    <input type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={onPotentialKeyDown} onBlur={onPotentialBlur} className={FIELD_CLASS} value={form.potential} onChange={onPotentialChange} />
-                  </div>
+                  {/* Potencial: perfil deportivo, no económico — vive aquí junto a Media/Edad,
+                      pero exclusivo de la Cantera. Un jugador del primer equipo (Comprado o
+                      Cedido) no tiene rango de potencial. */}
+                  {form.type === 'Cantera' && (
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Potencial (opcional, 1-99 o rango, ej: 64-88)</label>
+                      <input type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={onPotentialKeyDown} onBlur={onPotentialBlur} className={FIELD_CLASS} value={form.potential} onChange={onPotentialChange} />
+                    </div>
+                  )}
                 </>
               )}
 
@@ -749,11 +753,13 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
                     </ReviewRow>
 
-                    {/* Potencial: perfil deportivo, no económico — igual que en el Paso 2, se
-                        guarda para cualquier tipo de jugador. */}
+                    {/* Potencial: perfil deportivo, no económico — igual que en el Paso 2,
+                        exclusivo de la Cantera. */}
+                    {form.type === 'Cantera' && (
                     <ReviewRow label="Potencial" active={editField === 'potential'} onOpen={() => setEditField('potential')} display={form.potential || 'Sin definir'}>
                       <input autoFocus type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={onPotentialKeyDown} onBlur={(e) => { onPotentialBlur(e); setEditField(null); }} className={`${FIELD_CLASS} h-11`} value={form.potential} onChange={onPotentialChange} />
                     </ReviewRow>
+                    )}
                   </div>
 
                   {/* La Cantera bloqueada no tiene sección de Economía (sin sueldo, cláusula
