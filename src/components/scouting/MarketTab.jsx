@@ -71,12 +71,7 @@ function TargetRow({ t, onSign, onEdit, onDelete }) {
         </div>
       </div>
 
-      {/* Flecha de expandir: revela únicamente la Nota de seguimiento, empujando las
-          acciones hasta el final de la tarjeta. */}
-      <button type="button" onClick={() => setExpanded((e) => !e)} className="w-full mt-2.5 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-fg-faint hover:text-fg hover:bg-well transition-colors text-[9px] font-black uppercase tracking-widest touch-manipulation">
-        {expanded ? 'Menos Detalle' : 'Más Detalle'} <ChevronDown size={14} className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
-      </button>
-
+      {/* Nota de seguimiento: solo visible al expandir, justo antes de las acciones. */}
       {expanded && (
         <div className="mt-2.5 bg-well/60 rounded-xl px-3 py-2 border border-border-subtle animate-in fade-in slide-in-from-top-1 duration-150">
           <div className="text-[8px] font-black uppercase text-fg-faint tracking-widest mb-1">Nota de Seguimiento</div>
@@ -89,6 +84,11 @@ function TargetRow({ t, onSign, onEdit, onDelete }) {
         <button onClick={() => onEdit(t)} className="p-2.5 text-fg-faint hover:text-green-500 transition-colors bg-well rounded-xl"><Edit2 size={14} /></button>
         <button onClick={() => onDelete(t.id)} className="p-2.5 text-fg-faint hover:text-red-500 transition-colors bg-well rounded-xl"><Trash2 size={14} /></button>
       </div>
+
+      {/* Flecha de expandir: siempre al final de la tarjeta, debajo de las acciones. */}
+      <button type="button" onClick={() => setExpanded((e) => !e)} className="w-full mt-2.5 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-fg-faint hover:text-fg hover:bg-well transition-colors text-[9px] font-black uppercase tracking-widest touch-manipulation">
+        {expanded ? 'Menos Detalle' : 'Más Detalle'} <ChevronDown size={14} className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+      </button>
     </div>
   );
 }
