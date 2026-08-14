@@ -378,7 +378,6 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                             <div className="text-xs font-black text-fg truncate">{p.name}</div>
                             <div className="text-[9px] font-bold text-fg-faint uppercase tracking-wide truncate">{p.positions?.[0] || '—'} · {p.rating} OVR · {p.age} Años</div>
                           </div>
-                          <div className="text-[10px] font-black text-green-500 shrink-0 text-right">{formatCurrency(p.wage || 0)}</div>
                         </div>
                       ))}
                     </div>
