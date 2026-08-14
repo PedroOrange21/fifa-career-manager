@@ -22,6 +22,10 @@ export default function ClubMenu({ setActiveTab, onSwitchClub }) {
   useOnClickOutside(menuRef, close, open);
 
   const handleSwitch = (clubId) => { onSwitchClub(clubId); close(); };
+  // Abre el mismo asistente completo (identidad, fondos, tipo de partida, registro de
+  // jugadores/canteranos y resumen interactivo) que ve un usuario nuevo en el onboarding: no
+  // hay un formulario "de creación" aparte — ClubModal, al no recibir editingClub, renderiza
+  // siempre OnboardingWizardModal con clubExists=false, sea este el primer club o uno adicional.
   const handleNewClub = () => { setEditingClub(null); setShowClubModal(true); close(); };
   const handleEditClub = (club) => { setEditingClub(club); close(); };
   const goProfile = () => { setActiveTab('profile'); close(); };
