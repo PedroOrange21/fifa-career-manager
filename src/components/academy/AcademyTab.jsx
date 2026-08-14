@@ -227,8 +227,10 @@ export default function AcademyTab() {
 
   // Editar desde la Academia abre directamente el Paso 4, igual que desde la Plantilla.
   const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormInitialStep(4); setShowForm(true); };
-  // Fichar nuevo canterano: mismo asistente que "Fichar Jugador" de la Plantilla, con el
-  // Tipo de Adquisición precargado en "Cantera" al llegar al Paso 3.
+  // Fichar nuevo canterano: mismo asistente que "Fichar Jugador" de la Plantilla, pero con el
+  // Tipo de Adquisición bloqueado en "Cantera" — un canterano no tiene sección de Economía
+  // (ni sueldo, ni cláusula, ni costes), así que el Paso de Términos Económicos se salta por
+  // completo, tanto al fichar como al editar.
   const openNewForm = () => { setEditingPlayer(null); setFormPrefill({ type: 'Cantera' }); setFormInitialStep(1); setShowForm(true); };
 
   const handleFicharClick = () => {
@@ -299,7 +301,7 @@ export default function AcademyTab() {
 
       {updatingPlayer && <UpdateRatingModal player={updatingPlayer} onClose={() => setUpdatingPlayer(null)} />}
       {promotingPlayer && <PromoteToFirstTeamModal player={promotingPlayer} onClose={() => setPromotingPlayer(null)} />}
-      {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} initialStep={formInitialStep} onClose={() => setShowForm(false)} />}
+      {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} initialStep={formInitialStep} lockedType="Cantera" onClose={() => setShowForm(false)} />}
 
       {playerToDelete && (
         <ConfirmModal

@@ -313,25 +313,39 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
       if (!form.primaryPosition) return 'Selecciona la posición principal.';
       if (!form.rating || isNaN(form.rating) || form.rating < 1 || form.rating > 99) return 'Media entre 1 y 99.';
       if (!form.age || isNaN(form.age) || form.age < 15 || form.age > 50) return 'Edad entre 15 y 50.';
+      if (form.potential && !isValidPotentialInput(form.potential)) return 'Potencial entre 1 y 99, o un rango como 64-88.';
     }
     if (s === 3) {
       if (form.type !== 'Cantera' && (!form.marketValue || parseValue(form.marketValue) <= 0)) return 'Valor de mercado obligatorio.';
+      if (form.type !== 'Cantera' && (!form.wage || parseValue(form.wage) <= 0)) return 'El sueldo mensual es obligatorio.';
       if (form.type === 'Comprado' && !hidePurchasePrice && (!form.value || parseValue(form.value) <= 0)) return 'Precio de compra obligatorio.';
       if (form.type === 'Cedido' && !form.originClub.trim()) return 'Club de origen obligatorio.';
       if (form.type === 'Cedido' && form.hasBuyOption && (!form.buyOption || parseValue(form.buyOption) <= 0)) return 'Introduce el precio de la opción de compra.';
-      if (form.type === 'Cantera' && form.potential && !isValidPotentialInput(form.potential)) return 'Potencial entre 1 y 99, o un rango como 64-88.';
     }
     return '';
   };
+
+  // La Cantera no tiene sección de Economía (sin sueldo, cláusula ni costes): cuando el tipo
+  // viene bloqueado en 'Cantera' (asistente de bienvenida) el Paso 3 no tiene ya ningún campo
+  // que mostrar — el selector de Tipo también está oculto por lockedType — así que se salta
+  // directo del Paso 2 (Atributos) al Paso 4 (Revisión) en vez de dejar una pantalla vacía.
+  const skipEconomyStep = lockedType === 'Cantera';
 
   // --- Navegación: exclusivamente por los botones Anterior/Siguiente del pie. ---
   const goNext = () => {
     const err = validateStep(step);
     if (err) { setFormError(err); return; }
     setFormError('');
-    setStep((s) => Math.min(TOTAL_STEPS, s + 1));
+    let next = step + 1;
+    if (next === 3 && skipEconomyStep) next = 4;
+    setStep(Math.min(TOTAL_STEPS, next));
   };
-  const goPrev = () => { setFormError(''); setStep((s) => Math.max(1, s - 1)); };
+  const goPrev = () => {
+    setFormError('');
+    let prev = step - 1;
+    if (prev === 3 && skipEconomyStep) prev = 2;
+    setStep(Math.max(1, prev));
+  };
 
   const handleConfirm = async () => {
     if (isSubmitting) return;
@@ -369,10 +383,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
         // % de salario asumido y opción de compra).
         releaseClause: form.type === 'Comprado' ? (parseValue(form.releaseClause) || null) : null,
         contractYears: form.type === 'Comprado' && form.contractYears ? parseInt(form.contractYears) : null,
-        // Se guarda como texto (no parseInt) para conservar rangos como "64-88" tal cual;
-        // parsePotentialRange() normaliza este campo donde haga falta un número (listas,
-        // filtros, barra de progreso).
-        potential: form.type === 'Cantera' && form.potential ? form.potential.trim() : null,
+        // Ahora vive en Atributos Deportivos (Paso 2), no en Economía: se guarda igual para
+        // cualquier tipo de jugador, no solo Cantera. Se guarda como texto (no parseInt) para
+        // conservar rangos como "64-88" tal cual; parsePotentialRange() normaliza este campo
+        // donde haga falta un número (listas, filtros, barra de progreso).
+        potential: form.potential ? form.potential.trim() : null,
       }, editingPlayer?.id);
       if (!editingPlayer && sourceScoutId) {
         try { await deleteScout(sourceScoutId); } catch (err) { console.error(err); }
@@ -526,6 +541,12 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       <input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="23" min="15" max="50" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.age} onChange={(e) => set({ age: e.target.value })} />
                     </div>
                   </div>
+                  {/* Potencial: perfil deportivo, no económico — vive aquí junto a Media/Edad
+                      para cualquier jugador, no solo Cantera (que ya no tiene Paso de Economía). */}
+                  <div className="space-y-1 relative">
+                    <label className="text-[9px] font-black text-fg-muted ml-1">Potencial (opcional, 1-99 o rango, ej: 64-88)</label>
+                    <input type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={onPotentialKeyDown} onBlur={onPotentialBlur} className={FIELD_CLASS} value={form.potential} onChange={onPotentialChange} />
+                  </div>
                 </>
               )}
 
@@ -549,16 +570,6 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       </div>
                     </div>
                   )}
-                  {/* Cantera: la ficha ya recoge Media/Edad/Posición en el Paso 2; aquí solo
-                      falta el Potencial. Sin valor de mercado, sueldo, años de contrato ni
-                      cláusula — un canterano todavía no tiene términos económicos. */}
-                  {form.type === 'Cantera' && (
-                    <div className="space-y-1 relative">
-                      <label className="text-[9px] font-black text-fg-muted ml-1">Potencial (1-99 o rango, ej: 64-88)</label>
-                      <input type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={onPotentialKeyDown} onBlur={onPotentialBlur} className={FIELD_CLASS} value={form.potential} onChange={onPotentialChange} />
-                    </div>
-                  )}
-
                   {form.type === 'Comprado' && !hidePurchasePrice && (
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Precio de Compra (€) *</label>
@@ -589,8 +600,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                         <input type="text" inputMode="numeric" required placeholder="Ej: 80.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.marketValue} onChange={formatMoneyField('marketValue')} />
                       </div>
                       <div className="space-y-1 relative">
-                        <label className="text-[9px] font-black text-fg-muted ml-1">{form.type === 'Cedido' ? 'Sueldo Mensual Total (€)' : 'Sueldo Mensual (€)'}</label>
-                        <input type="text" inputMode="numeric" placeholder="Ej: 500.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.wage} onChange={formatMoneyField('wage')} />
+                        <label className="text-[9px] font-black text-fg-muted ml-1">{form.type === 'Cedido' ? 'Sueldo Mensual Total (€) *' : 'Sueldo Mensual (€) *'}</label>
+                        <input type="text" inputMode="numeric" required placeholder="Ej: 500.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.wage} onChange={formatMoneyField('wage')} />
                       </div>
                     </div>
                   )}
@@ -737,8 +748,18 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       </div>
                       <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
                     </ReviewRow>
+
+                    {/* Potencial: perfil deportivo, no económico — igual que en el Paso 2, se
+                        guarda para cualquier tipo de jugador. */}
+                    <ReviewRow label="Potencial" active={editField === 'potential'} onOpen={() => setEditField('potential')} display={form.potential || 'Sin definir'}>
+                      <input autoFocus type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={onPotentialKeyDown} onBlur={(e) => { onPotentialBlur(e); setEditField(null); }} className={`${FIELD_CLASS} h-11`} value={form.potential} onChange={onPotentialChange} />
+                    </ReviewRow>
                   </div>
 
+                  {/* La Cantera bloqueada no tiene sección de Economía (sin sueldo, cláusula
+                      ni costes): se omite por completo en vez de mostrarla vacía. */}
+                  {!skipEconomyStep && (
+                  <>
                   <SectionHeader emoji="💰" title="Economía" />
                   <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
                     {!lockedType && (
@@ -767,7 +788,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                             <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.value} onChange={formatMoneyField('value')} />
                           </ReviewRow>
                         )}
-                        <ReviewRow label="Sueldo Mensual (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
+                        <ReviewRow label="Sueldo Mensual (€) *" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
                           <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
                         </ReviewRow>
                         <ReviewRow label="Años Contrato" active={editField === 'contractYears'} onOpen={() => setEditField('contractYears')} display={form.contractYears ? `${form.contractYears} Años` : 'Sin definir'}>
@@ -787,7 +808,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                         <ReviewRow label="Duración Cesión" active={editField === 'loanDuration'} onOpen={() => setEditField('loanDuration')} display={form.loanDuration}>
                           <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => { set({ loanDuration: v }); setEditField(null); }} />
                         </ReviewRow>
-                        <ReviewRow label="Sueldo Mensual Total (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
+                        <ReviewRow label="Sueldo Mensual Total (€) *" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
                           <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
                         </ReviewRow>
                         <ReviewRow label="% Salario Pagado" active={editField === 'wagePercentage'} onOpen={() => setEditField('wagePercentage')} display={`${form.wagePercentage || 0}%`}>
@@ -810,12 +831,9 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                       </>
                     )}
 
-                    {form.type === 'Cantera' && (
-                      <ReviewRow label="Potencial" active={editField === 'potential'} onOpen={() => setEditField('potential')} display={form.potential || 'Sin definir'}>
-                        <input autoFocus type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={onPotentialKeyDown} onBlur={(e) => { onPotentialBlur(e); setEditField(null); }} className={`${FIELD_CLASS} h-11`} value={form.potential} onChange={onPotentialChange} />
-                      </ReviewRow>
-                    )}
                   </div>
+                  </>
+                  )}
 
                   {/* Solo aparece al editar un jugador que está actualmente cedido a otro
                       club (transferStatus === 'CedidoFuera'): permite ajustar la duración de
