@@ -7,7 +7,10 @@ export default function UncalledZone({ dnd, onPlayerClick }) {
   const { draggedPlayer, handleDragStart, handleDragOver, handleDrop, handleTouchStartLocal, shouldSuppressClick } = dnd;
 
   const notInTactics = (p) => !Object.values(lineup).includes(p.id) && !Object.values(bench).includes(p.id);
-  const uncalled = players.filter((p) => notInTactics(p) && (p.transferStatus || 'Activo') === 'Activo').sort((a, b) => b.rating - a.rating);
+  // Un canterano sin promocionar no es un jugador del primer equipo: aunque técnicamente
+  // "no está convocado" (no aparece en once ni banquillo), no debe listarse aquí — solo deja
+  // de ser Cantera (y puede entrar en esta zona) al subir al primer equipo con contrato.
+  const uncalled = players.filter((p) => p.type !== 'Cantera' && notInTactics(p) && (p.transferStatus || 'Activo') === 'Activo').sort((a, b) => b.rating - a.rating);
 
   return (
     <div data-slot="uncalled" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'uncalled')} className={`bg-surface p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl min-h-[120px] transition-colors ${draggedPlayer ? 'border-dashed border-border bg-well' : ''}`}>

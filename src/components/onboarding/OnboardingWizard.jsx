@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Check, ChevronLeft, ChevronRight, Plus, Wallet, Users, Sparkles, RotateCcw, Shield, Camera, RefreshCcw, ShieldAlert } from 'lucide-react';
+import { X, Check, ChevronLeft, ChevronRight, ChevronDown, Plus, Wallet, Users, Sparkles, RotateCcw, Shield, Camera, RefreshCcw, ShieldAlert } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency, formatValueInput, parseValue } from '../../utils/format';
@@ -13,6 +13,14 @@ function abbreviateBudget(amount) {
   if (amount >= 1000000) return `${(amount / 1000000).toLocaleString('es-ES', { useGrouping: true })}M €`;
   if (amount >= 1000) return `${amount / 1000}Mil €`;
   return `${amount} €`;
+}
+
+// Iniciales del avatar de respaldo cuando el jugador no tiene foto (p. ej. "EH" para
+// "Erling Haaland"), usadas en la lista desplegable del resumen final.
+function initialsOf(name) {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
 }
 
 // Puerta de entrada: decide si corresponde mostrar el asistente (sin montar sus hooks de
@@ -82,6 +90,9 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   // este asistente; cada ficha se guarda directamente en Firestore, así que la lista que se
   // muestra aquí simplemente lee "players" en vivo, sin estado local propio. ---
   const [addingPlayerMode, setAddingPlayerMode] = useState(null); // 'active' | 'academy' | null
+
+  // --- Paso Resumen: desglose desplegable de las dos listas ("Jugadores"/"Canteranos") ---
+  const [expandedGroup, setExpandedGroup] = useState(null); // 'active' | 'academy' | null
 
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -336,15 +347,63 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 rounded-xl bg-well border border-border-subtle text-center">
+                    <button type="button" onClick={() => setExpandedGroup((g) => (g === 'active' ? null : 'active'))} className={`p-3 rounded-xl border text-center transition-all touch-manipulation ${expandedGroup === 'active' ? 'bg-green-500/10 border-green-500/40' : 'bg-well border-border-subtle hover:bg-well-strong'}`}>
                       <div className="text-lg font-black italic text-fg">{activeRosterPlayers.length}</div>
-                      <div className="text-[9px] uppercase text-fg-faint font-black tracking-widest">Jugadores</div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-well border border-border-subtle text-center">
+                      <div className="flex items-center justify-center gap-1 text-[9px] uppercase text-fg-faint font-black tracking-widest">
+                        Jugadores <ChevronDown size={11} className={`transition-transform ${expandedGroup === 'active' ? 'rotate-180' : ''}`} />
+                      </div>
+                    </button>
+                    <button type="button" onClick={() => setExpandedGroup((g) => (g === 'academy' ? null : 'academy'))} className={`p-3 rounded-xl border text-center transition-all touch-manipulation ${expandedGroup === 'academy' ? 'bg-green-500/10 border-green-500/40' : 'bg-well border-border-subtle hover:bg-well-strong'}`}>
                       <div className="text-lg font-black italic text-fg">{academyRosterPlayers.length}</div>
-                      <div className="text-[9px] uppercase text-fg-faint font-black tracking-widest">Canteranos</div>
-                    </div>
+                      <div className="flex items-center justify-center gap-1 text-[9px] uppercase text-fg-faint font-black tracking-widest">
+                        Canteranos <ChevronDown size={11} className={`transition-transform ${expandedGroup === 'academy' ? 'rotate-180' : ''}`} />
+                      </div>
+                    </button>
                   </div>
+
+                  {/* Desglose desplegable: datos clave de cada jugador ya registrado, para
+                      revisar todo el equipo de un vistazo antes de confirmar. */}
+                  {expandedGroup === 'active' && (
+                    <div className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                      {activeRosterPlayers.length === 0 ? (
+                        <div className="p-4 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Sin jugadores todavía</div>
+                      ) : activeRosterPlayers.map((p) => (
+                        <div key={p.id} className="px-3 py-2.5 flex items-center gap-3">
+                          {p.photo ? (
+                            <img src={p.photo} alt={p.name} className="w-9 h-9 rounded-full object-cover shrink-0 border border-border-subtle" />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-well-strong flex items-center justify-center text-[10px] font-black text-fg-muted shrink-0">{initialsOf(p.name)}</div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-black text-fg truncate">{p.name}</div>
+                            <div className="text-[9px] font-bold text-fg-faint uppercase tracking-wide truncate">{p.positions?.[0] || '—'} · {p.rating} OVR · {p.age} Años</div>
+                          </div>
+                          <div className="text-[10px] font-black text-green-500 shrink-0 text-right">{formatCurrency(p.wage || 0)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {expandedGroup === 'academy' && (
+                    <div className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                      {academyRosterPlayers.length === 0 ? (
+                        <div className="p-4 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Sin canteranos todavía</div>
+                      ) : academyRosterPlayers.map((p) => (
+                        <div key={p.id} className="px-3 py-2.5 flex items-center gap-3">
+                          {p.photo ? (
+                            <img src={p.photo} alt={p.name} className="w-9 h-9 rounded-full object-cover shrink-0 border border-border-subtle" />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-well-strong flex items-center justify-center text-[10px] font-black text-fg-muted shrink-0">{initialsOf(p.name)}</div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-black text-fg truncate">{p.name}</div>
+                            <div className="text-[9px] font-bold text-fg-faint uppercase tracking-wide truncate">{p.positions?.[0] || '—'} · {p.rating} OVR · {p.age} Años</div>
+                          </div>
+                          <div className="text-[10px] font-black text-emerald-500 shrink-0 text-right">Pot. {p.potential || '—'}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="p-4 rounded-2xl bg-green-500/10 border border-green-500/20 space-y-1.5">
                     <div className="flex items-center gap-2 text-green-500 font-black text-[10px] uppercase tracking-widest"><Sparkles size={13} /> Todo Listo</div>
                     <p className="text-[10px] font-bold text-fg-muted">Al entrar, podrás seguir gestionando todo desde Plantilla, Academia y Mercado.</p>
