@@ -794,7 +794,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                             <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.value} onChange={formatMoneyField('value')} />
                           </ReviewRow>
                         )}
-                        <ReviewRow label="Sueldo Mensual (€) *" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
+                        <ReviewRow label="Sueldo Mensual (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
                           <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
                         </ReviewRow>
                         <ReviewRow label="Años Contrato" active={editField === 'contractYears'} onOpen={() => setEditField('contractYears')} display={form.contractYears ? `${form.contractYears} Años` : 'Sin definir'}>
@@ -814,7 +814,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
                         <ReviewRow label="Duración Cesión" active={editField === 'loanDuration'} onOpen={() => setEditField('loanDuration')} display={form.loanDuration}>
                           <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => { set({ loanDuration: v }); setEditField(null); }} />
                         </ReviewRow>
-                        <ReviewRow label="Sueldo Mensual Total (€) *" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
+                        <ReviewRow label="Sueldo Mensual Total (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
                           <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
                         </ReviewRow>
                         <ReviewRow label="% Salario Pagado" active={editField === 'wagePercentage'} onOpen={() => setEditField('wagePercentage')} display={`${form.wagePercentage || 0}%`}>
