@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
-import { X, ShieldAlert, Camera, RefreshCcw, User } from 'lucide-react';
+import { X, ShieldAlert, Camera, RefreshCcw, User, Globe2 } from 'lucide-react';
 import { ALL_POSITIONS } from '../../constants/positions';
+import { flagEmoji, detectCountry } from '../../constants/countries';
 import { formatValueInput, parseValue } from '../../utils/format';
 import { resizeImageToDataUrl } from '../../utils/image';
 import { useClubData } from '../../context/ClubDataContext';
@@ -18,16 +19,16 @@ export const STATUS_STYLE = {
 
 const FOOT_OPTIONS = ['Diestro', 'Zurdo', 'Ambas'];
 
-const emptyTarget = { photo: '', name: '', originClub: '', primaryPosition: '', secondaryPositions: [], preferredFoot: 'Diestro', age: '', rating: '', estimatedValue: '', wage: '', status: 'Seguimiento' };
+const emptyTarget = { photo: '', name: '', nationality: '', originClub: '', primaryPosition: '', secondaryPositions: [], preferredFoot: 'Diestro', age: '', rating: '', estimatedValue: '', wage: '', status: 'Seguimiento', notes: '' };
 
 const targetToFormState = (t) => ({
-  photo: t.photo || '', name: t.name, originClub: t.originClub || '',
+  photo: t.photo || '', name: t.name, nationality: t.nationality || '', originClub: t.originClub || '',
   primaryPosition: t.primaryPosition || t.positions?.[0] || '',
   secondaryPositions: t.secondaryPositions || t.positions?.slice(1) || [],
   preferredFoot: t.preferredFoot || 'Diestro',
   age: t.age || '', rating: t.rating || '',
   estimatedValue: formatValueInput(String(t.estimatedValue || '')), wage: formatValueInput(String(t.wage || '')),
-  status: t.status || 'Seguimiento',
+  status: t.status || 'Seguimiento', notes: t.notes || '',
 });
 
 export default function TargetForm({ editingTarget, onClose }) {
@@ -39,6 +40,7 @@ export default function TargetForm({ editingTarget, onClose }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const fileInputRef = useRef(null);
+  const selectedCountry = detectCountry(target.nationality);
 
   const selectPrimary = (pos) => {
     setTarget({ ...target, primaryPosition: pos, secondaryPositions: pos === 'POR' ? [] : target.secondaryPositions.filter((p) => p !== 'POR' && p !== pos) });
@@ -75,6 +77,7 @@ export default function TargetForm({ editingTarget, onClose }) {
       await addOrUpdateTarget({
         photo: target.photo || null,
         name: target.name.trim(),
+        nationality: target.nationality.trim() || null,
         originClub: target.originClub.trim() || null,
         positions: [target.primaryPosition, ...target.secondaryPositions],
         primaryPosition: target.primaryPosition, secondaryPositions: target.secondaryPositions,
@@ -83,6 +86,7 @@ export default function TargetForm({ editingTarget, onClose }) {
         rating: target.rating ? parseInt(target.rating) : null,
         estimatedValue: parseValue(target.estimatedValue),
         wage: parseValue(target.wage), status: target.status,
+        notes: target.notes.trim() || null,
       }, editingTarget?.id);
       onClose();
     } catch (err) {
@@ -117,6 +121,17 @@ export default function TargetForm({ editingTarget, onClose }) {
           </div>
 
           <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Nombre *</label><input type="text" required autoComplete="off" placeholder="Ej: Kobbie Mainoo" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={target.name} onChange={(e) => setTarget({ ...target, name: e.target.value })} /></div>
+          <div className="space-y-1">
+            <label className="text-[9px] font-black text-fg-muted ml-1">Nacionalidad</label>
+            <div className="relative">
+              {selectedCountry ? (
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base leading-none pointer-events-none">{flagEmoji(selectedCountry.code)}</span>
+              ) : (
+                <Globe2 className="absolute left-4 top-1/2 -translate-y-1/2 text-fg-faint pointer-events-none" size={16} />
+              )}
+              <input type="text" autoComplete="off" placeholder="Ej: Noruega" className="w-full bg-well p-4 pl-11 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={target.nationality} onChange={(e) => setTarget({ ...target, nationality: e.target.value })} />
+            </div>
+          </div>
           <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Club Actual</label><input type="text" placeholder="Ej: Manchester United" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle font-bold text-base md:text-sm text-fg placeholder:text-fg-faint" value={target.originClub} onChange={(e) => setTarget({ ...target, originClub: e.target.value })} /></div>
 
           <div className="space-y-1">
@@ -146,7 +161,7 @@ export default function TargetForm({ editingTarget, onClose }) {
             <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Media</label><input type="number" min="1" max="99" className="w-full h-14 bg-well rounded-xl outline-none border border-border-subtle text-center font-black text-xl text-fg placeholder:text-fg-faint" value={target.rating} onChange={(e) => setTarget({ ...target, rating: e.target.value })} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Valor de Mercado Estimado (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 20.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.estimatedValue} onChange={(e) => setTarget({ ...target, estimatedValue: formatValueInput(e.target.value) })} /></div>
+            <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Valor de Mercado (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 20.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.estimatedValue} onChange={(e) => setTarget({ ...target, estimatedValue: formatValueInput(e.target.value) })} /></div>
             <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Aproximado (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 500.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.wage} onChange={(e) => setTarget({ ...target, wage: formatValueInput(e.target.value) })} /></div>
           </div>
           <div className="space-y-1">
@@ -155,6 +170,7 @@ export default function TargetForm({ editingTarget, onClose }) {
               {STATUS_OPTIONS.map((s) => (<button key={s} type="button" onClick={() => setTarget({ ...target, status: s })} className={`py-2.5 rounded-xl text-[9px] font-black uppercase transition-all border ${target.status === s ? STATUS_STYLE[s] : 'bg-well text-fg-muted hover:bg-well-strong border-transparent'}`}>{STATUS_LABELS[s]}</button>))}
             </div>
           </div>
+          <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Notas de Seguimiento</label><textarea rows={3} placeholder="Observaciones sobre la negociación..." className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle font-bold text-sm text-fg placeholder:text-fg-faint resize-none" value={target.notes} onChange={(e) => setTarget({ ...target, notes: e.target.value })} /></div>
           <button type="submit" disabled={isSubmitting} className="w-full bg-green-500 text-black p-4 rounded-xl font-black uppercase text-xs tracking-wider mt-6 hover:bg-green-400 shrink-0 disabled:opacity-50">{isSubmitting ? 'Guardando...' : editingTarget ? 'Guardar Cambios' : 'Añadir a la Lista'}</button>
         </div>
       </form>

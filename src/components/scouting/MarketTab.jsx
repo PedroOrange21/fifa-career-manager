@@ -1,15 +1,98 @@
 import { useRef, useState } from 'react';
-import { Plus, Edit2, Trash2, UserPlus, User, ShieldAlert, Target, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, UserPlus, ShieldAlert, Target, Search, SlidersHorizontal, X, ChevronDown, MapPin } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { ALL_POSITIONS } from '../../constants/positions';
+import { flagEmoji, detectCountry } from '../../constants/countries';
+import { getCardStyle } from '../../utils/cardStyle';
 import { formatValueInput, abbreviateValue } from '../../utils/format';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import TargetForm, { STATUS_OPTIONS, STATUS_LABELS, STATUS_STYLE } from './TargetForm';
 import ConfirmModal from '../common/ConfirmModal';
 
 const STATUS_RANK = { Prioritario: 0, Negociando: 1, Seguimiento: 2, Descartado: 3 };
+// Franja de color a la izquierda de la tarjeta: mismo código de color que STATUS_STYLE, para
+// distinguir de un vistazo la prioridad sin necesitar un badge propio en la cabecera.
+const STATUS_BORDER = {
+  Seguimiento: 'border-l-border',
+  Negociando: 'border-l-yellow-500',
+  Prioritario: 'border-l-red-500',
+  Descartado: 'border-l-border-subtle',
+};
 
 const emptyFilters = { position: '', status: '', ageMin: '', ageMax: '', ratingMin: '', ratingMax: '' };
+
+const positionsOf = (t) => t.positions || (t.primaryPosition ? [t.primaryPosition, ...(t.secondaryPositions || [])] : []);
+
+// Misma línea visual que las tarjetas de Plantilla (PlayerRow): badge de Media/Posición,
+// nombre en italic uppercase junto a la bandera de nacionalidad, posición en verde debajo, y
+// una fila de etiquetas con los datos directos. Aquí, en vez de swipe, un icono de flecha
+// despliega/repliega un panel inferior con el resto de detalle.
+function TargetRow({ t, onSign, onEdit, onDelete }) {
+  const [expanded, setExpanded] = useState(false);
+  const positions = positionsOf(t);
+  const selectedCountry = detectCountry(t.nationality);
+  const secondaryPositions = t.secondaryPositions || positions.slice(1);
+
+  return (
+    <div className={`bg-surface p-3 md:p-4 border-l-4 ${STATUS_BORDER[t.status] || STATUS_BORDER.Seguimiento}`}>
+      <div className="flex items-center gap-3 md:gap-4">
+        <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(t.rating || 0)}`}>
+          <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{t.primaryPosition || positions[0] || '—'}</span>
+          <span className="text-lg md:text-xl">{t.rating || '—'}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight flex items-center gap-1.5 text-black dark:text-white">
+            <span className="truncate">{t.name}</span>
+            {selectedCountry && <span className="text-sm leading-none shrink-0">{flagEmoji(selectedCountry.code)}</span>}
+          </div>
+          <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest truncate">{positions.join(' · ') || '—'}</div>
+        </div>
+        <button type="button" onClick={() => setExpanded((e) => !e)} title={expanded ? 'Contraer' : 'Ver más detalle'} className="shrink-0 p-2 rounded-lg text-fg-faint hover:text-fg hover:bg-well transition-colors touch-manipulation">
+          <ChevronDown size={18} className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+        {t.originClub && (
+          <span className="text-[8px] md:text-[9px] flex items-center gap-1 text-blue-400 font-black uppercase tracking-widest bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded">
+            <MapPin size={10} className="shrink-0" /> {t.originClub}
+          </span>
+        )}
+        {t.age ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{t.age} Años</span> : null}
+        {t.preferredFoot ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{t.preferredFoot}</span> : null}
+        {t.estimatedValue > 0 && <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(t.estimatedValue)}</span>}
+        {t.wage > 0 && <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(t.wage)}/mes</span>}
+      </div>
+
+      {expanded && (
+        <div className="mt-3 pt-3 border-t border-border-subtle space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[9px] font-black uppercase text-fg-faint tracking-widest">Estado</span>
+            <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider border ${STATUS_STYLE[t.status] || STATUS_STYLE.Seguimiento}`}>{STATUS_LABELS[t.status] || STATUS_LABELS.Seguimiento}</span>
+          </div>
+          {secondaryPositions.length > 0 && (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[9px] font-black uppercase text-fg-faint tracking-widest">Posiciones Secundarias</span>
+              <span className="text-[10px] font-bold text-fg-secondary">{secondaryPositions.join(' · ')}</span>
+            </div>
+          )}
+          {t.notes && (
+            <div className="space-y-1">
+              <span className="text-[9px] font-black uppercase text-fg-faint tracking-widest">Notas de Seguimiento</span>
+              <p className="text-xs text-fg-secondary italic">{t.notes}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex gap-2 mt-3">
+        <button onClick={() => onSign(t)} className="flex-1 py-2.5 rounded-xl bg-green-500/10 text-green-500 font-black uppercase text-[10px] hover:bg-green-500/20 transition-all flex items-center justify-center gap-2 border border-green-500/20"><UserPlus size={14} /> Fichar</button>
+        <button onClick={() => onEdit(t)} className="p-2.5 text-fg-faint hover:text-green-500 transition-colors bg-well rounded-xl"><Edit2 size={14} /></button>
+        <button onClick={() => onDelete(t.id)} className="p-2.5 text-fg-faint hover:text-red-500 transition-colors bg-well rounded-xl"><Trash2 size={14} /></button>
+      </div>
+    </div>
+  );
+}
 
 export default function MarketTab({ onSignTarget }) {
   const { targets, targetToDelete, setTargetToDelete, confirmDeleteTarget } = useClubData();
@@ -22,8 +105,6 @@ export default function MarketTab({ onSignTarget }) {
   useOnClickOutside(filtersRef, () => setShowFilters(false), showFilters);
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
-
-  const positionsOf = (t) => t.positions || (t.primaryPosition ? [t.primaryPosition, ...(t.secondaryPositions || [])] : []);
 
   const filtered = targets
     .filter((t) => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -47,6 +128,7 @@ export default function MarketTab({ onSignTarget }) {
     onSignTarget({
       photo: t.photo || '',
       name: t.name,
+      nationality: t.nationality || '',
       positions: positionsOf(t),
       preferredFoot: t.preferredFoot || 'Diestro',
       age: t.age ? String(t.age) : '',
@@ -123,37 +205,9 @@ export default function MarketTab({ onSignTarget }) {
 
       <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
         {sorted.length === 0 && (<div className="p-16 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">{targets.length === 0 ? 'Sin Objetivos Todavía' : 'Sin Resultados'}</div>)}
-        {sorted.map((t) => {
-          const positions = positionsOf(t);
-          return (
-            <div key={t.id} className="p-3 md:p-4 flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                {t.photo ? (
-                  <img src={t.photo} alt={t.name} className="w-12 h-12 rounded-full object-cover border border-border-subtle shrink-0" />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-well flex items-center justify-center border border-border-subtle shrink-0"><User size={20} className="text-fg-faint" /></div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{t.name}</div>
-                  <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest truncate">{positions.join(' · ')}{t.originClub ? ` · ${t.originClub}` : ''}</div>
-                </div>
-                <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider border shrink-0 ${STATUS_STYLE[t.status] || STATUS_STYLE.Seguimiento}`}>{STATUS_LABELS[t.status] || STATUS_LABELS.Seguimiento}</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {t.age ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{t.age} Años</span> : null}
-                {t.rating ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">Media {t.rating}</span> : null}
-                {t.preferredFoot ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{t.preferredFoot}</span> : null}
-                {t.estimatedValue > 0 && <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(t.estimatedValue)}</span>}
-                {t.wage > 0 && <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(t.wage)}/mes</span>}
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => signTarget(t)} className="flex-1 py-2.5 rounded-xl bg-green-500/10 text-green-500 font-black uppercase text-[10px] hover:bg-green-500/20 transition-all flex items-center justify-center gap-2 border border-green-500/20"><UserPlus size={14} /> Fichar</button>
-                <button onClick={() => openEditForm(t)} className="p-2.5 text-fg-faint hover:text-green-500 transition-colors bg-well rounded-xl"><Edit2 size={14} /></button>
-                <button onClick={() => setTargetToDelete(t.id)} className="p-2.5 text-fg-faint hover:text-red-500 transition-colors bg-well rounded-xl"><Trash2 size={14} /></button>
-              </div>
-            </div>
-          );
-        })}
+        {sorted.map((t) => (
+          <TargetRow key={t.id} t={t} onSign={signTarget} onEdit={openEditForm} onDelete={setTargetToDelete} />
+        ))}
       </div>
 
       {showForm && <TargetForm editingTarget={editingTarget} onClose={() => setShowForm(false)} />}
