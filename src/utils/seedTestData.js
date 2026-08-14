@@ -1,6 +1,6 @@
 import { writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
-import { clubDoc, playerDoc, shortlistDoc } from './firestorePaths';
+import { clubDoc, playerDoc, targetDoc } from './firestorePaths';
 
 export const TEST_CLUB_NAME = 'Equipo de Prueba';
 
@@ -56,26 +56,28 @@ const TEST_PLAYERS = [
   player({ name: 'Lateral Promesa', positions: ['LD'], rating: 58, age: 16, marketValue: 900000, type: 'Cantera', potential: 80, wage: 150000 }),
 ];
 
-const scout = (overrides) => ({
+const target = (overrides) => ({
+  photo: null,
   age: 22,
   rating: null,
-  potential: null,
   originClub: null,
+  preferredFoot: 'Diestro',
+  secondaryPositions: [],
   estimatedValue: 0,
-  notes: '',
-  priority: 'Media',
+  wage: 0,
+  status: 'Seguimiento',
   ...overrides,
 });
 
-const TEST_SHORTLIST = [
-  scout({ name: 'Kai Talento', positions: ['ED'], position: 'ED', age: 22, rating: 79, potential: 87, originClub: 'Ajax', estimatedValue: 35000000, notes: 'Extremo rápido, muy buen regate al espacio.', priority: 'Alta' }),
-  scout({ name: 'Big Center', positions: ['DFC', 'MCD'], position: 'DFC', age: 25, rating: 76, potential: 80, originClub: 'Benfica', estimatedValue: 18000000, notes: 'Central polivalente, buena salida de balón.', priority: 'Media' }),
+const TEST_TARGETS = [
+  target({ name: 'Kai Talento', positions: ['ED'], primaryPosition: 'ED', age: 22, rating: 79, originClub: 'Ajax', estimatedValue: 35000000, wage: 400000, status: 'Prioritario' }),
+  target({ name: 'Big Center', positions: ['DFC', 'MCD'], primaryPosition: 'DFC', secondaryPositions: ['MCD'], age: 25, rating: 76, originClub: 'Benfica', estimatedValue: 18000000, wage: 250000, status: 'Negociando' }),
 ];
 
 /**
  * Crea (si no existe ya) el club "Equipo de Prueba" con una plantilla completa y variada,
- * más un par de fichas en la libreta de ojeadores, para poder probar de un vistazo todas
- * las funciones de la aplicación. Devuelve el id del club (nuevo o ya existente).
+ * más un par de fichas en la lista de seguimiento de objetivos, para poder probar de un
+ * vistazo todas las funciones de la aplicación. Devuelve el id del club (nuevo o ya existente).
  */
 export async function seedTestClub(uid, existingClubs = []) {
   const existing = existingClubs.find((c) => c.name === TEST_CLUB_NAME);
@@ -96,8 +98,8 @@ export async function seedTestClub(uid, existingClubs = []) {
     batch.set(playerDoc(uid, clubId, crypto.randomUUID()), p);
   });
 
-  TEST_SHORTLIST.forEach((s) => {
-    batch.set(shortlistDoc(uid, clubId, crypto.randomUUID()), { ...s, createdAt: Date.now() });
+  TEST_TARGETS.forEach((t) => {
+    batch.set(targetDoc(uid, clubId, crypto.randomUUID()), { ...t, createdAt: Date.now() });
   });
 
   await batch.commit();

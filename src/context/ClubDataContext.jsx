@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { onSnapshot, setDoc, addDoc, deleteDoc, updateDoc, increment } from 'firebase/firestore';
-import { playersCol, playerDoc, tacticsDoc, transactionsCol, shortlistCol, shortlistDoc, targetsCol, targetDoc, matchesCol, seasonsCol } from '../utils/firestorePaths';
+import { playersCol, playerDoc, tacticsDoc, transactionsCol, targetsCol, targetDoc, matchesCol, seasonsCol } from '../utils/firestorePaths';
 import { FORMATIONS } from '../constants/formations';
 import { isUncalledZone } from '../utils/slots';
 import { useAuth } from './AuthContext';
@@ -35,14 +35,12 @@ export function ClubDataProvider({ children }) {
   const setSavedFormationsBoth = (value) => { savedFormationsRef.current = value; setSavedFormations(value); };
   const [activeTacticName, setActiveTacticName] = useState(null);
   const [transactions, setTransactions] = useState([]);
-  const [shortlist, setShortlist] = useState([]);
   const [targets, setTargets] = useState([]);
   const [matches, setMatches] = useState([]);
   const [seasons, setSeasons] = useState([]);
 
   const [playerToDelete, setPlayerToDelete] = useState(null);
   const [formationToDelete, setFormationToDelete] = useState(null);
-  const [scoutToDelete, setScoutToDelete] = useState(null);
   const [targetToDelete, setTargetToDelete] = useState(null);
 
   useEffect(() => {
@@ -52,7 +50,6 @@ export function ClubDataProvider({ children }) {
       setLineup({});
       setBench({});
       setTransactions([]);
-      setShortlist([]);
       setTargets([]);
       setMatches([]);
       setSeasons([]);
@@ -60,7 +57,7 @@ export function ClubDataProvider({ children }) {
     }
 
     setPlayers([]); setPlayersLoaded(false); setFormation('4-3-3'); setLineup({}); setBench({}); setSavedFormationsBoth([]); setActiveTacticName(null);
-    setTransactions([]); setShortlist([]); setTargets([]); setMatches([]); setSeasons([]);
+    setTransactions([]); setTargets([]); setMatches([]); setSeasons([]);
 
     const unsubPlayers = onSnapshot(playersCol(user.uid, activeClubId), (snap) => {
       setPlayers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
@@ -84,10 +81,6 @@ export function ClubDataProvider({ children }) {
       setTransactions(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.date - a.date));
     }, (err) => console.error('Error fetching transactions:', err));
 
-    const unsubShortlist = onSnapshot(shortlistCol(user.uid, activeClubId), (snap) => {
-      setShortlist(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    }, (err) => console.error('Error fetching shortlist:', err));
-
     const unsubTargets = onSnapshot(targetsCol(user.uid, activeClubId), (snap) => {
       setTargets(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     }, (err) => console.error('Error fetching targets:', err));
@@ -100,7 +93,7 @@ export function ClubDataProvider({ children }) {
       setSeasons(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.seasonNumber - a.seasonNumber));
     }, (err) => console.error('Error fetching seasons:', err));
 
-    return () => { unsubPlayers(); unsubTactics(); unsubTransactions(); unsubShortlist(); unsubTargets(); unsubMatches(); unsubSeasons(); };
+    return () => { unsubPlayers(); unsubTactics(); unsubTransactions(); unsubTargets(); unsubMatches(); unsubSeasons(); };
   }, [user, activeClubId]);
 
   const logTransaction = async (type, playerName, amount) => {
@@ -108,27 +101,9 @@ export function ClubDataProvider({ children }) {
     await addDoc(transactionsCol(user.uid, activeClubId), { type, playerName, amount, date: Date.now() });
   };
 
-  const addOrUpdateScout = async (scoutData, editingId) => {
-    if (!user || !activeClubId) return;
-    const id = editingId || crypto.randomUUID();
-    await setDoc(shortlistDoc(user.uid, activeClubId, id), { ...scoutData, createdAt: scoutData.createdAt || Date.now() }, { merge: true });
-    return id;
-  };
-
-  const deleteScout = async (scoutId) => {
-    if (!user || !activeClubId || !scoutId) return;
-    try { await deleteDoc(shortlistDoc(user.uid, activeClubId, scoutId)); } catch (err) { console.error(err); }
-  };
-
-  const confirmDeleteScout = async () => {
-    if (!user || !activeClubId || !scoutToDelete) return;
-    try { await deleteDoc(shortlistDoc(user.uid, activeClubId, scoutToDelete)); } catch (err) { console.error(err); }
-    setScoutToDelete(null);
-  };
-
-  // Lista de Seguimiento / Objetivos de Mercado (antes "Operaciones"): mismo patrón CRUD que
-  // Ojeadores (shortlist) pero en su propia colección "targets", con otros campos (foto,
-  // salario) y otro estado (Seguimiento/Negociando/Prioridad Alta).
+  // Lista de Seguimiento / Objetivos de Mercado (pestaña "Objetivos" de Mercado): jugadores
+  // externos a seguir, con foto, club actual, posiciones, pierna buena, valor/sueldo estimado
+  // y estado (Seguimiento/Negociando/Prioritario/Descartado).
   const addOrUpdateTarget = async (targetData, editingId) => {
     if (!user || !activeClubId) return;
     const id = editingId || crypto.randomUUID();
@@ -430,13 +405,13 @@ export function ClubDataProvider({ children }) {
   };
 
   const value = {
-    players, playersLoaded, formation, lineup, bench, savedFormations, activeTacticName, transactions, shortlist, targets, matches, seasons,
+    players, playersLoaded, formation, lineup, bench, savedFormations, activeTacticName, transactions, targets, matches, seasons,
     playerToDelete, setPlayerToDelete, formationToDelete, setFormationToDelete,
-    scoutToDelete, setScoutToDelete, targetToDelete, setTargetToDelete,
+    targetToDelete, setTargetToDelete,
     addOrUpdatePlayer, confirmDeletePlayer, removePlayerFromTactic, sellPlayer, cedePlayer,
     saveTactics, clearTactics, clearLineup, clearBench, handleFormationChange, executeMove, assignPlayerToSlot,
     saveCurrentFormation, updateActiveTactic, confirmDeleteFormation, renameSavedFormation, loadSavedFormation, setPlayerTransferStatus,
-    addOrUpdateScout, confirmDeleteScout, deleteScout, updateYouthRating, saveMatch, endSeason,
+    updateYouthRating, saveMatch, endSeason,
     addOrUpdateTarget, confirmDeleteTarget, deleteTarget,
   };
 

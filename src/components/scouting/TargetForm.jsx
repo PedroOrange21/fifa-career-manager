@@ -7,18 +7,26 @@ import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
-const STATUS_OPTIONS = ['Seguimiento', 'Negociando', 'Prioridad Alta'];
-const STATUS_STYLE = {
+export const STATUS_OPTIONS = ['Seguimiento', 'Negociando', 'Prioritario', 'Descartado'];
+export const STATUS_LABELS = { Seguimiento: 'En Seguimiento', Negociando: 'Negociando', Prioritario: 'Objetivo Prioritario', Descartado: 'Descartado' };
+export const STATUS_STYLE = {
   Seguimiento: 'bg-well-strong text-fg-muted border-border',
   Negociando: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20',
-  'Prioridad Alta': 'bg-red-500/20 text-red-400 border-red-500/20',
+  Prioritario: 'bg-red-500/20 text-red-400 border-red-500/20',
+  Descartado: 'bg-well text-fg-faint border-border-subtle opacity-70',
 };
 
-const emptyTarget = { photo: '', name: '', positions: [], age: '', rating: '', originClub: '', estimatedValue: '', wage: '', status: 'Seguimiento' };
+const FOOT_OPTIONS = ['Diestro', 'Zurdo', 'Ambas'];
+
+const emptyTarget = { photo: '', name: '', originClub: '', primaryPosition: '', secondaryPositions: [], preferredFoot: 'Diestro', age: '', rating: '', estimatedValue: '', wage: '', status: 'Seguimiento' };
 
 const targetToFormState = (t) => ({
-  photo: t.photo || '', name: t.name, positions: t.positions || (t.position ? [t.position] : []), age: t.age || '', rating: t.rating || '',
-  originClub: t.originClub || '', estimatedValue: formatValueInput(String(t.estimatedValue || '')), wage: formatValueInput(String(t.wage || '')),
+  photo: t.photo || '', name: t.name, originClub: t.originClub || '',
+  primaryPosition: t.primaryPosition || t.positions?.[0] || '',
+  secondaryPositions: t.secondaryPositions || t.positions?.slice(1) || [],
+  preferredFoot: t.preferredFoot || 'Diestro',
+  age: t.age || '', rating: t.rating || '',
+  estimatedValue: formatValueInput(String(t.estimatedValue || '')), wage: formatValueInput(String(t.wage || '')),
   status: t.status || 'Seguimiento',
 });
 
@@ -32,11 +40,12 @@ export default function TargetForm({ editingTarget, onClose }) {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const fileInputRef = useRef(null);
 
-  const togglePosition = (pos) => {
-    let current = [...target.positions];
-    if (pos === 'POR') { current = ['POR']; }
-    else { current = current.filter((p) => p !== 'POR'); if (current.includes(pos)) { current = current.filter((p) => p !== pos); } else { current.push(pos); } }
-    setTarget({ ...target, positions: current });
+  const selectPrimary = (pos) => {
+    setTarget({ ...target, primaryPosition: pos, secondaryPositions: pos === 'POR' ? [] : target.secondaryPositions.filter((p) => p !== 'POR' && p !== pos) });
+  };
+  const toggleSecondary = (pos) => {
+    if (pos === target.primaryPosition || pos === 'POR' || target.primaryPosition === 'POR') return;
+    setTarget({ ...target, secondaryPositions: target.secondaryPositions.includes(pos) ? target.secondaryPositions.filter((p) => p !== pos) : [...target.secondaryPositions, pos] });
   };
 
   const handlePhotoChange = async (e) => {
@@ -58,16 +67,21 @@ export default function TargetForm({ editingTarget, onClose }) {
     e.preventDefault();
     if (isSubmitting) return;
     if (!target.name.trim()) return setFormError('El nombre es obligatorio.');
-    if (!target.positions || target.positions.length === 0) return setFormError('Selecciona al menos una posición.');
+    if (!target.primaryPosition) return setFormError('Selecciona la posición principal.');
 
     setFormError('');
     setIsSubmitting(true);
     try {
       await addOrUpdateTarget({
         photo: target.photo || null,
-        name: target.name.trim(), positions: target.positions, age: target.age ? parseInt(target.age) : null,
+        name: target.name.trim(),
+        originClub: target.originClub.trim() || null,
+        positions: [target.primaryPosition, ...target.secondaryPositions],
+        primaryPosition: target.primaryPosition, secondaryPositions: target.secondaryPositions,
+        preferredFoot: target.preferredFoot,
+        age: target.age ? parseInt(target.age) : null,
         rating: target.rating ? parseInt(target.rating) : null,
-        originClub: target.originClub.trim() || null, estimatedValue: parseValue(target.estimatedValue),
+        estimatedValue: parseValue(target.estimatedValue),
         wage: parseValue(target.wage), status: target.status,
       }, editingTarget?.id);
       onClose();
@@ -103,25 +117,42 @@ export default function TargetForm({ editingTarget, onClose }) {
           </div>
 
           <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Nombre *</label><input type="text" required autoComplete="off" placeholder="Ej: Kobbie Mainoo" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold placeholder:text-fg-faint text-fg text-base md:text-sm" value={target.name} onChange={(e) => setTarget({ ...target, name: e.target.value })} /></div>
+          <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Club Actual</label><input type="text" placeholder="Ej: Manchester United" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle font-bold text-base md:text-sm text-fg placeholder:text-fg-faint" value={target.originClub} onChange={(e) => setTarget({ ...target, originClub: e.target.value })} /></div>
+
           <div className="space-y-1">
-            <label className="text-[9px] font-black text-fg-muted ml-1">Posiciones * (Toca varias · POR es excluyente)</label>
+            <label className="text-[9px] font-black text-fg-muted ml-1">Posición Principal *</label>
             <div className="flex flex-wrap gap-1.5 p-2 bg-well rounded-xl border border-border-subtle">
-              {ALL_POSITIONS.map((pos) => (<button key={pos} type="button" onClick={() => togglePosition(pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${target.positions.includes(pos) ? 'bg-green-500 text-black shadow-lg shadow-green-500/30' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>))}
+              {ALL_POSITIONS.map((pos) => (<button key={pos} type="button" onClick={() => selectPrimary(pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${target.primaryPosition === pos ? 'bg-green-500 text-black shadow-lg shadow-green-500/30' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>))}
             </div>
           </div>
+          {target.primaryPosition && target.primaryPosition !== 'POR' && (
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-fg-muted ml-1">Posiciones Secundarias</label>
+              <div className="flex flex-wrap gap-1.5 p-2 bg-well rounded-xl border border-border-subtle">
+                {ALL_POSITIONS.filter((pos) => pos !== 'POR' && pos !== target.primaryPosition).map((pos) => (<button key={pos} type="button" onClick={() => toggleSecondary(pos)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${target.secondaryPositions.includes(pos) ? 'bg-green-500/80 text-black shadow-lg shadow-green-500/20' : 'bg-well-strong text-fg-muted border border-border-subtle'}`}>{pos}</button>))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <label className="text-[9px] font-black text-fg-muted ml-1">Pierna Buena</label>
+            <div className="flex gap-2">
+              {FOOT_OPTIONS.map((f) => (<button key={f} type="button" onClick={() => setTarget({ ...target, preferredFoot: f })} className={`flex-1 py-2.5 rounded-xl text-[9px] font-black uppercase transition-all border ${target.preferredFoot === f ? 'bg-green-500 text-black border-green-500' : 'bg-well text-fg-muted border-border-subtle hover:bg-well-strong'}`}>{f}</button>))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Edad</label><input type="number" min="14" max="50" className="w-full h-14 bg-well rounded-xl outline-none border border-border-subtle text-center font-black text-xl text-fg placeholder:text-fg-faint" value={target.age} onChange={(e) => setTarget({ ...target, age: e.target.value })} /></div>
             <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Media</label><input type="number" min="1" max="99" className="w-full h-14 bg-well rounded-xl outline-none border border-border-subtle text-center font-black text-xl text-fg placeholder:text-fg-faint" value={target.rating} onChange={(e) => setTarget({ ...target, rating: e.target.value })} /></div>
           </div>
-          <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Equipo de Origen</label><input type="text" placeholder="Ej: Manchester United" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle font-bold text-base md:text-sm text-fg placeholder:text-fg-faint" value={target.originClub} onChange={(e) => setTarget({ ...target, originClub: e.target.value })} /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Valor Estimado (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 20.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.estimatedValue} onChange={(e) => setTarget({ ...target, estimatedValue: formatValueInput(e.target.value) })} /></div>
-            <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Salario Estimado (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 500.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.wage} onChange={(e) => setTarget({ ...target, wage: formatValueInput(e.target.value) })} /></div>
+            <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Valor de Mercado Estimado (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 20.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.estimatedValue} onChange={(e) => setTarget({ ...target, estimatedValue: formatValueInput(e.target.value) })} /></div>
+            <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Aproximado (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 500.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.wage} onChange={(e) => setTarget({ ...target, wage: formatValueInput(e.target.value) })} /></div>
           </div>
           <div className="space-y-1">
-            <label className="text-[9px] font-black text-fg-muted ml-1">Estado</label>
-            <div className="flex gap-2">
-              {STATUS_OPTIONS.map((s) => (<button key={s} type="button" onClick={() => setTarget({ ...target, status: s })} className={`flex-1 py-2.5 rounded-xl text-[9px] font-black uppercase transition-all border ${target.status === s ? STATUS_STYLE[s] : 'bg-well text-fg-muted hover:bg-well-strong border-transparent'}`}>{s}</button>))}
+            <label className="text-[9px] font-black text-fg-muted ml-1">Estado de Seguimiento</label>
+            <div className="grid grid-cols-2 gap-2">
+              {STATUS_OPTIONS.map((s) => (<button key={s} type="button" onClick={() => setTarget({ ...target, status: s })} className={`py-2.5 rounded-xl text-[9px] font-black uppercase transition-all border ${target.status === s ? STATUS_STYLE[s] : 'bg-well text-fg-muted hover:bg-well-strong border-transparent'}`}>{STATUS_LABELS[s]}</button>))}
             </div>
           </div>
           <button type="submit" disabled={isSubmitting} className="w-full bg-green-500 text-black p-4 rounded-xl font-black uppercase text-xs tracking-wider mt-6 hover:bg-green-400 shrink-0 disabled:opacity-50">{isSubmitting ? 'Guardando...' : editingTarget ? 'Guardar Cambios' : 'Añadir a la Lista'}</button>

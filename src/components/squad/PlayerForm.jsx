@@ -148,8 +148,8 @@ function SectionHeader({ emoji, title }) {
 // skipInitialTransaction: usado por el asistente de configuración inicial del club (Create
 // Your Club) — un "Comprado" registrado ahí es estado base previo, no una compra real, así
 // que no debe descontar presupuesto ni generar un registro en el historial de transacciones.
-export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, sourceTargetId, onClose, initialStep = 1, lockedType = null, restrictTypes = null, hidePurchasePrice = false, skipInitialTransaction = false }) {
-  const { addOrUpdatePlayer, deleteScout, deleteTarget } = useClubData();
+export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onClose, initialStep = 1, lockedType = null, restrictTypes = null, hidePurchasePrice = false, skipInitialTransaction = false }) {
+  const { addOrUpdatePlayer, deleteTarget } = useClubData();
   useAutoHideChrome();
 
   const [form, setForm] = useState(() => toFormState(editingPlayer || prefill || null));
@@ -393,9 +393,6 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, sour
         // filtros, barra de progreso).
         potential: form.type === 'Cantera' && form.potential ? form.potential.trim() : null,
       }, editingPlayer?.id, { skipFinancialEffects: skipInitialTransaction });
-      if (!editingPlayer && sourceScoutId) {
-        try { await deleteScout(sourceScoutId); } catch (err) { console.error(err); }
-      }
       if (!editingPlayer && sourceTargetId) {
         try { await deleteTarget(sourceTargetId); } catch (err) { console.error(err); }
       }
