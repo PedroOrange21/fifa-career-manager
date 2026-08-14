@@ -33,7 +33,7 @@ function TargetRow({ t, onSign, onEdit, onDelete }) {
 
   return (
     <div className={`bg-surface p-3 md:p-4 border-l-4 ${STATUS_BORDER[t.status] || STATUS_BORDER.Seguimiento}`}>
-      <div className="flex items-center gap-3 md:gap-4">
+      <div className="flex items-start gap-3 md:gap-4">
         <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(t.rating || 0)}`}>
           <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{t.primaryPosition || positions[0] || '—'}</span>
           <span className="text-lg md:text-xl">{t.rating || '—'}</span>
@@ -45,7 +45,11 @@ function TargetRow({ t, onSign, onEdit, onDelete }) {
           </div>
           <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest truncate">{positions.join(' · ') || '—'}</div>
         </div>
-        {t.age ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded shrink-0">{t.age} Años</span> : null}
+        {/* Esquina superior derecha: Estado de seguimiento arriba, Edad justo debajo. */}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider border ${STATUS_STYLE[t.status] || STATUS_STYLE.Seguimiento}`}>{STATUS_LABELS[t.status] || STATUS_LABELS.Seguimiento}</span>
+          {t.age ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{t.age} Años</span> : null}
+        </div>
       </div>
 
       {/* Club actual: destacado en su propio bloque, bien diferenciado del resto de datos. */}
@@ -68,6 +72,14 @@ function TargetRow({ t, onSign, onEdit, onDelete }) {
           <div className="text-sm font-black text-fg truncate">{t.wage > 0 ? `${abbreviateValue(t.wage)}/mes` : 'Sin definir'}</div>
         </div>
       </div>
+
+      {/* Nota de seguimiento: solo ocupa espacio si existe. */}
+      {t.notes && (
+        <div className="mt-2.5 bg-well/60 rounded-xl px-3 py-2 border border-border-subtle">
+          <div className="text-[8px] font-black uppercase text-fg-faint tracking-widest mb-1">Nota de Seguimiento</div>
+          <p className="text-xs text-fg-secondary italic">{t.notes}</p>
+        </div>
+      )}
 
       <div className="flex gap-2 mt-3">
         <button onClick={() => onSign(t)} className="flex-1 py-2.5 rounded-xl bg-green-500/10 text-green-500 font-black uppercase text-[10px] hover:bg-green-500/20 transition-all flex items-center justify-center gap-2 border border-green-500/20"><UserPlus size={14} /> Fichar</button>
