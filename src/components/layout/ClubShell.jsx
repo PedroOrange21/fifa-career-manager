@@ -31,7 +31,6 @@ export default function ClubShell() {
   const [clubSubTab, setClubSubTab] = useState('squad');
   const [marketSubTab, setMarketSubTab] = useState('scouting');
   const [officeSubTab, setOfficeSubTab] = useState('finance');
-  const [pendingEditPlayer, setPendingEditPlayer] = useState(null);
   const [pendingPrefill, setPendingPrefill] = useState(null);
   const [chromeHiddenCount, setChromeHiddenCount] = useState(0);
 
@@ -41,8 +40,8 @@ export default function ClubShell() {
   const showChrome = useCallback(() => setChromeHiddenCount((c) => Math.max(0, c - 1)), []);
   const uiChromeValue = useMemo(() => ({ hide: hideChrome, show: showChrome }), [hideChrome, showChrome]);
 
-  const requestEditPlayer = (player) => { setActiveTab('club'); setClubSubTab('squad'); setPendingEditPlayer(player); };
   const requestSignScout = (prefillData, scoutId) => { setActiveTab('club'); setClubSubTab('squad'); setPendingPrefill({ ...prefillData, __scoutId: scoutId }); };
+  const requestSignTarget = (prefillData, targetId) => { setActiveTab('club'); setClubSubTab('squad'); setPendingPrefill({ ...prefillData, __targetId: targetId }); };
   const requestNewPlayer = () => { setActiveTab('club'); setClubSubTab('squad'); setPendingPrefill({}); };
   const switchClub = (clubId) => { setActiveClubId(clubId); setActiveTab('club'); setClubSubTab('squad'); };
   const goToScoutingMarket = () => { setActiveTab('market'); setMarketSubTab('scouting'); };
@@ -69,13 +68,12 @@ export default function ClubShell() {
                 <ClubTab
                   subTab={clubSubTab} setSubTab={setClubSubTab}
                   onNavigateToScouting={goToScoutingMarket}
-                  pendingEditPlayer={pendingEditPlayer} onConsumePendingEdit={() => setPendingEditPlayer(null)}
                   pendingPrefill={pendingPrefill} onConsumePendingPrefill={() => setPendingPrefill(null)}
                 />
               )}
               {activeTab === 'match' && activeClubId && <MatchTab />}
               {activeTab === 'market' && activeClubId && (
-                <MarketShell subTab={marketSubTab} setSubTab={setMarketSubTab} onSignScout={requestSignScout} onRequestEditPlayer={requestEditPlayer} />
+                <MarketShell subTab={marketSubTab} setSubTab={setMarketSubTab} onSignScout={requestSignScout} onSignTarget={requestSignTarget} />
               )}
               {activeTab === 'office' && activeClubId && (
                 <OfficeTab subTab={officeSubTab} setSubTab={setOfficeSubTab} onCreatePlayer={requestNewPlayer} />

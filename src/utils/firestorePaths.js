@@ -15,6 +15,12 @@ export const transactionDoc = (uid, clubId, id) => doc(db, 'artifacts', appId, '
 export const shortlistCol = (uid, clubId) => collection(db, 'artifacts', appId, 'users', uid, 'clubs', clubId, 'shortlist');
 export const shortlistDoc = (uid, clubId, id) => doc(db, 'artifacts', appId, 'users', uid, 'clubs', clubId, 'shortlist', id);
 
+// Lista de Seguimiento / Objetivos de Mercado (antes "Operaciones"): objetivos de fichaje
+// externos a seguir, distinta de "shortlist" (Ojeadores) — otros campos (foto, salario) y
+// otro estado (Seguimiento/Negociando/Prioridad Alta en vez de prioridad Baja/Media/Alta).
+export const targetsCol = (uid, clubId) => collection(db, 'artifacts', appId, 'users', uid, 'clubs', clubId, 'targets');
+export const targetDoc = (uid, clubId, id) => doc(db, 'artifacts', appId, 'users', uid, 'clubs', clubId, 'targets', id);
+
 export const matchesCol = (uid, clubId) => collection(db, 'artifacts', appId, 'users', uid, 'clubs', clubId, 'matches');
 export const matchDoc = (uid, clubId, id) => doc(db, 'artifacts', appId, 'users', uid, 'clubs', clubId, 'matches', id);
 

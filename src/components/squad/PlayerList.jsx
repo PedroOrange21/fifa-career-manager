@@ -40,7 +40,7 @@ const getPositionOrder = (p) => {
   return idx === -1 ? ALL_POSITIONS.length : idx;
 };
 
-export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pendingPrefill, onConsumePendingPrefill }) {
+export default function PlayerList({ pendingPrefill, onConsumePendingPrefill }) {
   const { players, lineup, bench, playerToDelete, setPlayerToDelete, confirmDeletePlayer, setPlayerTransferStatus } = useClubData();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('rating-desc');
@@ -48,6 +48,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [formPrefill, setFormPrefill] = useState(null);
   const [formSourceScoutId, setFormSourceScoutId] = useState(null);
+  const [formSourceTargetId, setFormSourceTargetId] = useState(null);
   const [formInitialStep, setFormInitialStep] = useState(1);
   const [sellingPlayer, setSellingPlayer] = useState(null);
   const [loaningPlayer, setLoaningPlayer] = useState(null);
@@ -60,26 +61,16 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const ficharRef = useRef(null);
   useOnClickOutside(ficharRef, () => setFicharConfirming(false), ficharConfirming);
 
-  useEffect(() => {
-    if (pendingEditPlayer) {
-      setEditingPlayer(pendingEditPlayer);
-      setFormPrefill(null);
-      setFormSourceScoutId(null);
-      setFormInitialStep(4);
-      setShowForm(true);
-      onConsumePendingEdit();
-    }
-  }, [pendingEditPlayer, onConsumePendingEdit]);
-
   // El modal de contrato de promoción (accesible desde la sección Academia de esta misma
   // vista) oculta la cabecera y la navegación por sí mismo (useAutoHideChrome).
 
   useEffect(() => {
     if (pendingPrefill) {
-      const { __scoutId, ...rest } = pendingPrefill;
+      const { __scoutId, __targetId, ...rest } = pendingPrefill;
       setEditingPlayer(null);
       setFormPrefill(rest);
       setFormSourceScoutId(__scoutId || null);
+      setFormSourceTargetId(__targetId || null);
       setFormInitialStep(1);
       setShowForm(true);
       onConsumePendingPrefill();
@@ -242,7 +233,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
         </div>
       )}
 
-      {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} sourceScoutId={formSourceScoutId} initialStep={formInitialStep} onClose={() => setShowForm(false)} />}
+      {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} sourceScoutId={formSourceScoutId} sourceTargetId={formSourceTargetId} initialStep={formInitialStep} onClose={() => setShowForm(false)} />}
       {sellingPlayer && <SellPlayerModal player={sellingPlayer} onClose={() => setSellingPlayer(null)} />}
       {loaningPlayer && <LoanOutModal player={loaningPlayer} onClose={() => setLoaningPlayer(null)} />}
       {promotingPlayer && <PromoteToFirstTeamModal player={promotingPlayer} onClose={() => setPromotingPlayer(null)} />}
