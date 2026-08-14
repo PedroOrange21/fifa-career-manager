@@ -184,11 +184,16 @@ export function ClubDataProvider({ children }) {
     await incrementSeasonNumber();
   };
 
-  const addOrUpdatePlayer = async (playerData, editingId) => {
+  // skipFinancialEffects: usado por el asistente de configuración inicial (Create Your Club).
+  // Un jugador "Comprado" registrado ahí refleja el estado base previo del club (ya estaba
+  // fichado antes de empezar a usar la app), no una compra real hecha dentro de ella — no debe
+  // descontar presupuesto ni dejar rastro en el historial de transacciones, que debe empezar
+  // completamente limpio y registrar solo los movimientos posteriores.
+  const addOrUpdatePlayer = async (playerData, editingId, { skipFinancialEffects = false } = {}) => {
     if (!user || !activeClubId) return;
     const id = editingId || crypto.randomUUID();
     await setDoc(playerDoc(user.uid, activeClubId, id), playerData, { merge: true });
-    if (!editingId && playerData.type === 'Comprado' && playerData.value > 0) {
+    if (!editingId && !skipFinancialEffects && playerData.type === 'Comprado' && playerData.value > 0) {
       adjustBudget(-playerData.value);
       logTransaction('compra', playerData.name, playerData.value);
     }

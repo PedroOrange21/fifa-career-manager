@@ -145,7 +145,10 @@ function SectionHeader({ emoji, title }) {
 // bloquear la elección (p. ej. plantilla ya existente: solo Comprado/Cedido, sin Cantera);
 // hidePurchasePrice oculta el Precio de Compra para jugadores "base" del club que nunca se
 // compraron por una cifra (siguen teniendo Valor de Mercado, Sueldo, etc.).
-export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onClose, initialStep = 1, lockedType = null, restrictTypes = null, hidePurchasePrice = false }) {
+// skipInitialTransaction: usado por el asistente de configuración inicial del club (Create
+// Your Club) — un "Comprado" registrado ahí es estado base previo, no una compra real, así
+// que no debe descontar presupuesto ni generar un registro en el historial de transacciones.
+export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onClose, initialStep = 1, lockedType = null, restrictTypes = null, hidePurchasePrice = false, skipInitialTransaction = false }) {
   const { addOrUpdatePlayer, deleteScout } = useClubData();
   useAutoHideChrome();
 
@@ -389,7 +392,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceScoutId, onCl
         // parsePotentialRange() normaliza este campo donde haga falta un número (listas,
         // filtros, barra de progreso).
         potential: form.type === 'Cantera' && form.potential ? form.potential.trim() : null,
-      }, editingPlayer?.id);
+      }, editingPlayer?.id, { skipFinancialEffects: skipInitialTransaction });
       if (!editingPlayer && sourceScoutId) {
         try { await deleteScout(sourceScoutId); } catch (err) { console.error(err); }
       }

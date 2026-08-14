@@ -185,10 +185,13 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const showDismiss = clubExists || clubs.length > 0;
 
   const isScratch = startType === 'scratch';
+  // skipInitialTransaction en los tres casos: cualquier jugador registrado aquí es estado base
+  // previo del club (ya fichado antes de usar la app), nunca una compra real hecha dentro de
+  // ella — el historial de transacciones y el presupuesto no deben verse afectados.
   const playerFormPropsFor = (mode) => {
-    if (mode === 'academy') return { prefill: { type: 'Cantera' }, lockedType: 'Cantera' };
-    if (isScratch) return { prefill: { type: 'Comprado' }, lockedType: 'Comprado', hidePurchasePrice: true };
-    return { prefill: { type: 'Comprado' }, restrictTypes: ['Comprado', 'Cedido'] };
+    if (mode === 'academy') return { prefill: { type: 'Cantera' }, lockedType: 'Cantera', skipInitialTransaction: true };
+    if (isScratch) return { prefill: { type: 'Comprado' }, lockedType: 'Comprado', hidePurchasePrice: true, skipInitialTransaction: true };
+    return { prefill: { type: 'Comprado' }, restrictTypes: ['Comprado', 'Cedido'], skipInitialTransaction: true };
   };
 
   const STEP_LABELS = {
