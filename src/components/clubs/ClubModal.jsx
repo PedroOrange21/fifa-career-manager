@@ -11,7 +11,8 @@ import { OnboardingWizardModal } from '../onboarding/OnboardingWizard';
 // OnboardingWizardModal (clubExists=false), que encadena identidad + fondos + registro de
 // jugadores en un único flujo, ver componente OnboardingWizard.jsx.
 function EditClubForm({ editingClub, onClose }) {
-  const { updateClub, setClubToDelete } = useClubs();
+  const { updateClub, setClubToDelete, clubs } = useClubs();
+  const canDeleteClub = clubs.length > 1;
   const [name, setName] = useState(editingClub.name || '');
   const [logo, setLogo] = useState(editingClub.logo || '');
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -71,9 +72,16 @@ function EditClubForm({ editingClub, onClose }) {
         <button type="submit" disabled={!name.trim() || isSaving} className="w-full bg-green-500 text-black p-4 rounded-2xl font-black uppercase text-xs md:text-sm tracking-wider shadow-lg shadow-green-500/20 active:scale-95 transition-all hover:bg-green-400 disabled:opacity-50 disabled:active:scale-100">
           {isSaving ? 'Guardando...' : 'Guardar Cambios'}
         </button>
-        <button type="button" onClick={() => { onClose(); setClubToDelete(editingClub.id); }} className="w-full bg-red-500/10 text-red-500 p-4 rounded-2xl border border-red-500/20 font-black uppercase text-xs flex justify-center items-center gap-2 hover:bg-red-500/20 active:scale-95 transition-all">
-          <Trash2 size={16} /> Eliminar Modo Carrera
-        </button>
+        {canDeleteClub ? (
+          <button type="button" onClick={() => { onClose(); setClubToDelete(editingClub.id); }} className="w-full bg-red-500/10 text-red-500 p-4 rounded-2xl border border-red-500/20 font-black uppercase text-xs flex justify-center items-center gap-2 hover:bg-red-500/20 active:scale-95 transition-all">
+            <Trash2 size={16} /> Eliminar Modo Carrera
+          </button>
+        ) : (
+          <div className="w-full bg-well text-fg-faint p-4 rounded-2xl border border-border-subtle flex flex-col items-center gap-1.5 text-center">
+            <span className="font-black uppercase text-xs flex items-center gap-2 opacity-70"><Trash2 size={16} /> Eliminar Modo Carrera</span>
+            <span className="text-[9px] font-bold normal-case tracking-normal opacity-80">Debe existir al menos un modo carrera. Crea otro antes de poder eliminar este.</span>
+          </div>
+        )}
       </div>
     </form>
   );

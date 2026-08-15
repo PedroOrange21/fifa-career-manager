@@ -75,11 +75,22 @@ export function ClubsProvider({ children }) {
 
   const confirmDeleteClub = async () => {
     if (!user || !clubToDelete) return;
+    // Nunca se permite dejar la cuenta sin ningún modo carrera: si por cualquier vía se llega
+    // aquí con un único club restante, se aborta el borrado como red de seguridad (la UI ya
+    // oculta/deshabilita el botón de eliminar en ese caso).
+    if (clubs.length <= 1) { setClubToDelete(null); return; }
     const deletedId = clubToDelete;
+    const deletedIdx = clubs.findIndex((c) => c.id === deletedId);
+    const remaining = clubs.filter((c) => c.id !== deletedId);
     try {
       await deleteDoc(clubDoc(user.uid, deletedId));
-      setClubs((prev) => prev.filter((c) => c.id !== deletedId));
-      if (activeClubId === deletedId) setActiveClubId(null);
+      setClubs(remaining);
+      if (activeClubId === deletedId) {
+        // Carga automáticamente otro modo carrera existente: el siguiente en la lista tras el
+        // eliminado o, si era el último, el primero disponible.
+        const nextClub = clubs[deletedIdx + 1] || remaining[0];
+        setActiveClubId(nextClub ? nextClub.id : null);
+      }
     } catch (err) {
       console.error(err);
     }
