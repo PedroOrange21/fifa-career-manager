@@ -113,6 +113,18 @@ textarea:-webkit-autofill:focus {
   transition: background-color 999999s ease-in-out 0s;
 }
 
+/* Texto de ejemplo (placeholder) unificado en toda la app: mismo tamaño reducido y color
+   atenuado en cualquier input/textarea, sin afectar nunca al tamaño del valor ya escrito por
+   el usuario. El ::placeholder es un pseudo-elemento aparte del propio campo, así que fijar
+   su font-size aquí no interfiere con la regla de zoom-prevention de arriba (esa solo aplica
+   al font-size del <input> en sí). */
+input::placeholder,
+textarea::placeholder {
+  font-size: 0.75rem;
+  color: var(--app-text-faint);
+  opacity: 1;
+}
+
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 16px);
 }

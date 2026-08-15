@@ -630,7 +630,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                   {form.type === 'Comprado' && !hidePurchasePrice && (
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Precio de Compra (€) *</label>
-                      <input type="text" inputMode="numeric" required placeholder="Ej: 50.000.000" onKeyDown={blockEnterKey} className={`${FIELD_CLASS} placeholder:text-xs`} value={form.value} onChange={formatMoneyField('value')} />
+                      <input type="text" inputMode="numeric" required placeholder="Ej: 50.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.value} onChange={formatMoneyField('value')} />
                     </div>
                   )}
 
@@ -642,7 +642,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                       </div>
                       <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">Club de Origen *</label>
-                        <input type="text" required placeholder="Ej: Real Madrid" onKeyDown={blockEnterKey} className={`${FIELD_BASE} placeholder:text-xs`} value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} />
+                        <input type="text" required placeholder="Ej: Real Madrid" onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} />
                       </div>
                     </div>
                   )}
@@ -654,11 +654,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">Valor de Mercado (€) *</label>
-                        <input type="text" inputMode="numeric" required placeholder="Ej: 80.000.000" onKeyDown={blockEnterKey} className={`${FIELD_CLASS} placeholder:text-xs`} value={form.marketValue} onChange={formatMoneyField('marketValue')} />
+                        <input type="text" inputMode="numeric" required placeholder="Ej: 80.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.marketValue} onChange={formatMoneyField('marketValue')} />
                       </div>
                       <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">{form.type === 'Cedido' ? 'Sueldo Mensual Total (€) *' : 'Sueldo Mensual (€) *'}</label>
-                        <input type="text" inputMode="numeric" required placeholder="Ej: 500.000" onKeyDown={blockEnterKey} className={`${FIELD_CLASS} placeholder:text-xs`} value={form.wage} onChange={formatMoneyField('wage')} />
+                        <input type="text" inputMode="numeric" required placeholder="Ej: 500.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.wage} onChange={formatMoneyField('wage')} />
                       </div>
                     </div>
                   )}
@@ -696,7 +696,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                       </div>
                       <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">Cláusula de Rescisión (€)</label>
-                        <input type="text" inputMode="numeric" placeholder="Ej: 150.000.000" onKeyDown={blockEnterKey} className={`${FIELD_CLASS} placeholder:text-xs`} value={form.releaseClause} onChange={formatMoneyField('releaseClause')} />
+                        <input type="text" inputMode="numeric" placeholder="Ej: 150.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.releaseClause} onChange={formatMoneyField('releaseClause')} />
                       </div>
                     </div>
                   )}

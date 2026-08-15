@@ -131,7 +131,7 @@ export default function MarketTab({ onSignTarget }) {
       <div className="bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl flex items-center gap-2">
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-faint" size={14} />
-          <input type="text" placeholder="Buscar objetivo..." className="w-full h-9 bg-well pl-9 pr-3 rounded-xl border border-border-subtle outline-none focus:border-green-500 text-sm font-bold text-fg placeholder:text-fg-faint max-md:placeholder:text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+          <input type="text" placeholder="Buscar objetivo..." className="w-full h-9 bg-well pl-9 pr-3 rounded-xl border border-border-subtle outline-none focus:border-green-500 text-sm font-bold text-fg placeholder:text-fg-faint" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
         </div>
         <div className="relative shrink-0" ref={filtersRef}>
           <button onClick={() => setShowFilters((o) => !o)} className={`h-9 px-3 flex items-center gap-1.5 rounded-xl border transition-all ${activeFilterCount > 0 ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:text-fg'}`} title="Filtros">
