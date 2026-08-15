@@ -40,7 +40,7 @@ const getPositionOrder = (p) => {
   return idx === -1 ? ALL_POSITIONS.length : idx;
 };
 
-export default function PlayerList({ pendingPrefill, onConsumePendingPrefill }) {
+export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pendingPrefill, onConsumePendingPrefill }) {
   const { players, lineup, bench, playerToDelete, setPlayerToDelete, confirmDeletePlayer, setPlayerTransferStatus } = useClubData();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('rating-desc');
@@ -59,6 +59,17 @@ export default function PlayerList({ pendingPrefill, onConsumePendingPrefill }) 
   const [ficharConfirming, setFicharConfirming] = useState(false);
   const ficharRef = useRef(null);
   useOnClickOutside(ficharRef, () => setFicharConfirming(false), ficharConfirming);
+
+  useEffect(() => {
+    if (pendingEditPlayer) {
+      setEditingPlayer(pendingEditPlayer);
+      setFormPrefill(null);
+      setFormSourceTargetId(null);
+      setFormInitialStep(4);
+      setShowForm(true);
+      onConsumePendingEdit();
+    }
+  }, [pendingEditPlayer, onConsumePendingEdit]);
 
   // El modal de contrato de promoción (accesible desde la sección Academia de esta misma
   // vista) oculta la cabecera y la navegación por sí mismo (useAutoHideChrome).

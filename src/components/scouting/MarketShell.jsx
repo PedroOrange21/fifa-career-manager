@@ -1,13 +1,13 @@
-import { Target, History } from 'lucide-react';
+import { Target, ArrowRightLeft } from 'lucide-react';
 import MarketTab from './MarketTab';
 import OperationsTab from './OperationsTab';
 
 const SUB_TABS = [
   { id: 'scouting', label: 'Objetivos', icon: Target },
-  { id: 'operations', label: 'Operaciones', icon: History },
+  { id: 'operations', label: 'Operaciones', icon: ArrowRightLeft },
 ];
 
-export default function MarketShell({ subTab, setSubTab, onSignTarget }) {
+export default function MarketShell({ subTab, setSubTab, onSignTarget, onRequestEditPlayer }) {
   return (
     <div className="space-y-4 animate-in fade-in">
       <div className="sticky top-[71px] md:top-[73px] z-30 flex bg-surface p-1 rounded-2xl border border-border-subtle shadow-lg">
@@ -19,7 +19,7 @@ export default function MarketShell({ subTab, setSubTab, onSignTarget }) {
       </div>
 
       {subTab === 'scouting' && <MarketTab onSignTarget={onSignTarget} />}
-      {subTab === 'operations' && <OperationsTab />}
+      {subTab === 'operations' && <OperationsTab onRequestEditPlayer={onRequestEditPlayer} />}
     </div>
   );
 }

@@ -2,7 +2,6 @@ import { useRef, useState } from 'react';
 import { Plus, Edit2, Trash2, UserPlus, ShieldAlert, Target, Search, SlidersHorizontal, X, MapPin, ChevronDown } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { ALL_POSITIONS } from '../../constants/positions';
-import { flagEmoji, detectCountry } from '../../constants/countries';
 import { getCardStyle } from '../../utils/cardStyle';
 import { formatValueInput, abbreviateValue } from '../../utils/format';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
@@ -30,7 +29,6 @@ const positionsOf = (t) => t.positions || (t.primaryPosition ? [t.primaryPositio
 function TargetRow({ t, onSign, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const positions = positionsOf(t);
-  const selectedCountry = detectCountry(t.nationality);
 
   return (
     <div className={`bg-surface p-3 md:p-4 border-l-4 ${STATUS_BORDER[t.status] || STATUS_BORDER.Seguimiento}`}>
@@ -40,35 +38,21 @@ function TargetRow({ t, onSign, onEdit, onDelete }) {
           <span className="text-lg md:text-xl">{t.rating || '—'}</span>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight flex items-center gap-1.5 text-black dark:text-white">
-            <span className="truncate">{t.name}</span>
-            {selectedCountry && <span className="text-sm leading-none shrink-0">{flagEmoji(selectedCountry.code)}</span>}
-          </div>
+          <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{t.name}</div>
           <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest truncate">{positions.join(' · ') || '—'}</div>
         </div>
         {/* Esquina superior derecha: solo el Estado de seguimiento. */}
         <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider border shrink-0 ${STATUS_STYLE[t.status] || STATUS_STYLE.Seguimiento}`}>{STATUS_LABELS[t.status] || STATUS_LABELS.Seguimiento}</span>
       </div>
 
-      {/* Club actual: destacado en su propio bloque, bien diferenciado del resto de datos.
-          La Edad ocupa aquí el hueco donde antes iba el pie dominante (ya eliminado). */}
-      {(t.originClub || t.age) && (
-        <div className="mt-2.5 flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2">
-          {t.originClub && (<><MapPin size={14} className="text-blue-400 shrink-0" /><span className="text-xs font-black text-blue-400 uppercase tracking-wide truncate">{t.originClub}</span></>)}
-          {t.age ? <span className="ml-auto shrink-0 text-[8px] font-black uppercase tracking-widest text-blue-300/80">{t.age} Años</span> : null}
-        </div>
-      )}
-
-      {/* Economía: precio de mercado y salario, ya en la vista base, justo debajo de club/edad. */}
-      <div className="grid grid-cols-2 gap-2 mt-2.5">
-        <div className="bg-well rounded-xl px-3 py-2">
-          <div className="text-[8px] font-black uppercase text-fg-faint tracking-widest">Valor de Mercado</div>
-          <div className="text-sm font-black text-fg truncate">{t.estimatedValue > 0 ? abbreviateValue(t.estimatedValue) : 'Sin definir'}</div>
-        </div>
-        <div className="bg-well rounded-xl px-3 py-2">
-          <div className="text-[8px] font-black uppercase text-fg-faint tracking-widest">Salario</div>
-          <div className="text-sm font-black text-fg truncate">{t.wage > 0 ? `${abbreviateValue(t.wage)}/mes` : 'Sin definir'}</div>
-        </div>
+      {/* Línea única y compacta: club actual, edad, valor de mercado y salario. */}
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        {t.originClub && (
+          <span className="flex items-center gap-1 text-[9px] md:text-[10px] font-black text-blue-400 uppercase tracking-wide bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded-lg truncate max-w-[140px]"><MapPin size={11} className="shrink-0" /> {t.originClub}</span>
+        )}
+        {t.age ? <span className="text-[9px] md:text-[10px] font-black text-fg-muted uppercase tracking-widest bg-well px-2 py-1 rounded-lg">{t.age} Años</span> : null}
+        <span className="text-[9px] md:text-[10px] font-black text-fg-muted uppercase tracking-widest bg-well px-2 py-1 rounded-lg">{t.estimatedValue > 0 ? abbreviateValue(t.estimatedValue) : 'Sin Valor'}</span>
+        <span className="text-[9px] md:text-[10px] font-black text-fg-muted uppercase tracking-widest bg-well px-2 py-1 rounded-lg">{t.wage > 0 ? `${abbreviateValue(t.wage)}/mes` : 'Sin Salario'}</span>
       </div>
 
       {/* Nota de seguimiento: solo visible al expandir, justo antes de las acciones. */}
