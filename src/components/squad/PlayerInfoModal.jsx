@@ -18,13 +18,27 @@ const ACTION_STYLES = {
   neutral: 'bg-well-strong text-fg border-transparent hover:brightness-125',
 };
 
-// Fila de solo lectura (label + valor), usada en las secciones de detalle del jugador.
-const InfoRow = ({ label, value }) => (
-  <div className="flex justify-between items-center gap-3 px-1 py-1.5">
-    <span className="text-[9px] font-black uppercase text-fg-faint tracking-widest shrink-0">{label}</span>
-    <span className="text-xs font-bold text-fg text-right truncate">{value}</span>
-  </div>
-);
+// Cabecera de sección y fila de detalle: réplica exacta de SectionHeader/ReviewRow del Paso 4
+// de PlayerForm.jsx (misma estructura, mismas clases), salvo que DetailRow no lleva lápiz ni
+// onClick — es puramente de lectura, la edición ocurre siempre desde el único lápiz superior.
+function SectionHeader({ emoji, title }) {
+  return (
+    <div className="w-full flex items-center gap-2 mt-5 mb-1 px-1 first:mt-0">
+      <span className="text-sm leading-none">{emoji}</span>
+      <span className="text-[10px] font-black uppercase tracking-widest text-fg-secondary">{title}</span>
+    </div>
+  );
+}
+function DetailRow({ label, value }) {
+  return (
+    <div className="px-4 py-2.5">
+      <div className="flex justify-between items-center gap-2">
+        <span className="text-[9px] font-black uppercase text-fg-muted shrink-0">{label}</span>
+        <span className="text-xs font-black text-fg truncate">{value}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onReplace, hideMarketStatus = false, hideTacticsActions = false }) {
   useBodyScrollLock();
@@ -111,9 +125,14 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
 
   return (
     <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
-      <div className="bg-surface border border-border p-6 rounded-[32px] w-full max-w-sm shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-well rounded-full hover:bg-well-strong text-fg-muted hover:text-fg"><X size={18} /></button>
-        <button onClick={() => onEdit(current)} title="Editar Jugador" className="absolute top-4 right-16 p-2 rounded-full bg-well text-fg-faint hover:text-blue-500 hover:bg-well-strong transition-colors"><Edit2 size={16} /></button>
+      <div className="bg-surface border border-border p-6 rounded-[32px] w-full max-w-sm shadow-2xl relative max-h-[88dvh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-well rounded-full hover:bg-well-strong text-fg-muted hover:text-fg z-10"><X size={18} /></button>
+        <button onClick={() => onEdit(current)} title="Editar Jugador" className="absolute top-4 right-16 p-2 rounded-full bg-well text-fg-faint hover:text-blue-500 hover:bg-well-strong transition-colors z-10"><Edit2 size={16} /></button>
+        {/* Cuerpo con scroll propio: la ficha en modo lectura ahora replica todas las
+            secciones del Paso 4 de PlayerForm y puede superar la altura del modal, sobre todo
+            en jugadores Cedido. Los dos botones de arriba quedan fuera de este contenedor, así
+            que se mantienen fijos en la esquina superior mientras el resto se desplaza. */}
+        <div className="overflow-y-auto no-scrollbar flex-1 min-h-0 pt-1">
         <div className="p-4 pt-5 bg-well rounded-[24px] border border-border-subtle flex flex-col gap-4 relative">
           <div className="flex items-center gap-4">
             <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center font-black leading-none shadow-lg flex-shrink-0 ${getCardStyle(current.rating)}`}><span className="text-[8px] opacity-70 font-bold mb-0.5">{current.positions?.[0]}</span><span className="text-xl">{current.rating}</span></div>
@@ -125,52 +144,59 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
           </div>
         </div>
 
-        {/* Detalle completo en modo lectura: misma estructura de campos que la vista de edición
-            unificada (PlayerForm paso 4), pero sin lápices individuales — la edición se hace
-            desde el único lápiz de la cabecera. */}
-        <div className="mt-4 bg-well rounded-[20px] border border-border-subtle divide-y divide-border-subtle overflow-hidden">
-          <div className="p-3 space-y-0.5">
-            <span className="text-[8px] font-black uppercase text-fg-faint tracking-widest block mb-1">Datos Personales</span>
-            <InfoRow label="Nacionalidad" value={current.nationality || 'Sin definir'} />
-            <InfoRow label="Edad" value={`${current.age} Años`} />
-          </div>
-          <div className="p-3 space-y-0.5">
-            <span className="text-[8px] font-black uppercase text-fg-faint tracking-widest block mb-1">Atributos</span>
-            <InfoRow label="Pierna" value={current.preferredFoot || 'Diestro'} />
-            <InfoRow label="Posiciones" value={current.positions?.join(' · ') || 'Sin definir'} />
-            {current.type === 'Cantera' && <InfoRow label="Potencial" value={current.potential || 'Sin definir'} />}
-          </div>
-          {current.type !== 'Cantera' && (
-            <div className="p-3 space-y-0.5">
-              <span className="text-[8px] font-black uppercase text-fg-faint tracking-widest block mb-1">Economía</span>
-              <InfoRow label="Adquisición" value={current.type || 'Sin definir'} />
-              <InfoRow label="Valor de Mercado" value={formatCurrency(current.marketValue || current.value || 0)} />
+        {/* Detalle completo en modo lectura: réplica exacta de la estructura, secciones y
+            campos del Paso 4 de PlayerForm.jsx (edición unificada), pero sin lápices
+            individuales — la edición se hace siempre desde el único lápiz de la cabecera. */}
+        <SectionHeader emoji="👤" title="Datos Personales" />
+        <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+          <DetailRow label="Nombre" value={current.name} />
+          <DetailRow label="Nacionalidad" value={current.nationality || 'Sin definir'} />
+          <DetailRow label="Edad" value={current.age ? `${current.age} Años` : '—'} />
+        </div>
+
+        <SectionHeader emoji="⚽" title="Atributos Deportivos" />
+        <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+          <DetailRow label="Media (OVR)" value={current.rating || '—'} />
+          <DetailRow label="Pierna" value={current.preferredFoot || 'Diestro'} />
+          <DetailRow label="Posiciones" value={current.positions?.join(' · ') || '—'} />
+          {current.type === 'Cantera' && <DetailRow label="Potencial" value={current.potential || 'Sin definir'} />}
+        </div>
+
+        {current.type !== 'Cantera' && (
+          <>
+            <SectionHeader emoji="💰" title="Economía" />
+            <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+              <DetailRow label="Adquisición" value={current.type} />
+              <DetailRow label="Valor de Mercado (€)" value={formatCurrency(current.marketValue || current.value)} />
               {current.type === 'Comprado' && (
                 <>
-                  <InfoRow label="Sueldo Mensual" value={formatCurrency(current.wage || 0)} />
-                  <InfoRow label="Años Contrato" value={current.contractYears ? `${current.contractYears} Años` : 'Sin definir'} />
-                  <InfoRow label="Cláusula de Rescisión" value={formatCurrency(current.releaseClause || 0)} />
+                  <DetailRow label="Precio de Compra (€)" value={formatCurrency(current.value)} />
+                  <DetailRow label="Sueldo Mensual (€)" value={formatCurrency(current.wage)} />
+                  <DetailRow label="Años Contrato" value={current.contractYears ? `${current.contractYears} Años` : 'Sin definir'} />
+                  <DetailRow label="Cláusula de Rescisión (€)" value={formatCurrency(current.releaseClause)} />
                 </>
               )}
               {current.type === 'Cedido' && (
                 <>
-                  <InfoRow label="Club de Origen" value={current.originClub || 'Sin definir'} />
-                  <InfoRow label="Duración Cesión" value={formatLoanDuration(current.loanDuration)} />
-                  <InfoRow label="Sueldo Mensual Total" value={formatCurrency(current.wage || 0)} />
-                  <InfoRow label="% Salario Pagado" value={`${current.wagePercentage || 0}%`} />
-                  <InfoRow label="Opción de Compra" value={current.buyOption ? formatCurrency(current.buyOption) : 'No'} />
+                  <DetailRow label="Club de Origen" value={current.originClub || 'Sin definir'} />
+                  <DetailRow label="Duración Cesión" value={current.loanDuration || 'Sin definir'} />
+                  <DetailRow label="Sueldo Mensual Total (€)" value={formatCurrency(current.wage)} />
+                  <DetailRow label="% Salario Pagado" value={`${current.wagePercentage || 0}%`} />
+                  <DetailRow label="¿Opción de Compra?" value={current.buyOption ? `Sí · ${formatCurrency(current.buyOption)}` : 'No'} />
                 </>
               )}
             </div>
-          )}
-          {current.transferStatus === 'CedidoFuera' && current.outboundLoan && (
-            <div className="p-3 space-y-0.5">
-              <span className="text-[8px] font-black uppercase text-fg-faint tracking-widest block mb-1">Cesión</span>
-              <InfoRow label="Cedido A" value={current.outboundLoan.destinationClub || 'Sin definir'} />
-              <InfoRow label="Duración" value={formatLoanDuration(current.outboundLoan.duration)} />
+          </>
+        )}
+
+        {current.transferStatus === 'CedidoFuera' && current.outboundLoan && (
+          <>
+            <SectionHeader emoji="🔄" title="Cesión" />
+            <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+              <DetailRow label="Duración de la Cesión" value={current.outboundLoan.duration || 'Sin definir'} />
             </div>
-          )}
-        </div>
+          </>
+        )}
 
         {!hideMarketStatus && (
           <div className="mt-4 p-3 bg-well rounded-xl border border-border-subtle space-y-2">
@@ -230,6 +256,7 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
             ))}
           </div>
         )}
+        </div>
       </div>
       {showMore && moreRect && createPortal(
         <div
