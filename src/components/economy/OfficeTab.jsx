@@ -1,15 +1,13 @@
-import { DollarSign, CalendarClock, ScanLine } from 'lucide-react';
+import { DollarSign, PieChart } from 'lucide-react';
 import FinanceTab from './FinanceTab';
-import SeasonsTab from '../seasons/SeasonsTab';
-import ScanTab from '../scan/ScanTab';
+import FinanceStatsTab from './FinanceStatsTab';
 
 const SUB_TABS = [
   { id: 'finance', label: 'Finanzas', icon: DollarSign },
-  { id: 'seasons', label: 'Temporada', icon: CalendarClock },
-  { id: 'scan', label: 'Escanear', icon: ScanLine },
+  { id: 'stats', label: 'Estadísticas', icon: PieChart },
 ];
 
-export default function OfficeTab({ subTab, setSubTab, onCreatePlayer }) {
+export default function OfficeTab({ subTab, setSubTab }) {
   return (
     <div className="space-y-4 animate-in fade-in">
       <div className="sticky top-[71px] md:top-[73px] z-30 flex bg-surface p-1 rounded-2xl border border-border-subtle shadow-lg">
@@ -21,8 +19,7 @@ export default function OfficeTab({ subTab, setSubTab, onCreatePlayer }) {
       </div>
 
       {subTab === 'finance' && <FinanceTab />}
-      {subTab === 'seasons' && <SeasonsTab />}
-      {subTab === 'scan' && <ScanTab onCreatePlayer={onCreatePlayer} />}
+      {subTab === 'stats' && <FinanceStatsTab />}
     </div>
   );
 }

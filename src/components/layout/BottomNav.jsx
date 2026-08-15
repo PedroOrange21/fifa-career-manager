@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Shield, Gamepad2, Briefcase, TrendingUp } from 'lucide-react';
+import { Shield, Gamepad2, Briefcase, TrendingUp, CalendarClock } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'club', label: 'Club', icon: Shield },
   { id: 'market', label: 'Mercado', icon: Briefcase },
   { id: 'office', label: 'Oficina', icon: TrendingUp },
+  { id: 'season', label: 'Temporada', icon: CalendarClock },
   { id: 'match', label: 'Partido', icon: Gamepad2 },
 ];
 
@@ -49,7 +50,7 @@ export default function BottomNav({ activeTab, setActiveTab }) {
     // texto de cada pestaña (solo iconos); el texto se colapsa por altura máxima (no por
     // display:none) para que la transición sea fluida, sin saltos bruscos.
     <div className="fixed inset-x-0 bottom-0 z-50 pb-safe">
-      <div className="grid grid-cols-4 w-full bg-surface/60 backdrop-blur-2xl border-t border-border rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.35)]">
+      <div className="grid grid-cols-5 w-full bg-surface/60 backdrop-blur-2xl border-t border-border rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.35)]">
         {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setActiveTab(id)} className={`flex flex-col items-center justify-center transition-all duration-300 ${shrunk ? 'py-2.5' : 'py-3'} ${activeTab === id ? 'text-green-500' : 'text-fg-muted hover:text-fg-secondary'}`}>
             <Icon size={19} className={activeTab === id ? 'drop-shadow-[0_0_8px_rgba(74,222,128,0.4)]' : ''} />

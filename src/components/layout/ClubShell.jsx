@@ -14,6 +14,7 @@ import ClubTab from '../club/ClubTab';
 import MatchTab from '../match/MatchTab';
 import MarketShell from '../scouting/MarketShell';
 import OfficeTab from '../economy/OfficeTab';
+import SeasonsTab from '../seasons/SeasonsTab';
 import ProfileTab from '../profile/ProfileTab';
 
 export default function ClubShell() {
@@ -45,7 +46,6 @@ export default function ClubShell() {
 
   const requestEditPlayer = (player) => { setActiveTab('club'); setClubSubTab('squad'); setPendingEditPlayer(player); };
   const requestSignTarget = (prefillData, targetId) => { setActiveTab('club'); setClubSubTab('squad'); setPendingPrefill({ ...prefillData, __targetId: targetId }); };
-  const requestNewPlayer = () => { setActiveTab('club'); setClubSubTab('squad'); setPendingPrefill({}); };
   const switchClub = (clubId) => { setActiveClubId(clubId); setActiveTab('club'); setClubSubTab('squad'); };
   const goToScoutingMarket = () => { setActiveTab('market'); setMarketSubTab('scouting'); };
   const goToFinance = () => { setActiveTab('office'); setOfficeSubTab('finance'); };
@@ -80,8 +80,9 @@ export default function ClubShell() {
                 <MarketShell subTab={marketSubTab} setSubTab={setMarketSubTab} onSignTarget={requestSignTarget} onRequestEditPlayer={requestEditPlayer} />
               )}
               {activeTab === 'office' && activeClubId && (
-                <OfficeTab subTab={officeSubTab} setSubTab={setOfficeSubTab} onCreatePlayer={requestNewPlayer} />
+                <OfficeTab subTab={officeSubTab} setSubTab={setOfficeSubTab} />
               )}
+              {activeTab === 'season' && activeClubId && <SeasonsTab />}
               {activeTab === 'profile' && <ProfileTab onClose={closeProfile} />}
             </>
           )}
