@@ -360,10 +360,17 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
   const endLoanAction = { key: 'endLoan', icon: Undo2, label: 'Finalizar Cesión', onClick: () => onEndLoan(p) };
   const marketWithEndLoan = isIncomingLoan ? [endLoanAction, ...MARKET_ACTIONS] : MARKET_ACTIONS;
   // Móvil: solo las acciones de mercado (Editar/Eliminar van por swipe).
-  // Escritorio: las mismas más Editar y Borrar al final, único punto de acceso a esas dos.
+  // Escritorio: las mismas más Editar y Borrar al final, único punto de acceso a esas dos —
+  // salvo para un cedido entrante, donde las 4 acciones de mercado ni siquiera aplican (van
+  // deshabilitadas) y se ocultan por completo: el menú de escritorio se reduce a exactamente
+  // Finalizar Cesión, Editar Jugador y Borrar Jugador.
+  const editAction = { key: 'edit', icon: Edit2, label: 'Editar Jugador', onClick: () => onEdit(p) };
+  const deleteAction = { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete(p.id) };
   const MORE_ACTIONS = moreContext === 'mobile'
     ? marketWithEndLoan
-    : [...marketWithEndLoan, { key: 'edit', icon: Edit2, label: 'Editar Jugador', onClick: () => onEdit(p) }, { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete(p.id) }];
+    : isIncomingLoan
+      ? [endLoanAction, editAction, deleteAction]
+      : [...marketWithEndLoan, editAction, deleteAction];
 
   return (
     <div className="relative overflow-hidden">
