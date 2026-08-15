@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { Shield, Gamepad2, Briefcase, TrendingUp } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -6,9 +7,45 @@ const NAV_ITEMS = [
   { id: 'office', label: 'Oficina', icon: TrendingUp },
 ];
 
+// Umbral mínimo de desplazamiento (en píxeles) antes de reaccionar: evita que micro-scrolls
+// (rebote táctil, ruido del trackpad) hagan parpadear la barra entre estado normal y
+// contraído. Por debajo de "TOP_BUFFER" siempre se muestra a tamaño completo, para que nunca
+// aparezca contraída justo al entrar en una pestaña con la página ya arriba del todo.
+const SCROLL_THRESHOLD = 8;
+const TOP_BUFFER = 80;
+
 export default function BottomNav({ activeTab, setActiveTab }) {
+  const [shrunk, setShrunk] = useState(false);
+  const lastScrollY = useRef(typeof window !== 'undefined' ? window.scrollY : 0);
+  const ticking = useRef(false);
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (ticking.current) return;
+      ticking.current = true;
+      requestAnimationFrame(() => {
+        const currentY = window.scrollY;
+        const delta = currentY - lastScrollY.current;
+        if (currentY <= TOP_BUFFER) {
+          // Cerca de arriba (incluido el rebote elástico en iOS con valores negativos):
+          // siempre a tamaño completo, sin depender del umbral de dirección.
+          setShrunk(false);
+          lastScrollY.current = currentY;
+        } else if (Math.abs(delta) > SCROLL_THRESHOLD) {
+          setShrunk(delta > 0);
+          lastScrollY.current = currentY;
+        }
+        ticking.current = false;
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   return (
-    <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center items-center gap-3 px-4 pointer-events-none pb-safe">
+    <div
+      className={`fixed left-0 right-0 z-50 flex justify-center items-center gap-3 px-4 pointer-events-none pb-safe origin-bottom transition-all duration-300 ease-in-out ${shrunk ? 'bottom-3 scale-[0.85] opacity-90' : 'bottom-6 scale-100 opacity-100'}`}
+    >
       <div className="flex justify-between items-center p-1.5 w-full max-w-[260px] bg-surface/60 backdrop-blur-2xl border border-border rounded-[28px] shadow-[0_10px_40px_rgba(0,0,0,0.5)] pointer-events-auto">
         {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setActiveTab(id)} className={`flex flex-col items-center justify-center w-[68px] h-[52px] rounded-[22px] transition-all duration-300 ${activeTab === id ? 'bg-well-strong text-green-500' : 'text-fg-muted hover:text-fg-secondary'}`}>
