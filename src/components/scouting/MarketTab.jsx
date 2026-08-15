@@ -41,16 +41,18 @@ function TargetRow({ t, onSign, onEdit, onDelete }) {
           <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{t.name}</div>
           <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest truncate">{positions.join(' · ') || '—'}</div>
         </div>
-        {/* Esquina superior derecha: solo el Estado de seguimiento. */}
-        <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider border shrink-0 ${STATUS_STYLE[t.status] || STATUS_STYLE.Seguimiento}`}>{STATUS_LABELS[t.status] || STATUS_LABELS.Seguimiento}</span>
+        {/* Esquina superior derecha: Estado de seguimiento arriba, Edad justo debajo. */}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider border ${STATUS_STYLE[t.status] || STATUS_STYLE.Seguimiento}`}>{STATUS_LABELS[t.status] || STATUS_LABELS.Seguimiento}</span>
+          {t.age ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{t.age} Años</span> : null}
+        </div>
       </div>
 
-      {/* Línea única y compacta: club actual, edad, valor de mercado y salario. */}
+      {/* Línea única y compacta: club actual, valor de mercado y salario. */}
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         {t.originClub && (
           <span className="flex items-center gap-1 text-[9px] md:text-[10px] font-black text-blue-400 uppercase tracking-wide bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded-lg truncate max-w-[140px]"><MapPin size={11} className="shrink-0" /> {t.originClub}</span>
         )}
-        {t.age ? <span className="text-[9px] md:text-[10px] font-black text-fg-muted uppercase tracking-widest bg-well px-2 py-1 rounded-lg">{t.age} Años</span> : null}
         <span className="text-[9px] md:text-[10px] font-black text-fg-muted uppercase tracking-widest bg-well px-2 py-1 rounded-lg">{t.estimatedValue > 0 ? abbreviateValue(t.estimatedValue) : 'Sin Valor'}</span>
         <span className="text-[9px] md:text-[10px] font-black text-fg-muted uppercase tracking-widest bg-well px-2 py-1 rounded-lg">{t.wage > 0 ? `${abbreviateValue(t.wage)}/mes` : 'Sin Salario'}</span>
       </div>
