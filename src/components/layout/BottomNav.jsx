@@ -4,8 +4,8 @@ import { Shield, Gamepad2, Briefcase, TrendingUp } from 'lucide-react';
 const NAV_ITEMS = [
   { id: 'club', label: 'Club', icon: Shield },
   { id: 'market', label: 'Mercado', icon: Briefcase },
-  { id: 'match', label: 'Partido', icon: Gamepad2 },
   { id: 'office', label: 'Oficina', icon: TrendingUp },
+  { id: 'match', label: 'Partido', icon: Gamepad2 },
 ];
 
 // Umbral mínimo de desplazamiento (en píxeles) antes de reaccionar: evita que micro-scrolls
