@@ -44,14 +44,16 @@ export default function BottomNav({ activeTab, setActiveTab }) {
   }, []);
 
   return (
-    // Barra a ancho completo (de extremo a extremo), pegada al borde inferior: al reducirse en
-    // scroll solo se escala (origin-bottom, centrada), nunca cambia de opacidad ni de fondo.
-    <div className={`fixed inset-x-0 bottom-0 z-50 pb-safe origin-bottom transition-transform duration-300 ease-in-out ${shrunk ? 'scale-[0.94]' : 'scale-100'}`}>
+    // Barra a ancho completo (de extremo a extremo), pegada al borde inferior: nunca cambia de
+    // opacidad ni de fondo. Al hacer scroll hacia abajo se vuelve más compacta ocultando el
+    // texto de cada pestaña (solo iconos); el texto se colapsa por altura máxima (no por
+    // display:none) para que la transición sea fluida, sin saltos bruscos.
+    <div className="fixed inset-x-0 bottom-0 z-50 pb-safe">
       <div className="grid grid-cols-4 w-full bg-surface/60 backdrop-blur-2xl border-t border-border rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.35)]">
         {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setActiveTab(id)} className={`flex flex-col items-center justify-center py-3 transition-all duration-300 ${activeTab === id ? 'text-green-500' : 'text-fg-muted hover:text-fg-secondary'}`}>
-            <Icon size={19} className={activeTab === id ? 'mb-1 drop-shadow-[0_0_8px_rgba(74,222,128,0.4)]' : 'mb-1'} />
-            <span className="text-[8px] font-black uppercase tracking-widest">{label}</span>
+          <button key={id} onClick={() => setActiveTab(id)} className={`flex flex-col items-center justify-center transition-all duration-300 ${shrunk ? 'py-2.5' : 'py-3'} ${activeTab === id ? 'text-green-500' : 'text-fg-muted hover:text-fg-secondary'}`}>
+            <Icon size={19} className={activeTab === id ? 'drop-shadow-[0_0_8px_rgba(74,222,128,0.4)]' : ''} />
+            <span className={`block overflow-hidden text-[8px] font-black uppercase tracking-widest transition-all duration-200 ease-in-out ${shrunk ? 'max-h-0 opacity-0 mt-0' : 'max-h-[10px] opacity-100 mt-1'}`}>{label}</span>
           </button>
         ))}
       </div>
