@@ -435,14 +435,19 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
           </div>
 
           <div onScroll={() => setShowFootMenu(false)} className="px-5 pt-4 flex-1 overflow-y-auto overscroll-contain no-scrollbar">
-            <div className="mb-4">
-              <div className="flex items-center gap-1.5">
-                {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
-                  <div key={n} className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${n <= step ? 'bg-green-500' : 'bg-well-strong'}`} />
-                ))}
+            {/* Barra de progreso y "Paso X de Y": solo tiene sentido en el asistente de alta
+                (Fichar Jugador). Editar un jugador ya existente entra directo a la vista
+                unificada (Paso 4, con todos los campos accesibles) sin rastro del wizard. */}
+            {!editingPlayer && (
+              <div className="mb-4">
+                <div className="flex items-center gap-1.5">
+                  {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
+                    <div key={n} className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${n <= step ? 'bg-green-500' : 'bg-well-strong'}`} />
+                  ))}
+                </div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-fg-muted text-center mt-2">Paso {step} de {TOTAL_STEPS} · {STEP_TITLES[step - 1]}</p>
               </div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-fg-muted text-center mt-2">Paso {step} de {TOTAL_STEPS} · {STEP_TITLES[step - 1]}</p>
-            </div>
+            )}
 
             {formError && (
               <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl mb-3 flex gap-2 text-red-400 text-[10px] font-black items-center animate-pulse">
@@ -864,7 +869,9 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
           </div>
 
           <footer className="shrink-0 bg-surface border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-            {step > 1 && (
+            {/* "Anterior" solo existe dentro del asistente de alta: editar no debe poder
+                navegar hacia atrás a los pasos 1-3, se queda siempre en la vista unificada. */}
+            {step > 1 && !editingPlayer && (
               <button type="button" onClick={goPrev} className="flex-1 py-4 rounded-xl bg-well-strong text-fg font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:brightness-125 transition-all touch-manipulation">
                 <ChevronLeft size={16} /> Anterior
               </button>
@@ -876,7 +883,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
             )}
             {step === TOTAL_STEPS && (
               <button type="button" disabled={isSubmitting} onClick={handleConfirm} className="flex-1 w-full py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-2 text-center hover:bg-green-400 transition-all disabled:opacity-50 touch-manipulation">
-                {isSubmitting ? 'Guardando...' : (<><Check size={16} className="shrink-0" /> <span className="md:hidden">Confirmar</span><span className="hidden md:inline">Confirmar Fichaje</span></>)}
+                {isSubmitting ? 'Guardando...' : editingPlayer ? (<><Check size={16} className="shrink-0" /> Guardar Cambios</>) : (<><Check size={16} className="shrink-0" /> <span className="md:hidden">Confirmar</span><span className="hidden md:inline">Confirmar Fichaje</span></>)}
               </button>
             )}
           </footer>
