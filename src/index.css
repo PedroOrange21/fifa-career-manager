@@ -102,6 +102,19 @@ input, textarea, select {
   }
 }
 
+/* Tamaño de fuente unificado para el texto que el usuario escribe en cualquier input/textarea
+   de la app (no el placeholder, ver regla más abajo): un tamaño intermedio (14px) en
+   escritorio, más estilizado que el que traía cada campo por defecto sin perder legibilidad,
+   sobrescribiendo con !important cualquier text-base/text-lg/text-xl propio del componente
+   para garantizar consistencia real en toda la web. Solo actúa a partir del breakpoint `md`
+   de Tailwind (768px): en móvil se respeta siempre el font-size de 16px forzado arriba, que
+   evita el auto-zoom de Safari/Chrome y no debe reducirse por debajo de ese umbral. */
+@media (min-width: 768px) {
+  input, textarea, select {
+    font-size: 0.875rem !important;
+  }
+}
+
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
