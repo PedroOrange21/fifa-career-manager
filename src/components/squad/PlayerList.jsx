@@ -373,7 +373,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           <span className="text-[8px] font-black uppercase">Editar</span>
         </button>
         {isIncomingLoan ? (
-          <button type="button" onClick={() => { onEndLoan(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-amber-500 text-black active:bg-amber-400 touch-manipulation">
+          <button type="button" onClick={() => { onEndLoan(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
             <Undo2 size={18} />
             <span className="text-[8px] font-black uppercase leading-tight text-center">Finalizar Cesión</span>
           </button>
