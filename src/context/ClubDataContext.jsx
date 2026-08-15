@@ -43,7 +43,28 @@ export function ClubDataProvider({ children }) {
   const [formationToDelete, setFormationToDelete] = useState(null);
   const [targetToDelete, setTargetToDelete] = useState(null);
 
+  // Ventana de "Deshacer" al finalizar una cesión: { player, deadline } o null. El jugador se
+  // oculta de "players" (expuesto más abajo) desde el instante de la confirmación, pero el
+  // borrado real en Firestore no ocurre hasta que expira el temporizador sin que se pulse
+  // "Deshacer". pendingEndLoanRef espeja el estado para que el setTimeout (closure fijado en
+  // el momento de crearse) siempre pueda comprobar/limpiar la entrada vigente, sin depender de
+  // un valor de "pendingEndLoan" potencialmente obsoleto capturado en su propio closure.
+  const [pendingEndLoan, setPendingEndLoan] = useState(null);
+  const pendingEndLoanRef = useRef(null);
+  const END_LOAN_UNDO_MS = 5500;
+
   useEffect(() => {
+    // Un cambio de club/usuario a media espera de "Deshacer" consolida de inmediato la
+    // finalización de cesión pendiente (con el uid/club capturados en su momento, no los
+    // nuevos) en vez de perderla en silencio o dejarla disparar más tarde contra el club
+    // equivocado. Se comprueba antes que nada, incluido el cierre de sesión.
+    if (pendingEndLoanRef.current) {
+      clearTimeout(pendingEndLoanRef.current.timer);
+      pendingEndLoanRef.current.finalize();
+      pendingEndLoanRef.current = null;
+      setPendingEndLoan(null);
+    }
+
     if (!user || !activeClubId) {
       setPlayers([]);
       setPlayersLoaded(false);
@@ -223,6 +244,45 @@ export function ClubDataProvider({ children }) {
     removePlayerFromTactic(player.id);
     const wageSaved = Math.round((player.wage || 0) * (1 - wagePercentage / 100));
     logTransaction('cesion', player.name, wageSaved, destinationClub || null);
+  };
+
+  // Finalizar una cesión ENTRANTE (jugador tipo 'Cedido' que llega a nuestro club) con toast
+  // de "Deshacer": el jugador desaparece de "players" (ver filtro en el value expuesto más
+  // abajo) desde ya, pero el borrado real en Firestore no se ejecuta hasta que expira
+  // END_LOAN_UNDO_MS sin que se cancele. uid/clubId quedan fijados en el propio cierre del
+  // temporizador (no se leen de closures externos en el momento de disparar), para que el
+  // borrado siga apuntando al club correcto aunque el usuario haya cambiado de club mientras
+  // tanto (ver limpieza en el useEffect de reinicio por cambio de club/usuario).
+  const startEndLoan = (player) => {
+    if (!user || !activeClubId || !player) return;
+    // Si ya había una cesión pendiente de finalizar, se consolida ya mismo antes de empezar
+    // la espera de la nueva, para no solapar dos temporizadores a la vez.
+    if (pendingEndLoanRef.current) {
+      clearTimeout(pendingEndLoanRef.current.timer);
+      pendingEndLoanRef.current.finalize();
+    }
+    const uid = user.uid;
+    const clubId = activeClubId;
+    const finalize = async () => {
+      pendingEndLoanRef.current = null;
+      setPendingEndLoan(null);
+      try {
+        await deleteDoc(playerDoc(uid, clubId, player.id));
+        if (clubId === activeClubId) removePlayerFromTactic(player.id);
+      } catch (err) { console.error(err); }
+    };
+    const timer = setTimeout(finalize, END_LOAN_UNDO_MS);
+    const entry = { player, deadline: Date.now() + END_LOAN_UNDO_MS, timer, finalize };
+    pendingEndLoanRef.current = entry;
+    setPendingEndLoan(entry);
+  };
+
+  const undoEndLoan = () => {
+    const entry = pendingEndLoanRef.current;
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    pendingEndLoanRef.current = null;
+    setPendingEndLoan(null);
   };
 
   const removePlayerFromTactic = (playerId) => {
@@ -407,10 +467,16 @@ export function ClubDataProvider({ children }) {
     await updateDoc(playerDoc(user.uid, activeClubId, player.id), { rating: newRating, evolutionHistory: newHistory });
   };
 
+  // Mientras hay una cesión pendiente de finalizar (ventana de "Deshacer"), el jugador
+  // implicado se oculta de "players" en todas partes (Plantilla, Táctica, Academia...) aunque
+  // su borrado real en Firestore todavía no se haya ejecutado.
+  const visiblePlayers = pendingEndLoan ? players.filter((p) => p.id !== pendingEndLoan.player.id) : players;
+
   const value = {
-    players, playersLoaded, formation, lineup, bench, savedFormations, activeTacticName, transactions, targets, matches, seasons,
+    players: visiblePlayers, playersLoaded, formation, lineup, bench, savedFormations, activeTacticName, transactions, targets, matches, seasons,
     playerToDelete, setPlayerToDelete, formationToDelete, setFormationToDelete,
     targetToDelete, setTargetToDelete,
+    pendingEndLoan, startEndLoan, undoEndLoan,
     addOrUpdatePlayer, confirmDeletePlayer, removePlayerFromTactic, sellPlayer, cedePlayer,
     saveTactics, clearTactics, clearLineup, clearBench, handleFormationChange, executeMove, assignPlayerToSlot,
     saveCurrentFormation, updateActiveTactic, confirmDeleteFormation, renameSavedFormation, loadSavedFormation, setPlayerTransferStatus,

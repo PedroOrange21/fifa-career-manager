@@ -124,3 +124,10 @@ textarea:-webkit-autofill:focus {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Barra de progreso del toast "Deshacer" (p. ej. al finalizar una cesión): se vacía de
+   izquierda a derecha en sincronía con la ventana de tiempo antes de consolidar la acción. */
+@keyframes undo-countdown {
+  from { width: 100%; }
+  to { width: 0%; }
+}

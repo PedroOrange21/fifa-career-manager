@@ -41,7 +41,7 @@ const getPositionOrder = (p) => {
 };
 
 export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pendingPrefill, onConsumePendingPrefill }) {
-  const { players, lineup, bench, playerToDelete, setPlayerToDelete, confirmDeletePlayer, setPlayerTransferStatus } = useClubData();
+  const { players, lineup, bench, playerToDelete, setPlayerToDelete, confirmDeletePlayer, setPlayerTransferStatus, startEndLoan } = useClubData();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('rating-desc');
   const [showForm, setShowForm] = useState(false);
@@ -202,7 +202,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
             onMarkCedible={() => setPlayerTransferStatus(p.id, 'Cedible')}
             onSell={() => setSellingPlayer(p)}
             onLoan={() => setLoaningPlayer(p)}
-            onEndLoan={() => { setEndingLoanPlayer(p); setPlayerToDelete(p.id); }}
+            onEndLoan={() => setEndingLoanPlayer(p)}
           />
         ))}
       </div>
@@ -219,7 +219,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
                 onMarkCedible={() => setPlayerTransferStatus(p.id, 'Cedible')}
                 onSell={() => setSellingPlayer(p)}
                 onLoan={() => setLoaningPlayer(p)}
-                onEndLoan={() => { setEndingLoanPlayer(p); setPlayerToDelete(p.id); }}
+                onEndLoan={() => setEndingLoanPlayer(p)}
                 onPromote={setPromotingPlayer}
               />
             ))}
@@ -247,7 +247,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       {loaningPlayer && <LoanOutModal player={loaningPlayer} onClose={() => setLoaningPlayer(null)} />}
       {promotingPlayer && <PromoteToFirstTeamModal player={promotingPlayer} onClose={() => setPromotingPlayer(null)} />}
 
-      {playerToDelete && !endingLoanPlayer && (
+      {playerToDelete && (
         <ConfirmModal
           icon={ShieldAlert}
           title="Eliminar Jugador"
@@ -258,10 +258,10 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
         />
       )}
 
-      {/* "Finalizar Cesión" reutiliza el mismo borrado que confirmDeletePlayer (el jugador
-          cedido entrante no es propiedad del club, así que "eliminarlo" de la plantilla es
-          exactamente devolverlo a su club de origen), con su propio mensaje de confirmación
-          para que quede claro que no se trata de un borrado normal. */}
+      {/* "Finalizar Cesión" no borra al instante: startEndLoan oculta al jugador de la
+          plantilla y arranca una ventana de "Deshacer" de unos segundos (ver
+          EndLoanUndoToast, montado en ClubShell) — el borrado real en Firestore solo ocurre
+          si esa ventana expira sin cancelarse. */}
       {endingLoanPlayer && (
         <ConfirmModal
           icon={Undo2}
@@ -270,8 +270,8 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
           message={`${endingLoanPlayer.name} volverá a su club de origen y saldrá de la plantilla. ¿Confirmas la finalización de la cesión?`}
           confirmLabel="Finalizar Cesión"
           confirmClassName="bg-yellow-500 text-black shadow-yellow-500/20 hover:bg-yellow-400"
-          onCancel={() => { setEndingLoanPlayer(null); setPlayerToDelete(null); }}
-          onConfirm={async () => { await confirmDeletePlayer(); setEndingLoanPlayer(null); }}
+          onCancel={() => setEndingLoanPlayer(null)}
+          onConfirm={() => { startEndLoan(endingLoanPlayer); setEndingLoanPlayer(null); }}
         />
       )}
     </div>
