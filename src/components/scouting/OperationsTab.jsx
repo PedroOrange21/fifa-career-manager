@@ -1,109 +1,118 @@
 import { useState } from 'react';
-import { Tag, Plus, ArrowRightLeft } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowRightLeft, Wallet, Scale, ListOrdered, Search, MapPin, History } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
-import { getCardStyle } from '../../utils/cardStyle';
-import { abbreviateValue } from '../../utils/format';
-import PlayerInfoModal from '../squad/PlayerInfoModal';
-import SellPlayerModal from '../economy/SellPlayerModal';
-import LoanOutModal from '../economy/LoanOutModal';
-import AddOperationPlayerModal from './AddOperationPlayerModal';
+import { formatCurrency } from '../../utils/format';
 
-function OperationRow({ player, chipClassName, chipTextClassName, onClick, children }) {
+// Metadatos visuales por tipo de movimiento: icono, color y signo del importe. "rescision" se
+// deja preparado (mismo esquema que el resto) por si en el futuro se registra ese tipo de
+// transacción, aunque hoy la app todavía no genera ninguna.
+const TYPE_META = {
+  compra: { label: 'Alta · Compra', icon: TrendingDown, badge: 'bg-red-500/10 text-red-500 border-red-500/20', dot: 'bg-red-500', sign: '-' },
+  venta: { label: 'Baja · Venta', icon: TrendingUp, badge: 'bg-green-500/10 text-green-500 border-green-500/20', dot: 'bg-green-500', sign: '+' },
+  cesion: { label: 'Cesión', icon: ArrowRightLeft, badge: 'bg-blue-500/10 text-blue-500 border-blue-500/20', dot: 'bg-blue-500', sign: '' },
+  rescision: { label: 'Rescisión', icon: History, badge: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', dot: 'bg-yellow-500', sign: '-' },
+};
+const typeMeta = (type) => TYPE_META[type] || TYPE_META.cesion;
+
+const TYPE_FILTERS = [
+  { id: '', label: 'Todos' },
+  { id: 'compra', label: 'Altas' },
+  { id: 'venta', label: 'Bajas' },
+  { id: 'cesion', label: 'Cesiones' },
+];
+
+function StatBlock({ icon: Icon, label, value, accent = 'text-fg' }) {
   return (
-    <div onClick={onClick} className={`flex items-center justify-between gap-3 px-3 py-2 rounded-xl border cursor-pointer ${chipClassName}`}>
-      <div className="flex items-center gap-3 min-w-0">
-        <div className={`w-8 h-8 rounded-lg flex shrink-0 items-center justify-center font-black text-[10px] ${getCardStyle(player.rating)}`}>{player.rating}</div>
-        <div className="flex flex-col min-w-0"><span className="text-[10px] font-bold uppercase italic text-black dark:text-white truncate">{player.name}</span><span className={`text-[8px] font-black uppercase tracking-widest truncate ${chipTextClassName}`}>{player.positions?.join(' · ')}</span></div>
-      </div>
-      {children}
+    <div className="bg-well/70 rounded-2xl p-3 border border-border-subtle min-w-0">
+      <Icon size={14} className={`mb-1.5 ${accent}`} />
+      <div className={`text-base md:text-lg font-black italic truncate ${accent}`}>{value}</div>
+      <div className="text-[8px] font-black uppercase tracking-widest text-fg-faint leading-tight mt-0.5">{label}</div>
     </div>
   );
 }
 
-export default function OperationsTab({ onRequestEditPlayer }) {
-  const { players } = useClubData();
-  const [selectedPlayerInfo, setSelectedPlayerInfo] = useState(null);
-  const [infoSlot, setInfoSlot] = useState(null);
-  const [sellingPlayer, setSellingPlayer] = useState(null);
-  const [loaningPlayer, setLoaningPlayer] = useState(null);
-  const [addingStatus, setAddingStatus] = useState(null);
+// Centro de Transferencias: historial completo de movimientos financieros del club (altas,
+// bajas y cesiones), con métricas agregadas en cabecera y filtros rápidos. Sustituye a la
+// antigua vista de gestión de Transferibles/Cedibles — esas acciones (marcar, vender, ceder)
+// siguen disponibles desde la Plantilla; aquí se centraliza únicamente el registro histórico.
+export default function OperationsTab() {
+  const { transactions } = useClubData();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
 
-  const forSale = players.filter((p) => p.transferStatus === 'Transferible' && p.type !== 'Cedido').sort((a, b) => b.rating - a.rating);
-  const forLoan = players.filter((p) => p.transferStatus === 'Cedible' && p.type !== 'Cedido').sort((a, b) => b.rating - a.rating);
-  const loanedOut = players.filter((p) => p.transferStatus === 'CedidoFuera').sort((a, b) => b.rating - a.rating);
+  const totalSpent = transactions.filter((t) => t.type === 'compra').reduce((sum, t) => sum + (t.amount || 0), 0);
+  const totalEarned = transactions.filter((t) => t.type === 'venta').reduce((sum, t) => sum + (t.amount || 0), 0);
+  const netBalance = totalEarned - totalSpent;
 
-  const openInfo = (player, slot) => { setSelectedPlayerInfo(player); setInfoSlot(slot); };
+  const filtered = transactions
+    .filter((t) => t.playerName.toLowerCase().includes(searchQuery.toLowerCase()))
+    .filter((t) => !typeFilter || t.type === typeFilter);
 
   return (
-    <div className="space-y-6 animate-in fade-in">
-      <div className="bg-surface p-4 rounded-[24px] border border-red-500/10 shadow-2xl">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-red-500/60 italic">En Venta (Transferibles)</h3>
-          <button onClick={() => setAddingStatus('Transferible')} title="Añadir jugador a la lista" className="p-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all"><Plus size={14} /></button>
+    <div className="space-y-4 animate-in fade-in">
+      {/* Métricas financieras: gasto, ingresos, balance neto y volumen total de movimientos. */}
+      <div className="bg-gradient-to-br from-surface to-well/40 rounded-[24px] border border-border-subtle shadow-2xl p-4 md:p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <History size={15} className="text-green-500" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted">Centro de Transferencias</span>
         </div>
-        <div className="grid gap-2">
-          {forSale.map((p) => (
-            <OperationRow key={p.id} player={p} onClick={() => openInfo(p, 'forSale')} chipClassName="bg-red-500/5 border-red-500/10" chipTextClassName="text-red-400">
-              <div className="flex items-center gap-2 shrink-0">
-                {(p.marketValue || p.value) ? <span className="text-[8px] text-red-400 font-black uppercase">{abbreviateValue(p.marketValue || p.value)}</span> : null}
-                <button onClick={(e) => { e.stopPropagation(); setSellingPlayer(p); }} className="bg-red-500 text-black px-3 py-1.5 rounded-lg text-[9px] font-black uppercase shadow-sm flex items-center gap-1"><Tag size={11} /> Vender</button>
-              </div>
-            </OperationRow>
-          ))}
-          {forSale.length === 0 && <span className="text-[10px] text-fg-faint italic p-2">Vacío. Añade jugadores con el botón "+".</span>}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+          <StatBlock icon={TrendingDown} label="Gasto en Fichajes" value={formatCurrency(totalSpent)} accent="text-red-500" />
+          <StatBlock icon={TrendingUp} label="Ingresos por Ventas" value={formatCurrency(totalEarned)} accent="text-green-500" />
+          <StatBlock icon={Scale} label="Balance Neto" value={formatCurrency(netBalance)} accent={netBalance >= 0 ? 'text-green-500' : 'text-red-500'} />
+          <StatBlock icon={ListOrdered} label="Total Movimientos" value={transactions.length} />
         </div>
       </div>
 
-      <div className="bg-surface p-4 rounded-[24px] border border-yellow-500/10 shadow-2xl">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-yellow-500/60 italic">Lista de Cedibles</h3>
-          <button onClick={() => setAddingStatus('Cedible')} title="Añadir jugador a la lista" className="p-1.5 rounded-lg bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 transition-all"><Plus size={14} /></button>
+      {/* Buscador y filtro rápido por tipo de operación. */}
+      <div className="bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl space-y-2.5">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-faint" size={14} />
+          <input type="text" placeholder="Buscar por jugador..." className="w-full h-9 bg-well pl-9 pr-3 rounded-xl border border-border-subtle outline-none focus:border-green-500 text-sm font-bold text-fg placeholder:text-fg-faint max-md:placeholder:text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
         </div>
-        <div className="grid gap-2">
-          {forLoan.map((p) => (
-            <OperationRow key={p.id} player={p} onClick={() => openInfo(p, 'forLoan')} chipClassName="bg-yellow-500/5 border-yellow-500/10" chipTextClassName="text-yellow-500">
-              <button onClick={(e) => { e.stopPropagation(); setLoaningPlayer(p); }} className="bg-yellow-500 text-black px-3 py-1.5 rounded-lg text-[9px] font-black uppercase shadow-sm flex items-center gap-1 shrink-0"><ArrowRightLeft size={11} /> Ceder</button>
-            </OperationRow>
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          {TYPE_FILTERS.map(({ id, label }) => (
+            <button key={id} onClick={() => setTypeFilter(id)} className={`shrink-0 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${typeFilter === id ? 'bg-green-500 text-black' : 'bg-well text-fg-muted border border-border-subtle hover:bg-well-strong'}`}>{label}</button>
           ))}
-          {forLoan.length === 0 && <span className="text-[10px] text-fg-faint italic p-2">Vacío. Añade jugadores con el botón "+".</span>}
         </div>
       </div>
 
-      <div className="bg-surface p-4 rounded-[24px] border border-border-subtle shadow-2xl opacity-80">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic mb-3">Cedidos a otros Clubes</h3>
-        <div className="grid gap-2">
-          {loanedOut.map((p) => (
-            <OperationRow key={p.id} player={p} onClick={() => openInfo(p, 'loanedOut')} chipClassName="bg-well border-border-subtle" chipTextClassName="text-fg-faint">
-              {p.outboundLoan && (
-                <div className="text-right shrink-0">
-                  <div className="text-[9px] font-black text-fg-secondary uppercase truncate max-w-[100px]">{p.outboundLoan.destinationClub}</div>
-                  <div className="text-[8px] text-fg-faint font-black uppercase">{p.outboundLoan.wagePercentage}% Salario</div>
+      {/* Historial: listado visual con badge de tipo, importe, y club implicado si se conoce
+          (solo disponible hoy para cesiones, ver destinationClub en cedePlayer). */}
+      {filtered.length === 0 ? (
+        <div className="bg-surface rounded-[28px] border border-dashed border-border-subtle p-10 md:p-14 flex flex-col items-center text-center gap-3">
+          <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center">
+            <History size={28} className="text-green-500" />
+          </div>
+          <h3 className="text-base font-black uppercase italic text-fg">{transactions.length === 0 ? 'Sin Movimientos Todavía' : 'Sin Resultados'}</h3>
+          <p className="text-xs text-fg-muted font-bold max-w-xs">{transactions.length === 0 ? 'Aquí aparecerán automáticamente tus fichajes, ventas y cesiones en cuanto los registres.' : 'Ajusta la búsqueda o el filtro para encontrar movimientos.'}</p>
+        </div>
+      ) : (
+        <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
+          {filtered.map((t) => {
+            const meta = typeMeta(t.type);
+            const Icon = meta.icon;
+            return (
+              <div key={t.id} className="p-3 md:p-4 flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${meta.badge}`}><Icon size={16} /></div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-black text-sm text-fg truncate">{t.playerName}</div>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                    <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider border ${meta.badge}`}>{meta.label}</span>
+                    {t.club && (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider bg-well text-fg-muted flex items-center gap-1"><MapPin size={9} /> {t.club}</span>
+                    )}
+                    <span className="text-[9px] text-fg-faint font-bold">{new Date(t.date).toLocaleDateString('es-ES')}</span>
+                  </div>
                 </div>
-              )}
-            </OperationRow>
-          ))}
-          {loanedOut.length === 0 && <span className="text-[10px] text-fg-faint italic p-2">Sin jugadores cedidos fuera.</span>}
+                <div className="text-right shrink-0">
+                  <div className={`font-black text-sm ${meta.sign === '-' ? 'text-red-500' : meta.sign === '+' ? 'text-green-500' : 'text-blue-500'}`}>{meta.sign}{formatCurrency(t.amount)}</div>
+                  {t.type === 'cesion' && <div className="text-[8px] text-fg-faint font-bold uppercase tracking-widest flex items-center justify-end gap-1"><Wallet size={9} /> Ahorro Salarial</div>}
+                </div>
+              </div>
+            );
+          })}
         </div>
-      </div>
-
-      {selectedPlayerInfo && (
-        <PlayerInfoModal
-          player={selectedPlayerInfo}
-          infoSlot={infoSlot}
-          onClose={() => setSelectedPlayerInfo(null)}
-          onEdit={(p) => { setSelectedPlayerInfo(null); onRequestEditPlayer(p); }}
-          onReplace={() => {}}
-        />
-      )}
-
-      {sellingPlayer && <SellPlayerModal player={sellingPlayer} onClose={() => setSellingPlayer(null)} />}
-      {loaningPlayer && <LoanOutModal player={loaningPlayer} onClose={() => setLoaningPlayer(null)} />}
-      {addingStatus && (
-        <AddOperationPlayerModal
-          status={addingStatus}
-          title={addingStatus === 'Transferible' ? 'Añadir a Transferibles' : 'Añadir a Cedibles'}
-          onClose={() => setAddingStatus(null)}
-        />
       )}
     </div>
   );

@@ -96,9 +96,12 @@ export function ClubDataProvider({ children }) {
     return () => { unsubPlayers(); unsubTactics(); unsubTransactions(); unsubTargets(); unsubMatches(); unsubSeasons(); };
   }, [user, activeClubId]);
 
-  const logTransaction = async (type, playerName, amount) => {
+  // club: opcional — solo se conoce para las cesiones (destinationClub). Las compras/ventas no
+  // registran un club "contrario" en el modelo de datos actual, así que ese campo queda vacío
+  // y la vista de Operaciones lo omite con gracia en vez de inventar un dato inexistente.
+  const logTransaction = async (type, playerName, amount, club = null) => {
     if (!user || !activeClubId) return;
-    await addDoc(transactionsCol(user.uid, activeClubId), { type, playerName, amount, date: Date.now() });
+    await addDoc(transactionsCol(user.uid, activeClubId), { type, playerName, amount, club, date: Date.now() });
   };
 
   // Lista de Seguimiento / Objetivos de Mercado (pestaña "Objetivos" de Mercado): jugadores
@@ -219,7 +222,7 @@ export function ClubDataProvider({ children }) {
     });
     removePlayerFromTactic(player.id);
     const wageSaved = Math.round((player.wage || 0) * (1 - wagePercentage / 100));
-    logTransaction('cesion', player.name, wageSaved);
+    logTransaction('cesion', player.name, wageSaved, destinationClub || null);
   };
 
   const removePlayerFromTactic = (playerId) => {
