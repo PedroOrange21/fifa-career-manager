@@ -1,11 +1,9 @@
 import { useRef, useState } from 'react';
 import { User, Camera, RefreshCcw, ShieldCheck, ShieldAlert, Eye, EyeOff, LogOut, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useLegal } from '../../context/LegalContext';
 
 export default function ProfileTab({ onClose }) {
   const { user, handleUpdateName, handleUpdatePassword, handlePhotoUpload, handleLogout } = useAuth();
-  const { openPrivacy, openTerms } = useLegal();
 
   const [profileName, setProfileName] = useState(user.displayName || user.email.split('@')[0]);
   const [newPassword, setNewPassword] = useState('');
@@ -57,16 +55,12 @@ export default function ProfileTab({ onClose }) {
           <div className="space-y-2"><label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Cambiar Contraseña</label><div className="flex flex-col sm:flex-row gap-2 sm:gap-3"><div className="relative w-full sm:flex-1"><input type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" className="w-full bg-well p-4 pr-12 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold text-fg placeholder:text-fg-faint text-base md:text-sm" /><button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-fg-muted hover:text-fg transition-colors">{showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div><button onClick={onUpdatePassword} className="w-full sm:w-auto bg-well-strong text-fg p-4 rounded-xl font-black uppercase text-[10px] md:text-xs hover:brightness-125 transition-all border border-border active:scale-95">Actualizar</button></div></div>
         </div>
 
+        {/* Los enlaces a Privacidad/Términos ya viven en el pie de página global
+            (Footer.jsx, montado por ClubShell al final del contenido de cada pestaña). */}
         <div className="pt-4 mt-2 border-t border-border-subtle">
           <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl bg-red-500/10 text-red-500 font-black uppercase text-xs hover:bg-red-500/20 transition-all border border-red-500/20 shadow-lg shadow-red-500/10">
             <LogOut size={16} /> Cerrar Sesión
           </button>
-        </div>
-
-        <div className="pt-2 flex items-center justify-center gap-3 text-[9px] font-bold text-fg-faint uppercase tracking-widest">
-          <button onClick={openPrivacy} className="hover:text-fg-muted transition-colors">Política de Privacidad</button>
-          <span className="opacity-50">·</span>
-          <button onClick={openTerms} className="hover:text-fg-muted transition-colors">Términos de Servicio</button>
         </div>
       </div>
     </div>

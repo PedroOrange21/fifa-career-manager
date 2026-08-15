@@ -5,6 +5,7 @@ import { ClubDataProvider } from '../../context/ClubDataContext';
 import { UiChromeContext } from '../../context/UiChromeContext';
 import Header from './Header';
 import BottomNav from './BottomNav';
+import Footer from './Footer';
 import ClubModal from '../clubs/ClubModal';
 import ConfirmModal from '../common/ConfirmModal';
 import OnboardingWizard from '../onboarding/OnboardingWizard';
@@ -83,6 +84,7 @@ export default function ClubShell() {
               {activeTab === 'profile' && <ProfileTab onClose={closeProfile} />}
             </>
           )}
+          <Footer />
         </main>
 
         {!chromeHidden && !hasNoClubs && !loadingClubs && activeClubId && <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />}
