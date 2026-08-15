@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Mail, Lock, User, ShieldAlert, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useLegal } from '../../context/LegalContext';
 
 export default function AuthScreen() {
   const { handleGoogleLogin, handleEmailAuth } = useAuth();
+  const { openPrivacy, openTerms } = useLegal();
   const [authMode, setAuthMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,6 +74,12 @@ export default function AuthScreen() {
           </button>
         </div>
       </div>
+
+      <footer className="mt-8 flex items-center gap-3 text-[10px] font-bold text-fg-faint uppercase tracking-widest">
+        <button onClick={openPrivacy} className="hover:text-fg-muted transition-colors">Política de Privacidad</button>
+        <span className="opacity-50">·</span>
+        <button onClick={openTerms} className="hover:text-fg-muted transition-colors">Términos de Servicio</button>
+      </footer>
     </div>
   );
 }

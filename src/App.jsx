@@ -1,9 +1,11 @@
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ClubsProvider } from './context/ClubsContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { LegalProvider } from './context/LegalContext';
 import { RefreshCcw } from 'lucide-react';
 import AuthScreen from './components/auth/AuthScreen';
 import ClubShell from './components/layout/ClubShell';
+import CookieConsent from './components/legal/CookieConsent';
 
 function AppGate() {
   const { user, loadingApp } = useAuth();
@@ -29,9 +31,12 @@ function AppGate() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <AppGate />
-      </AuthProvider>
+      <LegalProvider>
+        <AuthProvider>
+          <AppGate />
+        </AuthProvider>
+        <CookieConsent />
+      </LegalProvider>
     </ThemeProvider>
   );
 }
