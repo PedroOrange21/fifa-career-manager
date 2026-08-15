@@ -44,15 +44,35 @@ function StatCard({ icon: Icon, label, value, accent = 'text-fg' }) {
   );
 }
 
-// Desglose por demarcación con acordeón: cada línea (POR/DEF/MED/DEL) se puede desplegar para
-// ver el listado individual de jugadores con su importe (sueldo o coste de traspaso, según la
-// sección). Solo una línea abierta a la vez por sección, con su propio estado local.
-function GroupBreakdown({ title, icon: Icon, groups, total, emptyLabel, barColor, playerLabel }) {
+// Módulo unificado de desglose por demarcación: un selector tipo tabs en la cabecera alterna
+// entre "Gasto en Fichajes" (activo por defecto) y "Gasto Salarial" sin salir de la tarjeta;
+// debajo, el mismo acordeón por línea (POR/DEF/MED/DEL) se recalcula al vuelo según la vista
+// activa. El acordeón se repliega al cambiar de vista para no arrastrar una línea abierta de
+// un desglose a otro con datos distintos.
+function GroupBreakdown({ views, activeView, onChangeView }) {
   const [expanded, setExpanded] = useState(null);
+  const view = views[activeView];
+  const { groups, total, emptyLabel, barColor, playerLabel } = view;
+
+  const switchView = (id) => {
+    if (id === activeView) return;
+    setExpanded(null);
+    onChangeView(id);
+  };
 
   return (
     <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
-      <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><Icon size={13} /> {title}</h3>
+      <div className="flex bg-well p-1 rounded-2xl border border-border-subtle mb-4">
+        {Object.entries(views).map(([id, v]) => (
+          <button key={id} type="button" onClick={() => switchView(id)} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 touch-manipulation ${activeView === id ? 'bg-surface text-fg shadow-sm border border-border-subtle' : 'text-fg-muted hover:text-fg-secondary'}`}>
+            <v.icon size={12} /> {v.tabLabel}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic">Desglose por Demarcación</span>
+        <span className="text-[10px] font-black text-fg">{formatCurrency(total)}</span>
+      </div>
       {total === 0 ? (
         <div className="py-6 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">{emptyLabel}</div>
       ) : (
@@ -93,6 +113,8 @@ function GroupBreakdown({ title, icon: Icon, groups, total, emptyLabel, barColor
 export default function FinanceStatsTab() {
   const { activeClub } = useClubs();
   const { players, transactions } = useClubData();
+  // "signing" (Gasto en Fichajes) activo por defecto, tal y como se pidió.
+  const [breakdownView, setBreakdownView] = useState('signing');
 
   const totalSpent = useMemo(() => transactions.filter((t) => t.type === 'compra').reduce((sum, t) => sum + (t.amount || 0), 0), [transactions]);
   const totalEarned = useMemo(() => transactions.filter((t) => t.type === 'venta').reduce((sum, t) => sum + (t.amount || 0), 0), [transactions]);
@@ -153,6 +175,11 @@ export default function FinanceStatsTab() {
   const transferBudget = activeClub?.transferBudget || 0;
   const projection6m = transferBudget - totalWage * 6;
 
+  const breakdownViews = {
+    signing: { tabLabel: 'Fichajes', icon: Tag, groups: signingGroups, total: totalSpentByGroup, emptyLabel: 'Sin fichajes registrados', barColor: 'bg-red-500', playerLabel: 'fichajes' },
+    wage: { tabLabel: 'Salarial', icon: Shirt, groups: wageGroups, total: totalWage, emptyLabel: 'Sin sueldos registrados', barColor: 'bg-blue-500', playerLabel: 'jugadores' },
+  };
+
   return (
     <div className="space-y-4 animate-in fade-in">
       <div className="grid grid-cols-3 gap-2">
@@ -186,9 +213,7 @@ export default function FinanceStatsTab() {
         )}
       </div>
 
-      <GroupBreakdown title="Gasto Salarial por Posición" icon={Shirt} groups={wageGroups} total={totalWage} emptyLabel="Sin sueldos registrados" barColor="bg-blue-500" playerLabel="jugadores" />
-
-      <GroupBreakdown title="Gasto en Fichajes por Posición" icon={Tag} groups={signingGroups} total={totalSpentByGroup} emptyLabel="Sin fichajes registrados" barColor="bg-red-500" playerLabel="fichajes" />
+      <GroupBreakdown views={breakdownViews} activeView={breakdownView} onChangeView={setBreakdownView} />
 
       <div className="bg-gradient-to-br from-surface to-well/40 p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
         <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-3"><Wallet size={13} /> Proyección de Balance</h3>
