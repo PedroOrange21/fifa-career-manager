@@ -4,8 +4,9 @@ import { useClubData } from '../../context/ClubDataContext';
 
 const EXIT_MS = 250;
 
-// Toast flotante y sutil (glassmorphism: fondo oscuro translúcido + blur) en la parte superior
-// de la pantalla, con temporizador visual (ver @keyframes undo-countdown en index.css),
+// Toast flotante y sutil (glassmorphism: fondo oscuro translúcido + blur) en la parte inferior
+// de la pantalla, justo por encima del menú flotante (BottomNav, fixed bottom-6 con hasta 64px
+// de alto), con temporizador visual (ver @keyframes undo-countdown en index.css),
 // reutilizado por cualquier acción crítica con ventana de "Deshacer": eliminar jugador,
 // finalizar cesión, vender jugador o eliminar un objetivo de Mercado (ver pendingUndo/
 // scheduleUndo en ClubDataContext). El elemento implicado ya desapareció visualmente de la
@@ -41,7 +42,7 @@ export default function UndoToast() {
 
   return (
     <div
-      className={`fixed inset-x-0 top-[76px] md:top-[84px] z-[260] flex justify-center px-4 pointer-events-none transition-all ease-out ${closing ? 'opacity-0 -translate-y-2 duration-200' : 'opacity-100 translate-y-0 duration-300'}`}
+      className={`fixed inset-x-0 bottom-24 z-[260] flex justify-center px-4 pointer-events-none transition-all ease-out ${closing ? 'opacity-0 translate-y-2 duration-200' : 'opacity-100 translate-y-0 duration-300'}`}
     >
       <div className="pointer-events-auto bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden w-full max-w-xs">
         <div className="flex items-center gap-2.5 px-3.5 py-2.5">
