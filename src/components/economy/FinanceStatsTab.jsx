@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { TrendingUp, TrendingDown, Scale, LineChart, Shirt, Wallet } from 'lucide-react';
+import { TrendingUp, TrendingDown, Scale, LineChart, Shirt, Wallet, Tag } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency } from '../../utils/format';
@@ -65,7 +65,7 @@ export default function FinanceStatsTab() {
   }, [transactions]);
   const maxMonthly = Math.max(1, ...monthly.flatMap((m) => [m.spent, m.earned]));
 
-  // Masa salarial por demarcación/rol.
+  // Coste "De Actuación" (masa salarial) por demarcación/rol.
   const wageByGroup = useMemo(() => {
     const groups = { POR: 0, DEF: 0, MED: 0, DEL: 0 };
     players.forEach((p) => {
@@ -75,6 +75,21 @@ export default function FinanceStatsTab() {
     return groups;
   }, [players]);
   const totalWage = Object.values(wageByGroup).reduce((a, b) => a + b, 0);
+
+  // Gasto en fichajes por demarcación/rol: precio de compra de los jugadores actualmente en
+  // plantilla con tipo "Comprado" (los cedidos y canteranos no tienen precio de compra). No se
+  // reconstruye a partir del historial de transacciones porque esas no guardan la posición del
+  // jugador, y un jugador ya vendido/rescindido dejaría de poder atribuirse a ninguna línea.
+  const spentByGroup = useMemo(() => {
+    const groups = { POR: 0, DEF: 0, MED: 0, DEL: 0 };
+    players.forEach((p) => {
+      if (p.type !== 'Comprado' || !(p.value > 0)) return;
+      const g = groupOf(p.positions?.[0]);
+      if (g) groups[g] += p.value;
+    });
+    return groups;
+  }, [players]);
+  const totalSpentByGroup = Object.values(spentByGroup).reduce((a, b) => a + b, 0);
 
   // Proyección de balance: presupuesto actual menos la masa salarial mensual sostenida 6
   // meses — una estimación simple e ilustrativa, no una previsión financiera real.
@@ -115,7 +130,7 @@ export default function FinanceStatsTab() {
       </div>
 
       <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><Shirt size={13} /> Masa Salarial por Demarcación</h3>
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><Shirt size={13} /> De Actuación por Demarcación</h3>
         {totalWage === 0 ? (
           <div className="py-6 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Sin sueldos registrados</div>
         ) : (
@@ -128,6 +143,27 @@ export default function FinanceStatsTab() {
                 </div>
                 <div className="h-2 bg-well rounded-full overflow-hidden">
                   <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${totalWage ? (amount / totalWage) * 100 : 0}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><Tag size={13} /> Gasto en Fichajes por Demarcación</h3>
+        {totalSpentByGroup === 0 ? (
+          <div className="py-6 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Sin fichajes registrados</div>
+        ) : (
+          <div className="space-y-3">
+            {Object.entries(spentByGroup).map(([group, amount]) => (
+              <div key={group}>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-fg-secondary">{group}</span>
+                  <span className="text-[10px] font-black text-fg">{formatCurrency(amount)}</span>
+                </div>
+                <div className="h-2 bg-well rounded-full overflow-hidden">
+                  <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${totalSpentByGroup ? (amount / totalSpentByGroup) * 100 : 0}%` }} />
                 </div>
               </div>
             ))}
