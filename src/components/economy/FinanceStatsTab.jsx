@@ -1,11 +1,11 @@
-import { useMemo } from 'react';
-import { TrendingUp, TrendingDown, Scale, LineChart, Shirt, Wallet, Tag } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { TrendingUp, TrendingDown, Scale, LineChart, Shirt, Wallet, Tag, ChevronDown } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency } from '../../utils/format';
 
-// Misma agrupación por línea (POR/DEF/MED/DEL) que en Objetivos de Mercado, para desglosar la
-// masa salarial por demarcación en vez de por las 15 posiciones exactas.
+// Misma agrupación por línea (POR/DEF/MED/DEL) que en Objetivos de Mercado, para desglosar el
+// gasto por demarcación en vez de por las 15 posiciones exactas.
 const POSITION_GROUPS = {
   POR: ['POR'],
   DEF: ['DFC', 'LD', 'LI', 'CAD', 'CAI'],
@@ -13,6 +13,9 @@ const POSITION_GROUPS = {
   DEL: ['ED', 'EI', 'SD', 'DC'],
 };
 const groupOf = (pos) => Object.keys(POSITION_GROUPS).find((g) => POSITION_GROUPS[g].includes(pos)) || null;
+const EMPTY_GROUPS = () => ({
+  POR: { total: 0, players: [] }, DEF: { total: 0, players: [] }, MED: { total: 0, players: [] }, DEL: { total: 0, players: [] },
+});
 
 // Idéntico a FinanceTab.jsx (duplicado a propósito, mismo patrón ya usado en el resto de la
 // app): sueldo mensual que realmente carga al club, salvo cedidos fuera, donde solo pesa el
@@ -33,10 +36,56 @@ const monthLabel = (key) => {
 
 function StatCard({ icon: Icon, label, value, accent = 'text-fg' }) {
   return (
-    <div className="bg-surface rounded-2xl border border-border-subtle shadow-lg p-3.5">
-      <Icon size={14} className={`mb-1.5 ${accent}`} />
-      <div className={`text-sm md:text-base font-black italic truncate ${accent}`}>{value}</div>
-      <div className="text-[8px] font-black uppercase tracking-widest text-fg-faint leading-tight mt-0.5">{label}</div>
+    <div className="bg-surface rounded-2xl border border-border-subtle shadow-lg p-3 md:p-3.5 min-w-0">
+      <Icon size={13} className={`mb-1 md:mb-1.5 ${accent}`} />
+      <div className={`text-[11px] sm:text-xs md:text-base font-black italic leading-tight truncate ${accent}`}>{value}</div>
+      <div className="text-[7px] md:text-[8px] font-black uppercase tracking-widest text-fg-faint leading-tight mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+// Desglose por demarcación con acordeón: cada línea (POR/DEF/MED/DEL) se puede desplegar para
+// ver el listado individual de jugadores con su importe (sueldo o coste de traspaso, según la
+// sección). Solo una línea abierta a la vez por sección, con su propio estado local.
+function GroupBreakdown({ title, icon: Icon, groups, total, emptyLabel, barColor, playerLabel }) {
+  const [expanded, setExpanded] = useState(null);
+
+  return (
+    <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
+      <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><Icon size={13} /> {title}</h3>
+      {total === 0 ? (
+        <div className="py-6 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">{emptyLabel}</div>
+      ) : (
+        <div className="space-y-2">
+          {Object.entries(groups).map(([group, data]) => {
+            const isOpen = expanded === group;
+            return (
+              <div key={group} className="rounded-xl border border-border-subtle overflow-hidden">
+                <button type="button" onClick={() => setExpanded(isOpen ? null : group)} className="w-full flex items-center gap-2.5 px-3 py-2.5 bg-well/60 hover:bg-well transition-colors touch-manipulation">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-fg-secondary w-7 shrink-0 text-left">{group}</span>
+                  <div className="flex-1 min-w-0 h-2 bg-well rounded-full overflow-hidden">
+                    <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${total ? (data.total / total) * 100 : 0}%` }} />
+                  </div>
+                  <span className="text-[10px] font-black text-fg shrink-0">{formatCurrency(data.total)}</span>
+                  <ChevronDown size={14} className={`text-fg-faint shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isOpen && (
+                  <div className="divide-y divide-border-subtle animate-in fade-in slide-in-from-top-1 duration-150">
+                    {data.players.length === 0 ? (
+                      <div className="px-3 py-3 text-center text-[9px] font-bold text-fg-faint uppercase tracking-widest">Sin {playerLabel} en esta línea</div>
+                    ) : data.players.map((p) => (
+                      <div key={p.id} className="px-3 py-2 flex items-center justify-between gap-2 bg-surface">
+                        <span className="text-xs font-bold text-fg truncate">{p.name}</span>
+                        <span className="text-[10px] font-black text-fg-secondary shrink-0">{formatCurrency(p.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -65,31 +114,39 @@ export default function FinanceStatsTab() {
   }, [transactions]);
   const maxMonthly = Math.max(1, ...monthly.flatMap((m) => [m.spent, m.earned]));
 
-  // Coste "De Actuación" (masa salarial) por demarcación/rol.
-  const wageByGroup = useMemo(() => {
-    const groups = { POR: 0, DEF: 0, MED: 0, DEL: 0 };
+  // Gasto salarial por demarcación/rol, con el listado de jugadores de cada línea para el
+  // acordeón desplegable.
+  const wageGroups = useMemo(() => {
+    const groups = EMPTY_GROUPS();
     players.forEach((p) => {
       const g = groupOf(p.positions?.[0]);
-      if (g) groups[g] += getEffectiveWage(p);
+      if (!g) return;
+      const wage = getEffectiveWage(p);
+      groups[g].total += wage;
+      if (wage > 0) groups[g].players.push({ id: p.id, name: p.name, amount: wage });
     });
+    Object.values(groups).forEach((g) => g.players.sort((a, b) => b.amount - a.amount));
     return groups;
   }, [players]);
-  const totalWage = Object.values(wageByGroup).reduce((a, b) => a + b, 0);
+  const totalWage = Object.values(wageGroups).reduce((a, g) => a + g.total, 0);
 
   // Gasto en fichajes por demarcación/rol: precio de compra de los jugadores actualmente en
   // plantilla con tipo "Comprado" (los cedidos y canteranos no tienen precio de compra). No se
   // reconstruye a partir del historial de transacciones porque esas no guardan la posición del
   // jugador, y un jugador ya vendido/rescindido dejaría de poder atribuirse a ninguna línea.
-  const spentByGroup = useMemo(() => {
-    const groups = { POR: 0, DEF: 0, MED: 0, DEL: 0 };
+  const signingGroups = useMemo(() => {
+    const groups = EMPTY_GROUPS();
     players.forEach((p) => {
       if (p.type !== 'Comprado' || !(p.value > 0)) return;
       const g = groupOf(p.positions?.[0]);
-      if (g) groups[g] += p.value;
+      if (!g) return;
+      groups[g].total += p.value;
+      groups[g].players.push({ id: p.id, name: p.name, amount: p.value });
     });
+    Object.values(groups).forEach((g) => g.players.sort((a, b) => b.amount - a.amount));
     return groups;
   }, [players]);
-  const totalSpentByGroup = Object.values(spentByGroup).reduce((a, b) => a + b, 0);
+  const totalSpentByGroup = Object.values(signingGroups).reduce((a, g) => a + g.total, 0);
 
   // Proyección de balance: presupuesto actual menos la masa salarial mensual sostenida 6
   // meses — una estimación simple e ilustrativa, no una previsión financiera real.
@@ -98,7 +155,7 @@ export default function FinanceStatsTab() {
 
   return (
     <div className="space-y-4 animate-in fade-in">
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-3 gap-2">
         <StatCard icon={TrendingDown} label="Gasto en Fichajes" value={formatCurrency(totalSpent)} accent="text-red-500" />
         <StatCard icon={TrendingUp} label="Ingresos por Ventas" value={formatCurrency(totalEarned)} accent="text-green-500" />
         <StatCard icon={Scale} label="Balance Neto" value={formatCurrency(netBalance)} accent={netBalance >= 0 ? 'text-green-500' : 'text-red-500'} />
@@ -129,51 +186,13 @@ export default function FinanceStatsTab() {
         )}
       </div>
 
-      <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><Shirt size={13} /> De Actuación por Demarcación</h3>
-        {totalWage === 0 ? (
-          <div className="py-6 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Sin sueldos registrados</div>
-        ) : (
-          <div className="space-y-3">
-            {Object.entries(wageByGroup).map(([group, amount]) => (
-              <div key={group}>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-fg-secondary">{group}</span>
-                  <span className="text-[10px] font-black text-fg">{formatCurrency(amount)}</span>
-                </div>
-                <div className="h-2 bg-well rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${totalWage ? (amount / totalWage) * 100 : 0}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <GroupBreakdown title="Gasto Salarial por Posición" icon={Shirt} groups={wageGroups} total={totalWage} emptyLabel="Sin sueldos registrados" barColor="bg-blue-500" playerLabel="jugadores" />
 
-      <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><Tag size={13} /> Gasto en Fichajes por Demarcación</h3>
-        {totalSpentByGroup === 0 ? (
-          <div className="py-6 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Sin fichajes registrados</div>
-        ) : (
-          <div className="space-y-3">
-            {Object.entries(spentByGroup).map(([group, amount]) => (
-              <div key={group}>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-fg-secondary">{group}</span>
-                  <span className="text-[10px] font-black text-fg">{formatCurrency(amount)}</span>
-                </div>
-                <div className="h-2 bg-well rounded-full overflow-hidden">
-                  <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${totalSpentByGroup ? (amount / totalSpentByGroup) * 100 : 0}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <GroupBreakdown title="Gasto en Fichajes por Posición" icon={Tag} groups={signingGroups} total={totalSpentByGroup} emptyLabel="Sin fichajes registrados" barColor="bg-red-500" playerLabel="fichajes" />
 
       <div className="bg-gradient-to-br from-surface to-well/40 p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
         <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-3"><Wallet size={13} /> Proyección de Balance</h3>
-        <div className={`text-2xl md:text-3xl font-black italic tracking-tighter ${projection6m >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(projection6m)}</div>
+        <div className={`text-lg sm:text-xl md:text-3xl font-black italic tracking-tighter truncate ${projection6m >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(projection6m)}</div>
         <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest mt-1.5">Estimación a 6 meses (presupuesto actual menos masa salarial sostenida)</p>
       </div>
     </div>
