@@ -9,7 +9,7 @@ import Footer from './Footer';
 import ClubModal from '../clubs/ClubModal';
 import ConfirmModal from '../common/ConfirmModal';
 import OnboardingWizard from '../onboarding/OnboardingWizard';
-import EndLoanUndoToast from '../squad/EndLoanUndoToast';
+import UndoToast from '../common/UndoToast';
 import ClubTab from '../club/ClubTab';
 import MatchTab from '../match/MatchTab';
 import MarketShell from '../scouting/MarketShell';
@@ -100,10 +100,11 @@ export default function ClubShell() {
             mostrar los dos a la vez duplicaría el modal para el mismo club recién creado. */}
         {activeClubId && !loadingClubs && !showClubModal && <OnboardingWizard />}
 
-        {/* Toast de "Deshacer" tras Finalizar Cesión: se autogestiona leyendo pendingEndLoan
-            del contexto, montado a nivel de ClubShell para sobrevivir a la navegación entre
-            pestañas mientras dura la ventana de deshacer. */}
-        {activeClubId && <EndLoanUndoToast />}
+        {/* Toast de "Deshacer" (eliminar jugador, finalizar cesión, vender jugador, eliminar
+            objetivo): se autogestiona leyendo pendingUndo del contexto, montado a nivel de
+            ClubShell para sobrevivir a la navegación entre pestañas mientras dura la ventana
+            de deshacer. */}
+        {activeClubId && <UndoToast />}
 
         {clubToDelete && (
           <ConfirmModal

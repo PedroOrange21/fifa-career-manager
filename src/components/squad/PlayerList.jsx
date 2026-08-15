@@ -259,9 +259,9 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       )}
 
       {/* "Finalizar Cesión" no borra al instante: startEndLoan oculta al jugador de la
-          plantilla y arranca una ventana de "Deshacer" de unos segundos (ver
-          EndLoanUndoToast, montado en ClubShell) — el borrado real en Firestore solo ocurre
-          si esa ventana expira sin cancelarse. */}
+          plantilla y arranca una ventana de "Deshacer" de unos segundos (ver UndoToast,
+          montado en ClubShell) — el borrado real en Firestore solo ocurre si esa ventana
+          expira sin cancelarse. */}
       {endingLoanPlayer && (
         <ConfirmModal
           icon={Undo2}
