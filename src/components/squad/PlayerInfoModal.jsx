@@ -2,7 +2,7 @@ import { X, Edit2, RefreshCcw, Trash2, Tag, Armchair, ArrowRightLeft, Graduation
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getCardStyle } from '../../utils/cardStyle';
-import { abbreviateValue, formatLoanDuration } from '../../utils/format';
+import { abbreviateValue, formatLoanDuration, formatCurrency } from '../../utils/format';
 import { isUncalledZone } from '../../utils/slots';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -18,7 +18,15 @@ const ACTION_STYLES = {
   neutral: 'bg-well-strong text-fg border-transparent hover:brightness-125',
 };
 
-export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onReplace, hideMarketStatus = false }) {
+// Fila de solo lectura (label + valor), usada en las secciones de detalle del jugador.
+const InfoRow = ({ label, value }) => (
+  <div className="flex justify-between items-center gap-3 px-1 py-1.5">
+    <span className="text-[9px] font-black uppercase text-fg-faint tracking-widest shrink-0">{label}</span>
+    <span className="text-xs font-bold text-fg text-right truncate">{value}</span>
+  </div>
+);
+
+export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onReplace, hideMarketStatus = false, hideTacticsActions = false }) {
   useBodyScrollLock();
   useAutoHideChrome();
   const { lineup, bench, assignPlayerToSlot, setPlayerTransferStatus, setPlayerToDelete, confirmDeletePlayer } = useClubData();
@@ -76,11 +84,12 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
   const isCalledUp = Object.values(lineup).includes(current.id) || Object.values(bench).includes(current.id);
   const isUnpromotedCantera = current.type === 'Cantera' && !isCalledUp;
 
-  // Contexto genérico (Plantilla / Mercado): un único grid con todas las acciones.
-  const actions = [{ key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit(current), color: 'blue' }];
+  // Contexto genérico (Plantilla / Mercado): un único grid con todas las acciones. La edición
+  // ahora se hace desde el lápiz superior de la cabecera, no como una acción más aquí.
+  const actions = [];
   if (current.transferStatus !== 'CedidoFuera' && !isIncomingLoan && !isUnpromotedCantera) actions.push({ key: 'sell', icon: Tag, label: 'Vender', onClick: () => setShowSellModal(true), color: 'red' });
   if (canSendToBench) actions.push({ key: 'bench', icon: Armchair, label: 'Al Banquillo', onClick: () => { assignPlayerToSlot(`bench-${emptyBenchIdx}`, current.id); onClose(); }, color: 'yellow' });
-  if (!isUncalledZone(infoSlot)) {
+  if (!hideTacticsActions && !isUncalledZone(infoSlot)) {
     actions.push({ key: 'replace', icon: RefreshCcw, label: 'Reemplazar', onClick: () => onReplace(infoSlot), color: 'neutral' });
     actions.push({ key: 'uncalled', icon: Trash2, label: 'No Convocado', onClick: () => { assignPlayerToSlot(infoSlot, null); onClose(); }, color: 'red' });
   }
@@ -104,19 +113,63 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
     <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
       <div className="bg-surface border border-border p-6 rounded-[32px] w-full max-w-sm shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-well rounded-full hover:bg-well-strong text-fg-muted hover:text-fg"><X size={18} /></button>
-        <h3 className="text-center text-[10px] font-black uppercase tracking-widest text-fg-muted italic mb-4">Ficha del Jugador</h3>
-        <div className="p-4 bg-well rounded-[24px] border border-border-subtle flex flex-col gap-4 relative">
-          {hideMarketStatus && (
-            <button onClick={() => onEdit(current)} title="Editar Jugador" className="absolute top-3 right-3 p-2 rounded-full bg-well-strong text-fg-faint hover:text-blue-500 transition-colors"><Edit2 size={13} /></button>
-          )}
+        <button onClick={() => onEdit(current)} title="Editar Jugador" className="absolute top-4 right-16 p-2 rounded-full bg-well text-fg-faint hover:text-blue-500 hover:bg-well-strong transition-colors"><Edit2 size={16} /></button>
+        <div className="p-4 pt-5 bg-well rounded-[24px] border border-border-subtle flex flex-col gap-4 relative">
           <div className="flex items-center gap-4">
             <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center font-black leading-none shadow-lg flex-shrink-0 ${getCardStyle(current.rating)}`}><span className="text-[8px] opacity-70 font-bold mb-0.5">{current.positions?.[0]}</span><span className="text-xl">{current.rating}</span></div>
-            <div className={`flex-1 min-w-0 ${hideMarketStatus ? 'pr-6' : ''}`}>
+            <div className="flex-1 min-w-0">
               <div className="font-black uppercase italic text-lg truncate tracking-tighter leading-tight text-black dark:text-white">{current.name}</div>
               <div className="text-[10px] text-green-500/80 font-black uppercase tracking-widest mb-1 mt-0.5 truncate">{current.positions?.join(' · ')}</div>
               <div className="flex flex-wrap items-center gap-1.5 mt-1"><span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{current.age} Años</span><span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{current.preferredFoot || 'Diestro'}</span>{(current.marketValue || current.value) ? <span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{abbreviateValue(current.marketValue || current.value)}</span> : null}{current.type === 'Cedido' ? (<span className="text-[8px] flex items-center gap-1 text-yellow-500 font-black uppercase tracking-widest bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20"><ArrowDownToLine size={10} className="shrink-0" /> Cedido ({formatLoanDuration(current.loanDuration)})</span>) : current.type ? (<span className={`text-[8px] flex items-center gap-1 px-2 py-0.5 rounded font-black uppercase tracking-wider ${current.type === 'Cantera' ? 'bg-emerald-600/20 text-emerald-400' : 'bg-blue-600/20 text-blue-400'}`}>{current.type === 'Cantera' && <GraduationCap size={10} className="shrink-0" />} {current.type}</span>) : null}</div>
             </div>
           </div>
+        </div>
+
+        {/* Detalle completo en modo lectura: misma estructura de campos que la vista de edición
+            unificada (PlayerForm paso 4), pero sin lápices individuales — la edición se hace
+            desde el único lápiz de la cabecera. */}
+        <div className="mt-4 bg-well rounded-[20px] border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+          <div className="p-3 space-y-0.5">
+            <span className="text-[8px] font-black uppercase text-fg-faint tracking-widest block mb-1">Datos Personales</span>
+            <InfoRow label="Nacionalidad" value={current.nationality || 'Sin definir'} />
+            <InfoRow label="Edad" value={`${current.age} Años`} />
+          </div>
+          <div className="p-3 space-y-0.5">
+            <span className="text-[8px] font-black uppercase text-fg-faint tracking-widest block mb-1">Atributos</span>
+            <InfoRow label="Pierna" value={current.preferredFoot || 'Diestro'} />
+            <InfoRow label="Posiciones" value={current.positions?.join(' · ') || 'Sin definir'} />
+            {current.type === 'Cantera' && <InfoRow label="Potencial" value={current.potential || 'Sin definir'} />}
+          </div>
+          {current.type !== 'Cantera' && (
+            <div className="p-3 space-y-0.5">
+              <span className="text-[8px] font-black uppercase text-fg-faint tracking-widest block mb-1">Economía</span>
+              <InfoRow label="Adquisición" value={current.type || 'Sin definir'} />
+              <InfoRow label="Valor de Mercado" value={formatCurrency(current.marketValue || current.value || 0)} />
+              {current.type === 'Comprado' && (
+                <>
+                  <InfoRow label="Sueldo Mensual" value={formatCurrency(current.wage || 0)} />
+                  <InfoRow label="Años Contrato" value={current.contractYears ? `${current.contractYears} Años` : 'Sin definir'} />
+                  <InfoRow label="Cláusula de Rescisión" value={formatCurrency(current.releaseClause || 0)} />
+                </>
+              )}
+              {current.type === 'Cedido' && (
+                <>
+                  <InfoRow label="Club de Origen" value={current.originClub || 'Sin definir'} />
+                  <InfoRow label="Duración Cesión" value={formatLoanDuration(current.loanDuration)} />
+                  <InfoRow label="Sueldo Mensual Total" value={formatCurrency(current.wage || 0)} />
+                  <InfoRow label="% Salario Pagado" value={`${current.wagePercentage || 0}%`} />
+                  <InfoRow label="Opción de Compra" value={current.buyOption ? formatCurrency(current.buyOption) : 'No'} />
+                </>
+              )}
+            </div>
+          )}
+          {current.transferStatus === 'CedidoFuera' && current.outboundLoan && (
+            <div className="p-3 space-y-0.5">
+              <span className="text-[8px] font-black uppercase text-fg-faint tracking-widest block mb-1">Cesión</span>
+              <InfoRow label="Cedido A" value={current.outboundLoan.destinationClub || 'Sin definir'} />
+              <InfoRow label="Duración" value={formatLoanDuration(current.outboundLoan.duration)} />
+            </div>
+          )}
         </div>
 
         {!hideMarketStatus && (

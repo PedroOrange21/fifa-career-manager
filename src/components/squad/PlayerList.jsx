@@ -12,6 +12,7 @@ import ConfirmModal from '../common/ConfirmModal';
 import SellPlayerModal from '../economy/SellPlayerModal';
 import LoanOutModal from '../economy/LoanOutModal';
 import PromoteToFirstTeamModal from '../academy/PromoteToFirstTeamModal';
+import PlayerInfoModal from './PlayerInfoModal';
 
 // Escritorio (ratón real): el texto se revela con :hover y un solo clic abre el formulario.
 // Táctil: el primer toque despliega el texto (sin abrir) y el segundo lo confirma, igual que
@@ -53,6 +54,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [loaningPlayer, setLoaningPlayer] = useState(null);
   const [endingLoanPlayer, setEndingLoanPlayer] = useState(null);
   const [promotingPlayer, setPromotingPlayer] = useState(null);
+  const [selectedPlayerInfo, setSelectedPlayerInfo] = useState(null);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const sortMenuRef = useRef(null);
   useOnClickOutside(sortMenuRef, () => setShowSortMenu(false), showSortMenu);
@@ -203,6 +205,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
             onSell={() => setSellingPlayer(p)}
             onLoan={() => setLoaningPlayer(p)}
             onEndLoan={() => setEndingLoanPlayer(p)}
+            onViewDetail={setSelectedPlayerInfo}
           />
         ))}
       </div>
@@ -221,6 +224,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
                 onLoan={() => setLoaningPlayer(p)}
                 onEndLoan={() => setEndingLoanPlayer(p)}
                 onPromote={setPromotingPlayer}
+                onViewDetail={setSelectedPlayerInfo}
               />
             ))}
           </div>
@@ -236,6 +240,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
                 key={p.id} p={p}
                 onEdit={() => openEditForm(p)} onDelete={() => setPlayerToDelete(p.id)}
                 onRecall={() => setPlayerTransferStatus(p.id, 'Activo')}
+                onViewDetail={setSelectedPlayerInfo}
               />
             ))}
           </div>
@@ -246,6 +251,14 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       {sellingPlayer && <SellPlayerModal player={sellingPlayer} onClose={() => setSellingPlayer(null)} />}
       {loaningPlayer && <LoanOutModal player={loaningPlayer} onClose={() => setLoaningPlayer(null)} />}
       {promotingPlayer && <PromoteToFirstTeamModal player={promotingPlayer} onClose={() => setPromotingPlayer(null)} />}
+      {selectedPlayerInfo && (
+        <PlayerInfoModal
+          player={selectedPlayerInfo}
+          onClose={() => setSelectedPlayerInfo(null)}
+          onEdit={(p) => { setSelectedPlayerInfo(null); openEditForm(p); }}
+          hideTacticsActions
+        />
+      )}
 
       {playerToDelete && (
         <ConfirmModal
@@ -278,7 +291,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   );
 }
 
-function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onMarkCedible, onSell, onLoan, onEndLoan, onPromote }) {
+function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onMarkCedible, onSell, onLoan, onEndLoan, onPromote, onViewDetail }) {
   const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
@@ -454,7 +467,16 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           )}
 
           <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-            <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
+            {/* Zona de posición principal y media: abre la vista de detalle del jugador. Si el
+                panel de swipe está abierto, el toque simplemente lo cierra, igual que en el
+                resto de la fila. */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); if (offset < 0) { close(); return; } onViewDetail?.(p); }}
+              className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 touch-manipulation active:scale-95 transition-transform ${getCardStyle(p.rating)}`}
+            >
+              <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span><span className="text-lg md:text-xl">{p.rating}</span>
+            </button>
             <div className="flex-1 min-w-0">
               <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight flex items-center gap-2 text-black dark:text-white">{p.name}</div>
               <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest mb-1">{p.positions?.join(' · ') || p.pos}</div>
@@ -522,7 +544,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
 // activos, con el mismo orden de botones y el mismo aviso rojo de borrado continuo. En
 // escritorio, en vez de dos botones sueltos, se agrupan en un único "..." con las acciones
 // propias de un jugador cedido fuera (Recuperar, Editar, Borrar).
-function LoanedPlayerRow({ p, onEdit, onDelete, onRecall }) {
+function LoanedPlayerRow({ p, onEdit, onDelete, onRecall, onViewDetail }) {
   const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(onDelete, ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
@@ -585,7 +607,13 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall }) {
             reposo. */}
         <div className="flex items-center justify-between flex-1 min-w-0 gap-4 md:transition-transform md:duration-300 md:ease-in-out md:group-hover:translate-x-11">
           <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-            <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); if (offset < 0) { close(); return; } onViewDetail?.(p); }}
+              className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 touch-manipulation active:scale-95 transition-transform ${getCardStyle(p.rating)}`}
+            >
+              <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span>
+            </button>
             <div className="flex-1 min-w-0"><div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div><div className="text-[8px] md:text-[9px] text-zinc-500 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div></div>
           </div>
 
