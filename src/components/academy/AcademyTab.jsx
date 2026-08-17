@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { TrendingUp, Calendar, ArrowUpDown, ArrowUp, ArrowDown, ArrowUpCircle, Edit2, Trash2, MoreHorizontal, ShieldAlert, Star, ArrowDownAZ, LayoutGrid, Plus, Search } from 'lucide-react';
+import { TrendingUp, Calendar, ArrowUpDown, ArrowUp, ArrowDown, ArrowUpCircle, Edit2, Trash2, MoreHorizontal, ShieldAlert, Star, ArrowDownAZ, LayoutGrid, Plus, Search, Info, X } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import { useSwipeReveal } from '../../hooks/useSwipeReveal';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import { getCardStyle } from '../../utils/cardStyle';
 import { parsePotentialRange } from '../../utils/format';
 import { ALL_POSITIONS } from '../../constants/positions';
@@ -85,10 +87,49 @@ function PotentialBar({ rating, potential }) {
   );
 }
 
+const POTENTIAL_INFO_TIERS = [
+  { range: '90 - 99', label: 'Verde Brillante / Oro', badgeClass: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400', desc: 'Tiene potencial para ser especial: futura estrella mundial.' },
+  { range: '85 - 89', label: 'Verde / Azul Claro', badgeClass: 'bg-sky-500/15 border-sky-500/30 text-sky-400', desc: 'Un gran potencial: jugador de primer nivel.' },
+  { range: '80 - 84', label: 'Amarillo / Naranja', badgeClass: 'bg-yellow-500/15 border-yellow-500/30 text-yellow-400', desc: 'Mostrando gran potencial: buen jugador de rotación o titular.' },
+  { range: '< 80', label: 'Gris / Neutro', badgeClass: 'bg-well-strong border-border-subtle text-fg-muted', desc: 'Todavía en desarrollo, sin etiqueta especial.' },
+];
+
+// Popover explicativo del criterio de color del potencial: el techo de proyección que da el
+// ojeador (rango tipo "64-88") sitúa al canterano en una de estas franjas, y ese mismo techo,
+// combinado con la edad actual, es lo que decide si el semáforo de la fila sale verde, amarillo
+// o rojo (ver getPotentialStatusColor más abajo).
+function PotentialInfoModal({ onClose }) {
+  useBodyScrollLock();
+  useAutoHideChrome();
+  return (
+    <div className="fixed inset-0 bg-black/80 z-[300] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-surface border border-border w-full sm:max-w-sm rounded-t-[28px] sm:rounded-[28px] p-5 md:p-6 max-h-[85dvh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-black italic uppercase text-fg flex items-center gap-2 text-sm"><Info size={16} className="text-emerald-500" /> Rangos de Potencial</h3>
+          <button type="button" onClick={onClose} className="p-1.5 -mr-1.5 text-fg-faint hover:text-fg transition-colors touch-manipulation"><X size={18} /></button>
+        </div>
+        <p className="text-[10px] text-fg-muted font-bold leading-relaxed mb-4">El color se determina según el techo máximo del rango de proyección que estima el ojeador para el canterano.</p>
+        <div className="space-y-2">
+          {POTENTIAL_INFO_TIERS.map((tier) => (
+            <div key={tier.range} className="flex items-center gap-3 p-3 rounded-xl bg-well border border-border-subtle">
+              <span className={`shrink-0 w-14 text-center text-[10px] font-black py-1.5 rounded-lg border ${tier.badgeClass}`}>{tier.range}</span>
+              <div className="min-w-0">
+                <div className="text-[10px] font-black uppercase tracking-widest text-fg">{tier.label}</div>
+                <div className="text-[10px] text-fg-muted font-bold leading-snug mt-0.5">{tier.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-[9px] text-fg-faint font-bold leading-relaxed mt-4 pt-3 border-t border-border-subtle">Junto al techo de proyección, la app también tiene en cuenta la edad actual del canterano para calibrar el color de cada tarjeta: cuanto menos tiempo le quede para alcanzarlo, más exigente es el ritmo de progresión requerido.</p>
+      </div>
+    </div>
+  );
+}
+
 // Mismo gesto de deslizar y menú "..." que las filas de la Plantilla (PlayerList.jsx), pero
 // simplificado: un canterano no participa del mercado, así que aquí solo hay Editar y Borrar
 // (sin transferible/cedible/vender/ceder ni la opción "Más" intermedia en móvil).
-function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail }) {
+function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail, onShowPotentialInfo }) {
   const { rowRef, offset, dragging, deleteProgress, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
@@ -159,9 +200,16 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail
               <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div>
               <PotentialBar rating={p.rating} potential={p.potential} />
             </div>
-            <div className="flex flex-col items-end gap-1.5 shrink-0">
+            <div className="flex flex-col items-end gap-1 shrink-0">
               <span className="text-[8px] text-fg-faint font-black uppercase tracking-widest">{p.age} Años</span>
-              {p.potential ? <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border ${PROJECTION_STYLES[getProjectionTier(p)]}`}>Pot. {p.potential}</span> : null}
+              {p.potential ? (
+                <>
+                  <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border ${PROJECTION_STYLES[getProjectionTier(p)]}`}>Pot. {p.potential}</span>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); onShowPotentialInfo?.(); }} className="flex items-center gap-0.5 text-[7px] font-black uppercase tracking-widest text-fg-faint hover:text-fg-secondary transition-colors touch-manipulation">
+                    <Info size={8} className="shrink-0" /> Más Info
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
 
@@ -208,6 +256,7 @@ export default function AcademyTab() {
   const [updatingPlayer, setUpdatingPlayer] = useState(null);
   const [promotingPlayer, setPromotingPlayer] = useState(null);
   const [selectedPlayerInfo, setSelectedPlayerInfo] = useState(null);
+  const [showPotentialInfo, setShowPotentialInfo] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [formPrefill, setFormPrefill] = useState(null);
@@ -333,10 +382,12 @@ export default function AcademyTab() {
             onUpdate={setUpdatingPlayer} onPromote={setPromotingPlayer}
             onEdit={openEditForm} onDelete={setPlayerToDelete}
             onViewDetail={setSelectedPlayerInfo}
+            onShowPotentialInfo={() => setShowPotentialInfo(true)}
           />
         ))}
       </div>
 
+      {showPotentialInfo && <PotentialInfoModal onClose={() => setShowPotentialInfo(false)} />}
       {updatingPlayer && <UpdateRatingModal player={updatingPlayer} onClose={() => setUpdatingPlayer(null)} />}
       {promotingPlayer && <PromoteToFirstTeamModal player={promotingPlayer} onClose={() => setPromotingPlayer(null)} />}
       {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} initialStep={formInitialStep} lockedType="Cantera" onClose={() => setShowForm(false)} />}
