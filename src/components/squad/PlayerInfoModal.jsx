@@ -151,6 +151,10 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
             esquina superior del marco exterior — en Táctica con más espacio superior (pt-8)
             para que la tarjeta (y su lápiz interno) nunca quede debajo del botón de cerrar. */}
         <div className={`overflow-y-auto no-scrollbar flex-1 min-h-0 ${hideMarketStatus ? 'pt-8' : 'pt-1'}`}>
+        {/* Tarjeta resumida (badge + nombre + pills): solo en Táctica y Operaciones. En
+            Plantilla (hideTacticsActions) se elimina por completo — la ficha va directa a las
+            secciones de detalle de abajo, que ya incluyen nombre, media y posiciones. */}
+        {!hideTacticsActions && (
         <div className={`p-4 bg-well rounded-[24px] border border-border-subtle flex flex-col gap-4 relative ${hideMarketStatus ? 'pb-9' : ''}`}>
           {/* En Táctica (acción rápida): el lápiz vive dentro de la propia tarjeta del
               jugador, en su esquina inferior derecha (mismo tamaño compacto que la "X" de
@@ -167,6 +171,7 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
             </div>
           </div>
         </div>
+        )}
 
         {/* Detalle completo en modo lectura: réplica exacta de la estructura, secciones y
             campos del Paso 4 de PlayerForm.jsx (edición unificada), pero sin lápices
@@ -228,7 +233,7 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
           </>
         )}
 
-        {!hideMarketStatus && (
+        {!hideMarketStatus && !hideTacticsActions && (
           <div className="mt-4 p-3 bg-well rounded-xl border border-border-subtle space-y-2">
             <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted block">Estado de Mercado</span>
             <div className="grid grid-cols-2 gap-2">
@@ -303,7 +308,7 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
               )}
             </div>
           </>
-        ) : (
+        ) : !hideTacticsActions ? (
           <div className="grid grid-cols-2 gap-2 mt-3">
             {actions.map(({ key, icon: Icon, label, onClick, color }) => (
               <button key={key} onClick={onClick} className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-black uppercase text-[9px] transition-all border ${ACTION_STYLES[color]}`}>
@@ -311,7 +316,7 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
               </button>
             ))}
           </div>
-        )}
+        ) : null}
         </div>
       </div>
       {showMore && moreRect && createPortal(
