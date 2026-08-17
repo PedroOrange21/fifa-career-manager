@@ -4,10 +4,12 @@ import { useSwipeReveal } from '../../hooks/useSwipeReveal';
 // Ancho de cada botón del panel de swipe (Borrar/Editar/Más, Recuperar, Ejecutar Compra...).
 export const SWIPE_BUTTON_WIDTH = 64;
 
-// Gestor de deslizamiento único, compartido por Plantilla, Academia y Operaciones: la misma
-// mecánica de arrastre (useSwipeReveal), el mismo panel de botones revelado en un swipe corto
-// y el mismo rótulo rojo de "Borrar" que crece de forma continua (dragProgress) al completar
-// el gesto largo, en vez de que cada página reimplemente por su cuenta este bloque.
+// Gestor de deslizamiento único, compartido por Plantilla, Academia y Operaciones, en dos
+// fases (ver useSwipeReveal para el detalle exacto de los umbrales): un swipe corto revela el
+// panel de botones de abajo; seguir arrastrando más allá de ese panel expande el rótulo rojo
+// de "Borrar" de forma continua (dragProgress) hasta cubrir la tarjeta, para el borrado
+// directo por arrastre a fondo. En vez de que cada página reimplemente por su cuenta este
+// bloque, todas comparten el mismo componente.
 //
 // "buttons" es la lista ordenada de acciones del panel — el panel está anclado a la derecha,
 // así que el ÚLTIMO botón del array es el primero en asomar al iniciar el arrastre (mismo
@@ -45,9 +47,9 @@ export default function SwipeableRow({ onFullSwipe, buttons, rounded = false, ch
 
       {children({ rowRef, offset, dragging, close })}
 
-      {/* Borrado fluido y continuo (solo móvil): el rótulo rojo de "Borrar" crece desde el
-          primer píxel de arrastre (dragProgress 0→1) hasta el tope del gesto, idéntico en
-          Plantilla, Academia y Operaciones. */}
+      {/* Fase 2 del gesto (solo móvil): al superar el panel de botones, el rótulo rojo de
+          "Borrar" crece de forma continua (dragProgress 0→1) hasta el tope del arrastre,
+          idéntico en Plantilla, Academia y Operaciones. */}
       <div className={`absolute inset-y-0 right-0 z-10 bg-red-500 sm:hidden pointer-events-none ${roundedClass}`} style={{ width: `${dragProgress * 100}%`, transition: dragging ? 'none' : 'width 200ms ease-out' }} />
       <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden pointer-events-none" style={{ opacity: dragProgress, transition: dragging ? 'none' : 'opacity 200ms ease-out' }}>
         <Trash2 size={18} /> Borrar
