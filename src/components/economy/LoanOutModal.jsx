@@ -58,7 +58,7 @@ export default function LoanOutModal({ player, onClose }) {
           </div>
           <div className="space-y-1">
             <label className="text-[9px] font-black text-fg-muted ml-1">Duración de la Cesión</label>
-            <Dropdown value={duration} options={LOAN_DURATION_OPTIONS} onChange={setDuration} />
+            <Dropdown value={duration} options={LOAN_DURATION_OPTIONS} onChange={setDuration} labelClassName="text-xs" />
           </div>
           <div className="space-y-1">
             <label className="text-[9px] font-black text-fg-muted ml-1">% Salario Pagado por Nuestro Club</label>
@@ -66,14 +66,16 @@ export default function LoanOutModal({ player, onClose }) {
               <input type="range" min="0" max="100" step="5" className="flex-1 accent-yellow-500" value={wagePercentage} onChange={(e) => setWagePercentage(e.target.value)} />
               <span className="w-14 text-center font-black text-fg bg-well rounded-lg py-1.5 text-sm shrink-0">{wagePercentage}%</span>
             </div>
-            <div className="p-3 bg-well rounded-xl border border-border-subtle space-y-1.5 mt-2">
-              <div className="flex justify-between items-center gap-2 text-[10px]">
-                <span className="font-bold text-fg-muted shrink-0">Pago de Nuestro Club</span>
-                <span className="font-black text-yellow-500 text-right">{formatCurrency(ourShareMonthly)}/mes · {formatCurrency(ourShareYearly)}/año</span>
+            {/* Desglose sutil y compacto (sin caja propia, texto atenuado): dos líneas bien
+                separadas por justify-between, en vez del bloque destacado anterior. */}
+            <div className="space-y-0.5 mt-1.5 px-1">
+              <div className="flex justify-between items-center gap-2 text-[9px] font-bold text-fg-faint">
+                <span className="shrink-0">Nuestro Club</span>
+                <span className="text-fg-muted text-right">{formatCurrency(ourShareMonthly)}/mes · {formatCurrency(ourShareYearly)}/año</span>
               </div>
-              <div className="flex justify-between items-center gap-2 text-[10px]">
-                <span className="font-bold text-fg-muted shrink-0">Ahorro / Paga Club Destino</span>
-                <span className="font-black text-green-500 text-right">{formatCurrency(destShareMonthly)}/mes · {formatCurrency(destShareYearly)}/año</span>
+              <div className="flex justify-between items-center gap-2 text-[9px] font-bold text-fg-faint">
+                <span className="shrink-0">Club Destino</span>
+                <span className="text-fg-muted text-right">{formatCurrency(destShareMonthly)}/mes · {formatCurrency(destShareYearly)}/año</span>
               </div>
             </div>
           </div>

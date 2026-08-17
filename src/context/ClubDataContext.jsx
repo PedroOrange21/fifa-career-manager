@@ -303,7 +303,7 @@ export function ClubDataProvider({ children }) {
     const effectivePercent = salePrice > 0 ? Math.round((budgetAmount / salePrice) * 100) : allocationPercent;
     deferPlayerRemoval(player, `Jugador ${player.name} vendido`, async () => {
       adjustBudget(budgetAmount);
-      logTransaction('venta', player.name, budgetAmount, null, { totalAmount: salePrice, retainedAmount, allocationPercent: effectivePercent });
+      logTransaction('venta', player.name, budgetAmount, null, { totalAmount: salePrice, retainedAmount, allocationPercent: effectivePercent, wageFreed: player.wage || 0 });
     });
   };
 
@@ -315,7 +315,10 @@ export function ClubDataProvider({ children }) {
     });
     removePlayerFromTactic(player.id);
     const wageSaved = Math.round((player.wage || 0) * (1 - wagePercentage / 100));
-    logTransaction('cesion', player.name, wageSaved, destinationClub || null);
+    // Se guarda una instantánea de las condiciones pactadas (duración, % asumido, cláusula de
+    // compra) directamente en la transacción, para que el desglose del historial siga siendo
+    // consultable aunque el jugador ya haya vuelto o se haya vendido después.
+    logTransaction('cesion', player.name, wageSaved, destinationClub || null, { duration, wagePercentage, buyOption: buyOption || null, wageTotal: player.wage || 0 });
   };
 
   // Finalizar una cesión ENTRANTE (jugador tipo 'Cedido' que llega a nuestro club): mismo

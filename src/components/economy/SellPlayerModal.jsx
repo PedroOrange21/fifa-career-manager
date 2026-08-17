@@ -16,7 +16,9 @@ export default function SellPlayerModal({ player, onClose }) {
   useBodyScrollLock();
   useAutoHideChrome();
   const { sellPlayer } = useClubData();
-  const [price, setPrice] = useState(formatValueInput(String(player.marketValue || player.value || '')));
+  // Si la venta es la ejecución de una opción de compra pactada en una cesión saliente, se
+  // precarga ese importe (ya acordado) en vez del valor de mercado genérico.
+  const [price, setPrice] = useState(formatValueInput(String(player.outboundLoan?.buyOption || player.marketValue || player.value || '')));
   const [allocationPercent, setAllocationPercent] = useState(DEFAULT_ALLOCATION);
   const [customMode, setCustomMode] = useState(false);
   // Dentro de "Otro" se puede fijar o bien un % personalizado o bien la cifra exacta en euros
@@ -113,7 +115,7 @@ export default function SellPlayerModal({ player, onClose }) {
             <span className="font-black text-green-500">+{formatCurrency(budgetAmount)}</span>
           </div>
           <div className="flex justify-between items-center text-xs">
-            <span className="font-bold text-fg-muted">Retenido por la Directiva ({100 - effectivePercent}%)</span>
+            <span className="font-bold text-fg-muted">Retención ({100 - effectivePercent}%)</span>
             <span className="font-black text-fg-faint">+{formatCurrency(retainedAmount)}</span>
           </div>
           <div className="h-px bg-border-subtle" />
