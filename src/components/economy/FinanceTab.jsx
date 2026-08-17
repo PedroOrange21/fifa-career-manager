@@ -111,7 +111,7 @@ export default function FinanceTab() {
                           logTransaction), integrada en la misma línea sin competir con el
                           importe de la derecha gracias al min-w-0 + truncate del contenedor. */}
                       <div className="text-[9px] text-fg-faint font-black uppercase tracking-widest truncate">
-                        {t.type === 'compra' ? 'Fichaje' : t.type === 'venta' ? 'Traspaso' : t.type === 'cesion' ? 'Ahorro salarial' : 'Cesión entrante'} · T.{t.seasonNumber || 1}
+                        {t.type === 'compra' ? 'Fichaje' : t.type === 'venta' ? 'Traspaso' : t.type === 'cesion' ? 'Ahorro salarial' : 'Cesión entrante'} · T{t.seasonNumber || 1}
                       </div>
                     </div>
                   </div>

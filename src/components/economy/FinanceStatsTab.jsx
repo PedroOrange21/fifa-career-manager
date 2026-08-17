@@ -163,12 +163,17 @@ function ProfitabilityCard({ transactions }) {
               <div key={t.id} className="p-2.5 bg-well rounded-xl border border-border-subtle">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-black text-fg truncate">{t.playerName}</span>
-                  <span className="text-[8px] font-black text-fg-faint uppercase tracking-widest shrink-0">T.{t.seasonNumber || 1}</span>
+                  <span className="text-[8px] font-black text-fg-faint uppercase tracking-widest shrink-0">T{t.seasonNumber || 1}</span>
                 </div>
-                <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest mt-0.5">{t.position || '—'} · {t.rating ?? '—'} OVR</div>
-                <div className="flex items-center justify-between gap-2 mt-1.5 text-[9px]">
-                  <span className="font-bold text-fg-muted truncate">{formatCurrency(t.totalAmount ?? t.amount)} <span className="text-fg-faint">vs</span> {isAcademy ? 'Cantera' : formatCurrency(t.originalCost || 0)}</span>
-                  <span className={`font-black shrink-0 ${profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{profit >= 0 ? '+' : ''}{formatCurrency(profit)}</span>
+                <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest mt-0.5">{t.position || '—'} · {t.rating ?? '—'}</div>
+                {/* Dos filas: origen del jugador (comprado o cantera) y el precio de venta,
+                    con el beneficio/pérdida junto a esta última. */}
+                <div className="mt-1.5 space-y-0.5">
+                  <div className="text-[9px] font-bold text-fg-muted">{isAcademy ? 'Obtenido gratis (Cantera)' : `Comprado por ${formatCurrency(t.originalCost || 0)}`}</div>
+                  <div className="flex items-center justify-between gap-2 text-[9px]">
+                    <span className="font-bold text-fg-muted">Vendido por {formatCurrency(t.totalAmount ?? t.amount)}</span>
+                    <span className={`font-black shrink-0 ${profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{profit >= 0 ? '+' : ''}{formatCurrency(profit)}</span>
+                  </div>
                 </div>
               </div>
             );

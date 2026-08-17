@@ -305,7 +305,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
 }
 
 function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onMarkCedible, onSell, onLoan, onEndLoan, onPromote, onViewDetail }) {
-  const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
+  const { rowRef, offset, dragging, deleteProgress, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
   // En móvil, Editar/Eliminar ya se hacen con el swipe, así que el menú "..." solo suma las
@@ -527,15 +527,16 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
           <MoreHorizontal size={13} />
         </button>
 
-        {/* Umbral de borrado continuo (solo móvil): al superar la mitad de la fila, toda la
-            franja se tiñe de rojo en tiempo real para anticipar que soltar aquí borra al
-            jugador. En escritorio "offset" nunca se mueve (no hay gesto táctil), así que esto
-            nunca se activa igualmente, pero se oculta por CSS para no dejarlo ambiguo. */}
-        {pastThreshold && (
-          <div className="absolute inset-0 z-10 bg-red-500 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden">
-            <Trash2 size={18} /> Borrar
-          </div>
-        )}
+        {/* Umbral de borrado continuo (solo móvil): al superar la mitad de la fila, el rótulo
+            rojo de "Borrar" se expande suavemente (deleteProgress 0→1, sin saltos) hasta
+            cubrir toda la franja según se sigue arrastrando, anticipando que soltar aquí
+            borra al jugador. En escritorio "offset" nunca se mueve (no hay gesto táctil), así
+            que esto nunca se activa igualmente, pero se oculta por CSS para no dejarlo
+            ambiguo. */}
+        <div className="absolute inset-y-0 right-0 z-10 bg-red-500 sm:hidden pointer-events-none" style={{ width: `${deleteProgress * 100}%`, transition: dragging ? 'none' : 'width 200ms ease-out' }} />
+        <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden pointer-events-none" style={{ opacity: deleteProgress, transition: dragging ? 'none' : 'opacity 200ms ease-out' }}>
+          <Trash2 size={18} /> Borrar
+        </div>
       </div>
 
       {/* Menú contextual del botón "...": mismo patrón de portal que el resto de la app
@@ -565,7 +566,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
 // escritorio, en vez de dos botones sueltos, se agrupan en un único "..." con las acciones
 // propias de un jugador cedido fuera (Recuperar, Editar, Borrar).
 function LoanedPlayerRow({ p, onEdit, onDelete, onRecall, onViewDetail }) {
-  const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(onDelete, ROW_ACTION_WIDTH);
+  const { rowRef, offset, dragging, deleteProgress, close } = useSwipeReveal(onDelete, ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
   const moreBtnRef = useRef(null);
@@ -661,11 +662,10 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall, onViewDetail }) {
           <MoreHorizontal size={13} />
         </button>
 
-        {pastThreshold && (
-          <div className="absolute inset-0 z-10 bg-red-500 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden">
-            <Trash2 size={18} /> Borrar
-          </div>
-        )}
+        <div className="absolute inset-y-0 right-0 z-10 bg-red-500 sm:hidden pointer-events-none" style={{ width: `${deleteProgress * 100}%`, transition: dragging ? 'none' : 'width 200ms ease-out' }} />
+        <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden pointer-events-none" style={{ opacity: deleteProgress, transition: dragging ? 'none' : 'opacity 200ms ease-out' }}>
+          <Trash2 size={18} /> Borrar
+        </div>
       </div>
 
       {showMore && moreRect && createPortal(

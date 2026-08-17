@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 
-// Gesto de deslizar compartido por las filas de jugador de toda la app (Plantilla, Academia).
-// Usa un listener nativo de touchmove con { passive: false } porque React registra los
-// onTouchMove sintéticos como pasivos por defecto y no deja llamar a preventDefault() desde
-// la prop JSX (necesario aquí para bloquear el scroll vertical de la lista mientras se
-// arrastra en horizontal). El eje del gesto (horizontal vs vertical) se decide en los
-// primeros píxeles de movimiento y ya no cambia durante ese mismo toque.
+// Gesto de deslizar compartido por las filas de jugador de toda la app (Plantilla, Academia,
+// Operaciones). Usa un listener nativo de touchmove con { passive: false } porque React
+// registra los onTouchMove sintéticos como pasivos por defecto y no deja llamar a
+// preventDefault() desde la prop JSX (necesario aquí para bloquear el scroll vertical de la
+// lista mientras se arrastra en horizontal). El eje del gesto (horizontal vs vertical) se
+// decide en los primeros píxeles de movimiento y ya no cambia durante ese mismo toque.
 //
-// Deslizamiento corto: deja la fila abierta (revela Editar/Eliminar). Deslizamiento largo y
-// continuo — más de la mitad del ancho de la propia fila (equivalente a la mitad de la
-// pantalla en una lista a ancho completo) — tiñe toda la franja de rojo con "Borrar" en
-// tiempo real; si se suelta dentro de esa zona, dispara onFullSwipe (que siempre debe abrir
-// una confirmación antes de borrar nada).
+// Deslizamiento corto: deja la fila abierta (revela Editar/Eliminar). Deslizamiento largo —
+// más de la mitad del ancho de la propia fila — activa la zona de borrado: a partir de ahí,
+// "deleteProgress" crece de 0 a 1 de forma continua (no en un solo salto) a medida que se
+// sigue arrastrando hasta el tope, para que el rótulo rojo de "Borrar" se expanda con
+// suavidad en vez de aparecer de golpe. Si se suelta dentro de esa zona (deleteProgress > 0,
+// equivalente al antiguo "pastThreshold"), dispara onFullSwipe (que siempre debe abrir una
+// confirmación antes de borrar nada).
 //
 // El efecto se suscribe UNA sola vez (deps []): si "onFullSwipe" (una función definida en
 // línea por el padre) formara parte de las dependencias, el efecto se desmontaría y volvería
@@ -22,6 +24,7 @@ export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [pastThreshold, setPastThreshold] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState(0);
   const rowRef = useRef(null);
   const offsetRef = useRef(0);
   const onFullSwipeRef = useRef(onFullSwipe);
@@ -56,6 +59,11 @@ export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
         offsetRef.current = next;
         setOffset(next);
         setPastThreshold(next <= drag.threshold);
+        // 0 justo al cruzar el 50% del ancho (drag.threshold), 1 al llegar al tope de
+        // arrastre (drag.maxDrag) — el tramo "extra" que ya existía tras el umbral, ahora
+        // usado para animar el crecimiento en vez de solo determinar un booleano.
+        const growth = next <= drag.threshold ? Math.min(1, (next - drag.threshold) / (drag.maxDrag - drag.threshold)) : 0;
+        setDeleteProgress(growth);
       }
     };
     const onEnd = () => {
@@ -74,6 +82,7 @@ export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
       drag.axis = null;
       setDragging(false);
       setPastThreshold(false);
+      setDeleteProgress(0);
     };
     el.addEventListener('touchstart', onStart, { passive: true });
     el.addEventListener('touchmove', onMove, { passive: false });
@@ -88,7 +97,7 @@ export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
   }, []);
 
   const close = () => { offsetRef.current = 0; setOffset(0); };
-  return { rowRef, offset, dragging, pastThreshold, close };
+  return { rowRef, offset, dragging, pastThreshold, deleteProgress, close };
 }
 
 // Ancho del panel de acciones reveladas al deslizar: 3 botones de 64px (w-16) cada uno.

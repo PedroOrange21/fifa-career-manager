@@ -16,7 +16,7 @@ import ConfirmModal from '../common/ConfirmModal';
 // hover en escritorio, ambos abriendo el mismo menú de acciones contextual ("moreActions"),
 // que varía según la lista (Transferibles/Cedibles/Cedidos a otros Clubes).
 function OperationRow({ player, chipClassName, chipTextClassName, onClick, onDelete, onEdit, moreActions, children }) {
-  const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(onDelete, ROW_ACTION_WIDTH);
+  const { rowRef, offset, dragging, deleteProgress, close } = useSwipeReveal(onDelete, ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
   const moreBtnDesktopRef = useRef(null);
@@ -95,11 +95,12 @@ function OperationRow({ player, chipClassName, chipTextClassName, onClick, onDel
         </div>
       </div>
 
-      {pastThreshold && (
-        <div className="absolute inset-0 z-10 bg-red-500 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden">
-          <Trash2 size={18} /> Borrar
-        </div>
-      )}
+      {/* Umbral de borrado continuo (solo móvil): el rótulo rojo se expande suavemente
+          (deleteProgress) en vez de aparecer de golpe, igual que en Plantilla/Academia. */}
+      <div className="absolute inset-y-0 right-0 z-10 bg-red-500 sm:hidden pointer-events-none rounded-xl" style={{ width: `${deleteProgress * 100}%`, transition: dragging ? 'none' : 'width 200ms ease-out' }} />
+      <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden pointer-events-none" style={{ opacity: deleteProgress, transition: dragging ? 'none' : 'opacity 200ms ease-out' }}>
+        <Trash2 size={18} /> Borrar
+      </div>
 
       {showMore && moreRect && createPortal(
         <div
