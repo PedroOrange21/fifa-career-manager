@@ -106,10 +106,12 @@ export default function FinanceTab() {
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconWrapClass}`}><Icon size={16} /></div>
                     <div className="min-w-0">
                       <div className="font-bold text-sm text-fg truncate">{t.playerName}</div>
+                      {/* Formato compacto "Etiqueta · T.X": sustituye la fecha de calendario
+                          por la temporada del movimiento (t.seasonNumber, guardado desde
+                          logTransaction), integrada en la misma línea sin competir con el
+                          importe de la derecha gracias al min-w-0 + truncate del contenedor. */}
                       <div className="text-[9px] text-fg-faint font-black uppercase tracking-widest truncate">
-                        {t.type === 'cesion' && 'Ahorro salarial · '}
-                        {t.type === 'cesion_entrante' && 'Cesión entrante · '}
-                        {new Date(t.date).toLocaleDateString('es-ES')}
+                        {t.type === 'compra' ? 'Fichaje' : t.type === 'venta' ? 'Traspaso' : t.type === 'cesion' ? 'Ahorro salarial' : 'Cesión entrante'} · T.{t.seasonNumber || 1}
                       </div>
                     </div>
                   </div>

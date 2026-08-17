@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { TrendingUp, TrendingDown, Scale, LineChart, Shirt, Wallet, Tag, ChevronDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, Scale, LineChart, Shirt, Wallet, Tag, ChevronDown, Info } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency } from '../../utils/format';
@@ -111,7 +111,8 @@ function GroupBreakdown({ views, activeView, onChangeView }) {
 // operación (ver sellPlayer en ClubDataContext).
 function ProfitabilityCard({ transactions }) {
   const [view, setView] = useState('all');
-  const ventas = transactions.filter((t) => t.type === 'venta');
+  const [showList, setShowList] = useState(false);
+  const ventas = [...transactions.filter((t) => t.type === 'venta')].sort((a, b) => b.date - a.date);
   const academyVentas = ventas.filter((t) => (t.originalCost ?? 0) === 0);
   const signedVentas = ventas.filter((t) => (t.originalCost ?? 0) > 0);
 
@@ -120,18 +121,20 @@ function ProfitabilityCard({ transactions }) {
   const signedNet = signedVentas.reduce((sum, t) => sum + (t.netProfit ?? ((t.totalAmount ?? t.amount) - (t.originalCost || 0))), 0);
 
   const views = {
-    all: { label: 'Todos', value: allProfit },
-    academy: { label: 'Canteranos', value: academyIncome },
-    signed: { label: 'No Canteranos', value: signedNet },
+    all: { label: 'Todos', value: allProfit, list: ventas },
+    academy: { label: 'Canteranos', value: academyIncome, list: academyVentas },
+    signed: { label: 'No Canteranos', value: signedNet, list: signedVentas },
   };
   const active = views[view];
+
+  const switchView = (id) => { if (id === view) return; setShowList(false); setView(id); };
 
   return (
     <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
       <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><TrendingUp size={13} /> Beneficio por Traspasos</h3>
       <div className="flex bg-well p-1 rounded-2xl border border-border-subtle mb-4">
         {Object.entries(views).map(([id, v]) => (
-          <button key={id} type="button" onClick={() => setView(id)} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all touch-manipulation ${view === id ? 'bg-surface text-fg shadow-sm border border-border-subtle' : 'text-fg-muted hover:text-fg-secondary'}`}>
+          <button key={id} type="button" onClick={() => switchView(id)} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all touch-manipulation ${view === id ? 'bg-surface text-fg shadow-sm border border-border-subtle' : 'text-fg-muted hover:text-fg-secondary'}`}>
             {v.label}
           </button>
         ))}
@@ -142,6 +145,36 @@ function ProfitabilityCard({ transactions }) {
         {view === 'academy' && 'Total ingresado por ventas de canteranos'}
         {view === 'signed' && 'Balance neto de compras vs. ventas de fichajes'}
       </p>
+
+      {/* Desglose jugador a jugador de la cifra activa: se repliega solo, sin desplazar el
+          resto de la pantalla, hasta que el usuario decide consultarlo. */}
+      <button type="button" onClick={() => setShowList((v) => !v)} className="w-full flex items-center justify-between mt-4 pt-3 border-t border-border-subtle text-[9px] font-black uppercase tracking-widest text-fg-muted hover:text-fg transition-colors touch-manipulation">
+        <span>{active.list.length} Traspaso{active.list.length === 1 ? '' : 's'}</span>
+        <ChevronDown size={14} className={`transition-transform duration-200 ${showList ? 'rotate-180' : ''}`} />
+      </button>
+      {showList && (
+        <div className="mt-2 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+          {active.list.length === 0 ? (
+            <div className="py-4 text-center text-[9px] font-bold text-fg-faint uppercase tracking-widest">Sin traspasos en esta categoría</div>
+          ) : active.list.map((t) => {
+            const profit = t.netProfit ?? ((t.totalAmount ?? t.amount) - (t.originalCost || 0));
+            const isAcademy = (t.originalCost ?? 0) === 0;
+            return (
+              <div key={t.id} className="p-2.5 bg-well rounded-xl border border-border-subtle">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-black text-fg truncate">{t.playerName}</span>
+                  <span className="text-[8px] font-black text-fg-faint uppercase tracking-widest shrink-0">T.{t.seasonNumber || 1}</span>
+                </div>
+                <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest mt-0.5">{t.position || '—'} · {t.rating ?? '—'} OVR</div>
+                <div className="flex items-center justify-between gap-2 mt-1.5 text-[9px]">
+                  <span className="font-bold text-fg-muted truncate">{formatCurrency(t.totalAmount ?? t.amount)} <span className="text-fg-faint">vs</span> {isAcademy ? 'Cantera' : formatCurrency(t.originalCost || 0)}</span>
+                  <span className={`font-black shrink-0 ${profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{profit >= 0 ? '+' : ''}{formatCurrency(profit)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -206,10 +239,15 @@ export default function FinanceStatsTab() {
   }, [players]);
   const totalSpentByGroup = Object.values(signingGroups).reduce((a, g) => a + g.total, 0);
 
-  // Proyección de balance: presupuesto actual menos la masa salarial mensual sostenida 6
-  // meses — una estimación simple e ilustrativa, no una previsión financiera real.
+  // Proyección de balance: Presupuesto actual + Ingresos proyectados (media histórica de lo
+  // ingresado por temporada, 0 si todavía no hay ninguna venta registrada) - Compromiso
+  // salarial restante (masa salarial mensual sostenida 6 meses, estimación simple e
+  // ilustrativa de "lo que queda de temporada", no una previsión financiera real).
   const transferBudget = activeClub?.transferBudget || 0;
-  const projection6m = transferBudget - totalWage * 6;
+  const projectedIncome = seasonly.length > 0 ? Math.round(seasonly.reduce((sum, s) => sum + s.earned, 0) / seasonly.length) : 0;
+  const MONTHS_REMAINING_ESTIMATE = 6;
+  const wageCommitment = totalWage * MONTHS_REMAINING_ESTIMATE;
+  const finalBalance = transferBudget + projectedIncome - wageCommitment;
 
   const breakdownViews = {
     signing: { tabLabel: 'Fichajes', icon: Tag, groups: signingGroups, total: totalSpentByGroup, emptyLabel: 'Sin fichajes registrados', barColor: 'bg-red-500', playerLabel: 'fichajes' },
@@ -254,9 +292,36 @@ export default function FinanceStatsTab() {
       <GroupBreakdown views={breakdownViews} activeView={breakdownView} onChangeView={setBreakdownView} />
 
       <div className="bg-gradient-to-br from-surface to-well/40 p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-3"><Wallet size={13} /> Proyección de Balance</h3>
-        <div className={`text-lg sm:text-xl md:text-3xl font-black italic tracking-tighter truncate ${projection6m >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(projection6m)}</div>
-        <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest mt-1.5">Estimación a 6 meses (presupuesto actual menos masa salarial sostenida)</p>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2"><Wallet size={13} /> Proyección de Balance</h3>
+          <Info size={13} className="text-fg-faint shrink-0 cursor-help" title="Estimación del saldo al cierre de temporada teniendo en cuenta la masa salarial restante." />
+        </div>
+        <div className={`text-lg sm:text-xl md:text-3xl font-black italic tracking-tighter truncate ${finalBalance >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(finalBalance)}</div>
+        <div className={`inline-flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${finalBalance >= 0 ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+          {finalBalance >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />} {finalBalance >= 0 ? 'Superávit Previsto' : 'Riesgo de Déficit'}
+        </div>
+
+        {/* Desglose visual del cálculo, línea a línea, para que la cifra final nunca se sienta
+            "sacada de la nada". */}
+        <div className="mt-4 pt-3 border-t border-border-subtle space-y-1.5">
+          <div className="flex justify-between items-center text-[10px]">
+            <span className="font-bold text-fg-muted">Presupuesto Actual</span>
+            <span className="font-black text-fg">{formatCurrency(transferBudget)}</span>
+          </div>
+          <div className="flex justify-between items-center text-[10px]">
+            <span className="font-bold text-fg-muted">+ Ingresos Proyectados</span>
+            <span className="font-black text-green-500">+{formatCurrency(projectedIncome)}</span>
+          </div>
+          <div className="flex justify-between items-center text-[10px]">
+            <span className="font-bold text-fg-muted">− Compromiso Salarial Restante</span>
+            <span className="font-black text-red-500">-{formatCurrency(wageCommitment)}</span>
+          </div>
+          <div className="h-px bg-border-subtle my-1" />
+          <div className="flex justify-between items-center text-[10px]">
+            <span className="font-black text-fg-secondary">= Balance Final Estimado</span>
+            <span className={`font-black ${finalBalance >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(finalBalance)}</span>
+          </div>
+        </div>
       </div>
     </div>
   );

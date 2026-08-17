@@ -327,7 +327,13 @@ export function ClubDataProvider({ children }) {
     const netProfit = salePrice - originalCost;
     deferPlayerRemoval(player, `Jugador ${player.name} vendido`, async () => {
       adjustBudget(budgetAmount);
-      logTransaction('venta', player.name, budgetAmount, null, { totalAmount: salePrice, retainedAmount, allocationPercent: effectivePercent, wageFreed: player.wage || 0, originalCost, netProfit });
+      logTransaction('venta', player.name, budgetAmount, null, {
+        totalAmount: salePrice, retainedAmount, allocationPercent: effectivePercent, wageFreed: player.wage || 0, originalCost, netProfit,
+        // Instantánea de posición/media al momento de la venta, para poder listar el jugador
+        // en el desglose de la tarjeta de Beneficio por Traspasos aunque ya no esté en la
+        // plantilla.
+        position: player.positions?.[0] || null, rating: player.rating ?? null,
+      });
     });
   };
 
