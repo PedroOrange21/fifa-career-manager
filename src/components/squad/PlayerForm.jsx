@@ -342,6 +342,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
       if (form.type !== 'Cantera' && (!form.marketValue || parseValue(form.marketValue) <= 0)) return 'Valor de mercado obligatorio.';
       if (form.type !== 'Cantera' && (!form.wage || parseValue(form.wage) <= 0)) return 'El sueldo mensual es obligatorio.';
       if (form.type === 'Comprado' && !hidePurchasePrice && (!form.value || parseValue(form.value) <= 0)) return 'Precio de compra obligatorio.';
+      if (form.type === 'Comprado' && !form.contractYears) return 'Selecciona los años de contrato.';
       if (form.type === 'Cedido' && !form.originClub.trim()) return 'Club de origen obligatorio.';
       if (form.type === 'Cedido' && form.hasBuyOption && (!form.buyOption || parseValue(form.buyOption) <= 0)) return 'Introduce el precio de la opción de compra.';
     }
@@ -670,7 +671,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                         <input type="range" min="0" max="100" step="5" className="flex-1 accent-green-500" value={form.wagePercentage || 0} onChange={(e) => set({ wagePercentage: e.target.value })} />
                         <span className="w-12 text-center font-black text-fg bg-well-strong rounded-lg py-1.5 text-xs shrink-0">{form.wagePercentage || 0}%</span>
                       </div>
-                      <p className="text-[9px] text-fg-faint font-bold ml-1">Tu club paga: {formatCurrency(parseValue(form.wage) * (Number(form.wagePercentage) || 0) / 100)} / mes</p>
+                      <p className="text-[9px] text-fg-faint font-bold ml-1">Tu club paga: {formatCurrency(parseValue(form.wage) * (Number(form.wagePercentage) || 0) / 100)} / mes ({formatCurrency(parseValue(form.wage) * (Number(form.wagePercentage) || 0) / 100 * 12)} / año)</p>
                     </div>
                   )}
 

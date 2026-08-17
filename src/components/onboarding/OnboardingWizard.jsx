@@ -4,6 +4,7 @@ import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency, formatValueInput, parseValue } from '../../utils/format';
 import { resizeImageToDataUrl } from '../../utils/image';
+import { getCardStyle } from '../../utils/cardStyle';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import PlayerForm from '../squad/PlayerForm';
 
@@ -13,14 +14,6 @@ function abbreviateBudget(amount) {
   if (amount >= 1000000) return `${(amount / 1000000).toLocaleString('es-ES', { useGrouping: true })}M €`;
   if (amount >= 1000) return `${amount / 1000}Mil €`;
   return `${amount} €`;
-}
-
-// Iniciales del avatar de respaldo cuando el jugador no tiene foto (p. ej. "EH" para
-// "Erling Haaland"), usadas en la lista desplegable del resumen final.
-function initialsOf(name) {
-  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
 }
 
 // Puerta de entrada: decide si corresponde mostrar el asistente (sin montar sus hooks de
@@ -285,11 +278,11 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                   <p className="text-xs font-bold text-fg-muted">¿Cómo quieres empezar tu Modo Carrera?</p>
                   <button type="button" onClick={() => setStartType('scratch')} className={`w-full p-4 rounded-2xl border text-left transition-all ${startType === 'scratch' ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:bg-well-strong'}`}>
                     <div className="font-black uppercase text-sm flex items-center gap-2"><RotateCcw size={16} /> Empezar desde Cero</div>
-                    <div className="text-[10px] font-bold mt-1 opacity-70">Registra los jugadores base de tu club: sin precio de compra ni cesiones, solo sus datos deportivos y económicos.</div>
+                    <div className="text-[10px] font-bold mt-1 opacity-70">Arranca una carrera limpia y nueva: presupuesto inicial por defecto y plantilla vacía, para ir registrando a tus jugadores paso a paso desde ahora.</div>
                   </button>
                   <button type="button" onClick={() => setStartType('continue')} className={`w-full p-4 rounded-2xl border text-left transition-all ${startType === 'continue' ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:bg-well-strong'}`}>
                     <div className="font-black uppercase text-sm flex items-center gap-2"><Users size={16} /> Modo Carrera ya Empezado</div>
-                    <div className="text-[10px] font-bold mt-1 opacity-70">Registra tu plantilla actual, ficha a ficha, igual que en "Fichar Jugador" (Comprado o Cedido).</div>
+                    <div className="text-[10px] font-bold mt-1 opacity-70">Vuelca los datos de una partida ya avanzada de EA Sports FC: los fichajes que ya hiciste, el presupuesto actual de tu club y tus jugadores reales, ya adaptados.</div>
                   </button>
                 </div>
               )}
@@ -372,11 +365,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                         <div className="p-4 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Sin jugadores todavía</div>
                       ) : activeRosterPlayers.map((p) => (
                         <div key={p.id} className="px-3 py-2.5 flex items-center gap-3">
-                          {p.photo ? (
-                            <img src={p.photo} alt={p.name} className="w-9 h-9 rounded-full object-cover shrink-0 border border-border-subtle" />
-                          ) : (
-                            <div className="w-9 h-9 rounded-full bg-well-strong flex items-center justify-center text-[10px] font-black text-fg-muted shrink-0">{initialsOf(p.name)}</div>
-                          )}
+                          <div className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[6px] opacity-70 font-bold">{p.positions?.[0]}</span><span className="text-[11px]">{p.rating}</span></div>
                           <div className="min-w-0 flex-1">
                             <div className="text-xs font-black text-fg truncate">{p.name}</div>
                             <div className="text-[9px] font-bold text-fg-faint uppercase tracking-wide truncate">{p.positions?.[0] || '—'} · {p.rating} OVR · {p.age} Años</div>
@@ -391,11 +380,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                         <div className="p-4 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Sin canteranos todavía</div>
                       ) : academyRosterPlayers.map((p) => (
                         <div key={p.id} className="px-3 py-2.5 flex items-center gap-3">
-                          {p.photo ? (
-                            <img src={p.photo} alt={p.name} className="w-9 h-9 rounded-full object-cover shrink-0 border border-border-subtle" />
-                          ) : (
-                            <div className="w-9 h-9 rounded-full bg-well-strong flex items-center justify-center text-[10px] font-black text-fg-muted shrink-0">{initialsOf(p.name)}</div>
-                          )}
+                          <div className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[6px] opacity-70 font-bold">{p.positions?.[0]}</span><span className="text-[11px]">{p.rating}</span></div>
                           <div className="min-w-0 flex-1">
                             <div className="text-xs font-black text-fg truncate">{p.name}</div>
                             <div className="text-[9px] font-bold text-fg-faint uppercase tracking-wide truncate">{p.positions?.[0] || '—'} · {p.rating} OVR · {p.age} Años</div>

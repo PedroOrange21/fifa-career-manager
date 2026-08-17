@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { TrendingUp, Calendar, ArrowUpDown, ArrowUp, ArrowDown, ArrowUpCircle, Edit2, Trash2, MoreHorizontal, ShieldAlert, Star, DollarSign, ArrowDownAZ, LayoutGrid, Plus, Search } from 'lucide-react';
+import { TrendingUp, Calendar, ArrowUpDown, ArrowUp, ArrowDown, ArrowUpCircle, Edit2, Trash2, MoreHorizontal, ShieldAlert, Star, ArrowDownAZ, LayoutGrid, Plus, Search } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import { useSwipeReveal } from '../../hooks/useSwipeReveal';
@@ -22,14 +22,32 @@ const HAS_HOVER = typeof window !== 'undefined' && window.matchMedia('(hover: ho
 const SORT_GROUPS = [
   { label: 'Potencial', descId: 'potential-desc', ascId: 'potential-asc', icon: TrendingUp },
   { label: 'Media', descId: 'rating-desc', ascId: 'rating-asc', icon: Star },
-  { label: 'Valor', descId: 'value-desc', ascId: 'value-asc', icon: DollarSign },
   { label: 'Edad', descId: 'age-desc', ascId: 'age-asc', icon: Calendar },
 ];
 
 const SORT_OPTIONS = [
-  { id: 'name-asc', label: 'Nombre (A-Z)', icon: ArrowDownAZ },
   { id: 'position-asc', label: 'Posición en el Campo', icon: LayoutGrid },
 ];
+
+// Código de color inteligente de la badge de potencial: cruza edad actual, media actual y
+// techo del rango de potencial para estimar cuán probable es que el canterano llegue a su
+// máximo. Verde = muy joven con mucho margen de crecimiento todavía; Rojo/Naranja = edad ya
+// avanzada para lo poco que le queda de margen hasta su potencial (progresión estancada);
+// Amarillo = cualquier otro caso, progresión dentro de lo normal.
+const PROJECTION_STYLES = {
+  green: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+  yellow: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
+  red: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
+};
+function getProjectionTier(p) {
+  const ceiling = parsePotentialRange(p.potential)?.max;
+  if (!ceiling) return 'yellow';
+  const gap = ceiling - p.rating;
+  const age = p.age || 0;
+  if (age <= 18 && gap >= 12) return 'green';
+  if (age >= 21 && gap <= 5) return 'red';
+  return 'yellow';
+}
 
 // Orden táctico natural en el terreno de juego (Portero → Defensas → Centrocampistas →
 // Delanteros), mismo criterio que ALL_POSITIONS ya usa en la Plantilla.
@@ -136,7 +154,7 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete }) {
             </div>
             <div className="flex flex-col items-end gap-1.5 shrink-0">
               <span className="text-[8px] text-fg-faint font-black uppercase tracking-widest">{p.age} Años</span>
-              {p.potential ? <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Pot. {p.potential}</span> : null}
+              {p.potential ? <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border ${PROJECTION_STYLES[getProjectionTier(p)]}`}>Pot. {p.potential}</span> : null}
             </div>
           </div>
 
@@ -210,11 +228,10 @@ export default function AcademyTab() {
     else if (sortOrder === 'potential-asc') sorted.sort((a, b) => getPotentialSortValue(a) - getPotentialSortValue(b));
     else if (sortOrder === 'rating-desc') sorted.sort((a, b) => b.rating - a.rating);
     else if (sortOrder === 'rating-asc') sorted.sort((a, b) => a.rating - b.rating);
-    else if (sortOrder === 'value-desc') sorted.sort((a, b) => (b.marketValue || b.value || 0) - (a.marketValue || a.value || 0));
-    else if (sortOrder === 'value-asc') sorted.sort((a, b) => (a.marketValue || a.value || 0) - (b.marketValue || b.value || 0));
     else if (sortOrder === 'age-desc') sorted.sort((a, b) => b.age - a.age);
     else if (sortOrder === 'age-asc') sorted.sort((a, b) => a.age - b.age);
     else if (sortOrder === 'name-asc') sorted.sort((a, b) => a.name.localeCompare(b.name));
+    else if (sortOrder === 'name-desc') sorted.sort((a, b) => b.name.localeCompare(a.name));
     else if (sortOrder === 'position-asc') sorted.sort((a, b) => getPositionOrder(a) - getPositionOrder(b));
     return sorted;
   };
@@ -273,6 +290,19 @@ export default function AcademyTab() {
                   </div>
                 </div>
               ))}
+              {/* Fila de Nombre: mismos botones compactos que los grupos mayor/menor de arriba,
+                  pero con etiquetas A-Z/Z-A en vez de flechas (más claras para orden alfabético). */}
+              <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl">
+                <span className="flex items-center gap-2 text-xs font-bold text-fg-secondary"><ArrowDownAZ size={14} className="shrink-0" /> Nombre</span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button type="button" onClick={() => { setSortOrder('name-asc'); setShowSort(false); }} title="A-Z" className={`px-2 h-7 flex items-center justify-center rounded-lg text-[10px] font-black transition-all ${sortOrder === 'name-asc' ? 'bg-green-500/10 text-green-500' : 'text-fg-faint hover:bg-well hover:text-fg-secondary'}`}>
+                    A-Z
+                  </button>
+                  <button type="button" onClick={() => { setSortOrder('name-desc'); setShowSort(false); }} title="Z-A" className={`px-2 h-7 flex items-center justify-center rounded-lg text-[10px] font-black transition-all ${sortOrder === 'name-desc' ? 'bg-green-500/10 text-green-500' : 'text-fg-faint hover:bg-well hover:text-fg-secondary'}`}>
+                    Z-A
+                  </button>
+                </div>
+              </div>
               <div className="h-px bg-border-subtle my-1 mx-1" />
               {SORT_OPTIONS.map(({ id, label, icon: Icon }) => (
                 <button key={id} onClick={() => { setSortOrder(id); setShowSort(false); }} className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl text-xs font-bold transition-all ${sortOrder === id ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
