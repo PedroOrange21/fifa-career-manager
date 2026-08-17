@@ -19,11 +19,30 @@ export default function SellPlayerModal({ player, onClose }) {
   const [price, setPrice] = useState(formatValueInput(String(player.marketValue || player.value || '')));
   const [allocationPercent, setAllocationPercent] = useState(DEFAULT_ALLOCATION);
   const [customMode, setCustomMode] = useState(false);
+  // Dentro de "Otro" se puede fijar o bien un % personalizado o bien la cifra exacta en euros
+  // que queda disponible para fichajes de inmediato — igual que el correo de confirmación de
+  // traspaso de EA FC ("se ha vendido por X € y dispones de Y € para fichajes"), sin tener que
+  // calcular mentalmente a qué porcentaje equivale ese importe.
+  const [customInputType, setCustomInputType] = useState('percent');
   const [customPercent, setCustomPercent] = useState(String(DEFAULT_ALLOCATION));
+  const [customAmount, setCustomAmount] = useState('');
 
   const totalAmount = parseValue(price);
-  const effectivePercent = customMode ? Math.min(100, Math.max(0, parseInt(customPercent, 10) || 0)) : allocationPercent;
-  const budgetAmount = Math.round(totalAmount * (effectivePercent / 100));
+
+  // customPercent ya no se recorta mientras se escribe (antes se forzaba a 100 en cada tecla,
+  // bloqueando poder escribir con calma); el recorte a un rango 0-100 válido para el cálculo
+  // ocurre aquí, al usarlo, no en el propio campo.
+  let effectivePercent;
+  let budgetAmount;
+  if (customMode && customInputType === 'amount') {
+    const rawAmount = parseValue(customAmount);
+    budgetAmount = Math.max(0, Math.min(totalAmount, rawAmount));
+    effectivePercent = totalAmount > 0 ? Math.round((budgetAmount / totalAmount) * 100) : 0;
+  } else {
+    const rawPercent = customMode ? (parseInt(customPercent, 10) || 0) : allocationPercent;
+    effectivePercent = Math.min(100, Math.max(0, rawPercent));
+    budgetAmount = Math.round(totalAmount * (effectivePercent / 100));
+  }
   const retainedAmount = totalAmount - budgetAmount;
 
   const pickPreset = (pct) => { setCustomMode(false); setAllocationPercent(pct); };
@@ -31,21 +50,17 @@ export default function SellPlayerModal({ player, onClose }) {
   // valor personalizado anterior) en vez de reiniciar siempre a un valor fijo — así el
   // desglose no pega un salto inesperado al pulsar el botón, antes de que el usuario haya
   // escrito nada.
-  const enterCustomMode = () => { setCustomPercent(String(allocationPercent)); setCustomMode(true); };
-  // Igual que los campos monetarios del resto de la app (formatValueInput): se limpia
-  // cualquier carácter que no sea dígito (puntos de miles, comas, etc.) en cada tecleo, en
-  // vez de confiar en el parseo nativo de <input type="number">, y se limita a 100 al vuelo
-  // para que el desglose de abajo nunca muestre un porcentaje fuera de rango mientras se
-  // escribe.
-  const onCustomPercentChange = (e) => {
-    const digits = e.target.value.replace(/\D/g, '');
-    setCustomPercent(digits === '' ? '' : String(Math.min(100, parseInt(digits, 10))));
-  };
+  const enterCustomMode = () => { setCustomPercent(String(allocationPercent)); setCustomInputType('percent'); setCustomMode(true); };
+  const onCustomPercentChange = (e) => setCustomPercent(e.target.value.replace(/\D/g, ''));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (totalAmount <= 0) return;
-    await sellPlayer(player, totalAmount, effectivePercent);
+    // Cuando el modo activo es "Importe (€)", se pasa la cifra exacta introducida por el
+    // usuario en vez de dejar que se recalcule a partir de un porcentaje redondeado, para que
+    // el presupuesto final cuadre céntimo a céntimo con lo mostrado en el desglose.
+    const explicitBudgetAmount = customMode && customInputType === 'amount' ? budgetAmount : null;
+    await sellPlayer(player, totalAmount, effectivePercent, explicitBudgetAmount);
     onClose();
   };
 
@@ -72,12 +87,22 @@ export default function SellPlayerModal({ player, onClose }) {
             </button>
           </div>
           {customMode && (
-            <input type="text" inputMode="numeric" autoFocus placeholder="Ej: 90" className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-red-500 text-center font-black text-fg mt-1 placeholder:text-fg-faint" value={customPercent} onChange={onCustomPercentChange} />
+            <div className="space-y-1.5 mt-1">
+              <div className="grid grid-cols-2 gap-1.5">
+                <button type="button" onClick={() => setCustomInputType('percent')} className={`py-2 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${customInputType === 'percent' ? 'bg-red-500 text-black' : 'bg-well-strong text-fg-muted hover:text-fg'}`}>% Personalizado</button>
+                <button type="button" onClick={() => setCustomInputType('amount')} className={`py-2 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${customInputType === 'amount' ? 'bg-red-500 text-black' : 'bg-well-strong text-fg-muted hover:text-fg'}`}>Importe Disponible (€)</button>
+              </div>
+              {customInputType === 'percent' ? (
+                <input type="text" inputMode="numeric" autoFocus placeholder="Ej: 90" className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-red-500 text-center font-black text-fg placeholder:text-fg-faint" value={customPercent} onChange={onCustomPercentChange} />
+              ) : (
+                <input type="text" inputMode="numeric" autoFocus placeholder="Ej: 36.000.000" className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-red-500 text-center font-black text-fg placeholder:text-fg-faint" value={customAmount} onChange={(e) => formatMoneyLiveWithCursor(e.target, setCustomAmount)} />
+              )}
+            </div>
           )}
         </div>
 
-        {/* Desglose financiero en tiempo real: se recalcula en cada tecleo del precio o cambio
-            de porcentaje, sin ningún paso intermedio de confirmación. */}
+        {/* Desglose financiero en tiempo real: se recalcula en cada tecleo del precio, del
+            porcentaje o del importe disponible, sin ningún paso intermedio de confirmación. */}
         <div className="p-4 bg-well rounded-2xl border border-border-subtle space-y-2.5 mb-6">
           <div className="flex justify-between items-center text-xs">
             <span className="font-bold text-fg-muted">Total Traspaso</span>

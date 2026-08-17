@@ -283,6 +283,7 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
                 <SectionHeader emoji="🔄" title="Cesión" />
                 <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
                   <DetailRow label="Duración de la Cesión" value={current.outboundLoan.duration || 'Sin definir'} />
+                  {current.outboundLoan.buyOption ? <DetailRow label="Opción de Compra" value={formatCurrency(current.outboundLoan.buyOption)} /> : null}
                 </div>
               </>
             )}

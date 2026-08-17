@@ -290,22 +290,28 @@ export function ClubDataProvider({ children }) {
   // allocationPercent: porcentaje del traspaso que la directiva libera de inmediato al
   // presupuesto de fichajes (por defecto 80%); el resto queda "retenido" por la directiva —
   // simplemente no se suma al presupuesto disponible, modelando fondos del club que no van a
-  // reinversión inmediata en el mercado.
-  const sellPlayer = (player, salePrice, allocationPercent = 80) => {
+  // reinversión inmediata en el mercado. explicitBudgetAmount: cuando el modal permite fijar
+  // directamente la cifra disponible en euros (en vez de un %), se pasa aquí ya calculada para
+  // que el presupuesto final cuadre exacto con lo introducido, sin el redondeo que introduciría
+  // recalcularlo a partir de allocationPercent.
+  const sellPlayer = (player, salePrice, allocationPercent = 80, explicitBudgetAmount = null) => {
     if (!player || player.type === 'Cedido') return;
-    const budgetAmount = Math.round(salePrice * (allocationPercent / 100));
+    const budgetAmount = explicitBudgetAmount != null
+      ? Math.max(0, Math.min(salePrice, explicitBudgetAmount))
+      : Math.round(salePrice * (allocationPercent / 100));
     const retainedAmount = salePrice - budgetAmount;
+    const effectivePercent = salePrice > 0 ? Math.round((budgetAmount / salePrice) * 100) : allocationPercent;
     deferPlayerRemoval(player, `Jugador ${player.name} vendido`, async () => {
       adjustBudget(budgetAmount);
-      logTransaction('venta', player.name, budgetAmount, null, { totalAmount: salePrice, retainedAmount, allocationPercent });
+      logTransaction('venta', player.name, budgetAmount, null, { totalAmount: salePrice, retainedAmount, allocationPercent: effectivePercent });
     });
   };
 
-  const cedePlayer = async (player, { destinationClub, duration, wagePercentage }) => {
+  const cedePlayer = async (player, { destinationClub, duration, wagePercentage, buyOption = null }) => {
     if (!user || !activeClubId || !player || player.type === 'Cedido') return;
     await updateDoc(playerDoc(user.uid, activeClubId, player.id), {
       transferStatus: 'CedidoFuera',
-      outboundLoan: { destinationClub, duration, wagePercentage },
+      outboundLoan: { destinationClub, duration, wagePercentage, buyOption: buyOption || null },
     });
     removePlayerFromTactic(player.id);
     const wageSaved = Math.round((player.wage || 0) * (1 - wagePercentage / 100));
