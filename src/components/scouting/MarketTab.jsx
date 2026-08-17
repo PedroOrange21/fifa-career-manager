@@ -191,7 +191,20 @@ function BudgetPlannerCard({ targets, selectedIds }) {
                   </div>
                   <div className="mt-1.5 space-y-0.5">
                     <div className="flex items-center justify-between gap-2 text-[9px]"><span className="font-bold text-fg-muted">Traspaso Estimado</span><span className="font-black text-fg-secondary">{t.estimatedValue > 0 ? formatCurrency(t.estimatedValue) : 'Sin Valor'}</span></div>
-                    <div className="flex items-center justify-between gap-2 text-[9px]"><span className="font-bold text-fg-muted">Sueldo Estimado</span><span className="font-black text-fg-secondary">{t.wage > 0 ? `${formatCurrency(t.wage)}/mes · ${formatCurrency(t.wage * 12)}/año` : 'Sin Salario'}</span></div>
+                    {/* Dos filas superpuestas (mes arriba, año abajo) en vez de un único valor
+                        inline, mismo patrón que el resto de la app (p. ej. Ficha Salarial
+                        Pactada en Estadísticas). */}
+                    <div className="flex items-start justify-between gap-2 text-[9px]">
+                      <span className="font-bold text-fg-muted pt-px">Sueldo Estimado</span>
+                      {t.wage > 0 ? (
+                        <span className="text-right leading-tight shrink-0">
+                          <span className="block font-black text-fg-secondary">{formatCurrency(t.wage)}/mes</span>
+                          <span className="block font-bold text-fg-faint text-[8px] mt-0.5">{formatCurrency(t.wage * 12)}/año</span>
+                        </span>
+                      ) : (
+                        <span className="font-black text-fg-secondary">Sin Salario</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -200,7 +213,13 @@ function BudgetPlannerCard({ targets, selectedIds }) {
                   suma de todas las filas anteriores. */}
               <div className="p-2.5 bg-well-strong rounded-xl border border-border-subtle">
                 <div className="flex items-center justify-between gap-2 text-[9px]"><span className="font-black uppercase tracking-widest text-fg-secondary">Total Traspasos</span><span className="font-black text-fg">{formatCurrency(totalTransfer)}</span></div>
-                <div className="flex items-center justify-between gap-2 text-[9px] mt-1"><span className="font-black uppercase tracking-widest text-fg-secondary">Total Masa Salarial</span><span className="font-black text-fg">{formatCurrency(totalWageMonthly)}/mes · {formatCurrency(totalWageMonthly * 12)}/año</span></div>
+                <div className="flex items-start justify-between gap-2 text-[9px] mt-1">
+                  <span className="font-black uppercase tracking-widest text-fg-secondary pt-px">Total Masa Salarial</span>
+                  <span className="text-right leading-tight shrink-0">
+                    <span className="block font-black text-fg">{formatCurrency(totalWageMonthly)}/mes</span>
+                    <span className="block font-bold text-fg-faint text-[8px] mt-0.5">{formatCurrency(totalWageMonthly * 12)}/año</span>
+                  </span>
+                </div>
               </div>
             </>
           )}
