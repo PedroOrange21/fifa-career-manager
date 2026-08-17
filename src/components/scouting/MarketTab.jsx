@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react';
-import { Plus, Edit2, Trash2, UserPlus, ShieldAlert, Target, Search, SlidersHorizontal, X, MapPin, ChevronDown } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, Edit2, Trash2, UserPlus, ShieldAlert, Target, Search, SlidersHorizontal, X, MapPin, ChevronDown, Check, Wallet } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { getCardStyle } from '../../utils/cardStyle';
-import { formatValueInput, abbreviateValue } from '../../utils/format';
+import { formatValueInput, abbreviateValue, formatCurrency } from '../../utils/format';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import TargetForm, { STATUS_OPTIONS, STATUS_LABELS, STATUS_STYLE } from './TargetForm';
 import ConfirmModal from '../common/ConfirmModal';
@@ -26,13 +26,21 @@ const positionsOf = (t) => t.positions || (t.primaryPosition ? [t.primaryPositio
 // nombre en italic uppercase junto a la bandera de nacionalidad, posición en verde debajo.
 // Vista compacta por defecto (badge, identificación, posiciones, club/edad/estado); la
 // flecha despliega el resto (economía, notas y acciones).
-function TargetRow({ t, onSign, onEdit, onDelete }) {
+function TargetRow({ t, onSign, onEdit, onDelete, selected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
   const positions = positionsOf(t);
 
   return (
-    <div className={`bg-surface p-3 md:p-4 border-l-4 ${STATUS_BORDER[t.status] || STATUS_BORDER.Seguimiento}`}>
+    <div className={`p-3 md:p-4 border-l-4 transition-colors ${STATUS_BORDER[t.status] || STATUS_BORDER.Seguimiento} ${selected ? 'bg-green-500/5' : 'bg-surface'}`}>
       <div className="flex items-start gap-3 md:gap-4">
+        <button
+          type="button"
+          onClick={() => onToggleSelect(t.id)}
+          title={selected ? 'Quitar de la selección' : 'Seleccionar para el planificador'}
+          className={`w-6 h-6 md:w-[22px] md:h-[22px] mt-1.5 md:mt-2 rounded-md border-2 flex items-center justify-center shrink-0 transition-all touch-manipulation ${selected ? 'bg-green-500 border-green-500' : 'border-border-subtle bg-well hover:border-green-500/50'}`}
+        >
+          {selected && <Check size={13} className="text-black" strokeWidth={3.5} />}
+        </button>
         <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(t.rating || 0)}`}>
           <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{t.primaryPosition || positions[0] || '—'}</span>
           <span className="text-lg md:text-xl">{t.rating || '—'}</span>
@@ -79,6 +87,75 @@ function TargetRow({ t, onSign, onEdit, onDelete }) {
   );
 }
 
+// Planificador de fichajes: calcula sobre la marcha el impacto económico de fichar a los
+// objetivos marcados con el checkbox de cada tarjeta. Con 0 seleccionados no tiene sentido
+// mostrar un desglose vacío, así que cae automáticamente a la vista "Todos los Objetivos"; en
+// cuanto se marca el primero, salta a "Seleccionados" para que el resultado del cálculo sea
+// inmediato — pero el usuario puede volver a pulsar "Todos" en cualquier momento para consultar
+// el coste total de fichar a toda la lista sin perder su selección.
+function BudgetPlannerCard({ targets, selectedIds }) {
+  const [view, setView] = useState('all');
+  const hadSelectionRef = useRef(false);
+  const hasSelection = selectedIds.size > 0;
+
+  useEffect(() => {
+    if (hasSelection && !hadSelectionRef.current) setView('selected');
+    if (!hasSelection) setView('all');
+    hadSelectionRef.current = hasSelection;
+  }, [hasSelection]);
+
+  const selectedTargets = targets.filter((t) => selectedIds.has(t.id));
+  const activeTargets = view === 'selected' ? selectedTargets : targets;
+  const totalTransfer = activeTargets.reduce((sum, t) => sum + (t.estimatedValue || 0), 0);
+  const totalWageMonthly = activeTargets.reduce((sum, t) => sum + (t.wage || 0), 0);
+
+  return (
+    <div className="flex-1 min-w-0 bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-1.5 truncate"><Wallet size={12} className="shrink-0" /> Planificador de Fichajes</span>
+        {hasSelection && (
+          <div className="flex bg-well p-0.5 rounded-lg border border-border-subtle shrink-0">
+            <button type="button" onClick={() => setView('selected')} className={`px-2 py-1 rounded-md text-[8px] font-black uppercase transition-all touch-manipulation ${view === 'selected' ? 'bg-surface text-fg shadow-sm' : 'text-fg-faint hover:text-fg-secondary'}`}>Selec.</button>
+            <button type="button" onClick={() => setView('all')} className={`px-2 py-1 rounded-md text-[8px] font-black uppercase transition-all touch-manipulation ${view === 'all' ? 'bg-surface text-fg shadow-sm' : 'text-fg-faint hover:text-fg-secondary'}`}>Todos</button>
+          </div>
+        )}
+      </div>
+
+      {targets.length === 0 ? (
+        <p className="text-[10px] text-fg-faint font-bold">Sin objetivos todavía.</p>
+      ) : !hasSelection && view === 'all' ? (
+        <>
+          <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest mb-1.5">Selecciona objetivos para calcular el presupuesto necesario</p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+            <span className="text-xs md:text-sm font-black italic text-fg">{formatCurrency(totalTransfer)}</span>
+            <span className="text-[9px] font-bold text-fg-muted">Traspasos · {targets.length} Objetivos</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5">
+            <span className="text-[10px] font-black text-fg-secondary">{formatCurrency(totalWageMonthly)}/mes</span>
+            <span className="text-[9px] font-bold text-fg-faint">| {formatCurrency(totalWageMonthly * 12)}/año</span>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest mb-1.5">
+            {view === 'selected' ? `${selectedTargets.length} Objetivo${selectedTargets.length === 1 ? '' : 's'} Seleccionado${selectedTargets.length === 1 ? '' : 's'}` : `Coste Total de la Lista · ${targets.length} Objetivos`}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0">
+              <div className="text-xs md:text-sm font-black italic text-fg truncate">{formatCurrency(totalTransfer)}</div>
+              <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">Traspaso Total</div>
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs md:text-sm font-black italic text-fg truncate">{formatCurrency(totalWageMonthly)}/mes</div>
+              <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">{formatCurrency(totalWageMonthly * 12)}/año</div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function MarketTab({ onSignTarget }) {
   const { targets, targetToDelete, setTargetToDelete, confirmDeleteTarget } = useClubData();
   const [showForm, setShowForm] = useState(false);
@@ -88,6 +165,12 @@ export default function MarketTab({ onSignTarget }) {
   const [showFilters, setShowFilters] = useState(false);
   const filtersRef = useRef(null);
   useOnClickOutside(filtersRef, () => setShowFilters(false), showFilters);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const toggleSelect = (id) => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
@@ -184,14 +267,19 @@ export default function MarketTab({ onSignTarget }) {
         <span className="text-[10px] text-fg-muted font-black uppercase tracking-widest flex items-center gap-2"><Target size={14} /> {sorted.length} Objetivos en Seguimiento</span>
       </div>
 
-      <button onClick={openNewForm} className="w-full bg-green-500 text-black p-4 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 hover:bg-green-400">
-        <Plus size={16} /> Añadir Objetivo
-      </button>
+      {/* Planificador a la izquierda (flex-1) + "Añadir Objetivo" desplazado a la derecha,
+          compacto en móvil (solo icono) y con etiqueta a partir de md. */}
+      <div className="flex items-stretch gap-2">
+        <BudgetPlannerCard targets={targets} selectedIds={selectedIds} />
+        <button onClick={openNewForm} className="shrink-0 w-14 md:w-auto md:px-5 bg-green-500 text-black rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 hover:bg-green-400 touch-manipulation">
+          <Plus size={18} /> <span className="hidden md:inline">Añadir Objetivo</span>
+        </button>
+      </div>
 
       <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
         {sorted.length === 0 && (<div className="p-16 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">{targets.length === 0 ? 'Sin Objetivos Todavía' : 'Sin Resultados'}</div>)}
         {sorted.map((t) => (
-          <TargetRow key={t.id} t={t} onSign={signTarget} onEdit={openEditForm} onDelete={setTargetToDelete} />
+          <TargetRow key={t.id} t={t} onSign={signTarget} onEdit={openEditForm} onDelete={setTargetToDelete} selected={selectedIds.has(t.id)} onToggleSelect={toggleSelect} />
         ))}
       </div>
 
