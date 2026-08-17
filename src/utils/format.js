@@ -15,6 +15,33 @@ export const parseValue = (val) => {
   return Number(String(val).replace(/\./g, ''));
 };
 
+// Formatea un input de dinero con puntos de miles en tiempo real (cada tecleo) SIN que el
+// cursor salte al final del texto al editar un dígito en medio del número — el mismo problema
+// que ya se resolvió puntualmente en el asistente de "Fichar Jugador" (formatMoneyField),
+// ahora extraído aquí para poder reutilizarlo en cualquier campo monetario de la app (p. ej.
+// el precio de venta del modal de Vender Jugador) sin duplicar la lógica de reposicionamiento
+// del cursor. "input" es el elemento <input> nativo (event.target); "onFormatted" recibe el
+// valor ya formateado para guardarlo en el estado del campo.
+export const formatMoneyLiveWithCursor = (input, onFormatted) => {
+  const raw = input.value;
+  const cursorPos = input.selectionStart ?? raw.length;
+  const digitsBeforeCursor = raw.slice(0, cursorPos).replace(/\D/g, '').length;
+  const formatted = formatValueInput(raw);
+  onFormatted(formatted);
+  requestAnimationFrame(() => {
+    if (!input.isConnected) return;
+    let seen = 0; let pos = formatted.length;
+    if (digitsBeforeCursor === 0) { pos = 0; }
+    else {
+      for (let i = 0; i < formatted.length; i++) {
+        if (/\d/.test(formatted[i])) seen++;
+        if (seen === digitsBeforeCursor) { pos = i + 1; break; }
+      }
+    }
+    try { input.setSelectionRange(pos, pos); } catch (err) { /* input puede haber perdido el foco */ }
+  });
+};
+
 export const formatCurrency = (val) => {
   const num = parseValue(String(val ?? 0));
   return num.toLocaleString('es-ES', { useGrouping: true }) + ' €';

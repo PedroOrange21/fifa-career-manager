@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, Tag } from 'lucide-react';
-import { formatValueInput, parseValue, formatCurrency } from '../../utils/format';
+import { formatValueInput, parseValue, formatCurrency, formatMoneyLiveWithCursor } from '../../utils/format';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
@@ -56,7 +56,7 @@ export default function SellPlayerModal({ player, onClose }) {
 
         <div className="space-y-1 mb-5">
           <label className="text-[9px] font-black text-fg-muted ml-1">Precio de Venta (€)</label>
-          <input type="text" autoFocus required inputMode="numeric" placeholder="Ej: 60.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-red-500 text-center font-black text-lg text-fg placeholder:text-fg-faint" value={price} onChange={(e) => setPrice(formatValueInput(e.target.value))} />
+          <input type="text" autoFocus required inputMode="numeric" placeholder="Ej: 60.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-red-500 text-center font-black text-lg text-fg placeholder:text-fg-faint" value={price} onChange={(e) => formatMoneyLiveWithCursor(e.target, setPrice)} />
         </div>
 
         <div className="space-y-2 mb-5">
@@ -83,12 +83,9 @@ export default function SellPlayerModal({ player, onClose }) {
             <span className="font-bold text-fg-muted">Total Traspaso</span>
             <span className="font-black text-fg">+{formatCurrency(totalAmount)}</span>
           </div>
-          <div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="font-bold text-fg-muted">Añadido a Fichajes ({effectivePercent}%)</span>
-              <span className="font-black text-green-500">+{formatCurrency(budgetAmount)}</span>
-            </div>
-            <p className="text-[8px] text-green-500/70 font-black uppercase tracking-widest text-right mt-0.5">Disponible de inmediato</p>
+          <div className="flex justify-between items-center text-xs">
+            <span className="font-bold text-fg-muted">Añadido a Fichajes ({effectivePercent}%)</span>
+            <span className="font-black text-green-500">+{formatCurrency(budgetAmount)}</span>
           </div>
           <div className="flex justify-between items-center text-xs">
             <span className="font-bold text-fg-muted">Retenido por la Directiva ({100 - effectivePercent}%)</span>
