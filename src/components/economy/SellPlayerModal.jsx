@@ -27,6 +27,20 @@ export default function SellPlayerModal({ player, onClose }) {
   const retainedAmount = totalAmount - budgetAmount;
 
   const pickPreset = (pct) => { setCustomMode(false); setAllocationPercent(pct); };
+  // Al entrar en "Otro" se parte del porcentaje que estuviera activo (preset o el propio
+  // valor personalizado anterior) en vez de reiniciar siempre a un valor fijo — así el
+  // desglose no pega un salto inesperado al pulsar el botón, antes de que el usuario haya
+  // escrito nada.
+  const enterCustomMode = () => { setCustomPercent(String(allocationPercent)); setCustomMode(true); };
+  // Igual que los campos monetarios del resto de la app (formatValueInput): se limpia
+  // cualquier carácter que no sea dígito (puntos de miles, comas, etc.) en cada tecleo, en
+  // vez de confiar en el parseo nativo de <input type="number">, y se limita a 100 al vuelo
+  // para que el desglose de abajo nunca muestre un porcentaje fuera de rango mientras se
+  // escribe.
+  const onCustomPercentChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, '');
+    setCustomPercent(digits === '' ? '' : String(Math.min(100, parseInt(digits, 10))));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -53,12 +67,12 @@ export default function SellPlayerModal({ player, onClose }) {
                 {pct}%
               </button>
             ))}
-            <button type="button" onClick={() => setCustomMode(true)} className={`py-2.5 rounded-xl text-[9px] font-black uppercase transition-all touch-manipulation ${customMode ? 'bg-red-500 text-black' : 'bg-well text-fg-muted hover:bg-well-strong border border-border-subtle'}`}>
+            <button type="button" onClick={enterCustomMode} className={`py-2.5 rounded-xl text-[9px] font-black uppercase transition-all touch-manipulation ${customMode ? 'bg-red-500 text-black' : 'bg-well text-fg-muted hover:bg-well-strong border border-border-subtle'}`}>
               Otro
             </button>
           </div>
           {customMode && (
-            <input type="number" min="0" max="100" autoFocus inputMode="numeric" className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-red-500 text-center font-black text-fg mt-1" value={customPercent} onChange={(e) => setCustomPercent(e.target.value)} />
+            <input type="text" inputMode="numeric" autoFocus placeholder="Ej: 90" className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-red-500 text-center font-black text-fg mt-1 placeholder:text-fg-faint" value={customPercent} onChange={onCustomPercentChange} />
           )}
         </div>
 
