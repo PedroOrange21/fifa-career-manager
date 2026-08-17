@@ -42,7 +42,7 @@ function DetailRow({ label, value }) {
   );
 }
 
-export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onReplace, hideMarketStatus = false, hideTacticsActions = false }) {
+export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onReplace, onOpenFullDetail, hideMarketStatus = false, hideTacticsActions = false }) {
   useBodyScrollLock();
   useAutoHideChrome();
   const { lineup, bench, formation, assignPlayerToSlot, setPlayerTransferStatus, setPlayerToDelete, confirmDeletePlayer } = useClubData();
@@ -208,7 +208,18 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
             <button onClick={() => onEdit(current)} title="Editar Jugador" className="absolute bottom-3 right-3 p-1.5 rounded-full bg-well-strong text-fg-faint hover:text-blue-500 transition-colors z-10"><Edit2 size={14} /></button>
           )}
           <div className="flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center font-black leading-none shadow-lg flex-shrink-0 ${getCardStyle(current.rating)}`}><span className="text-[8px] opacity-70 font-bold mb-0.5">{current.positions?.[0]}</span><span className="text-xl">{current.rating}</span></div>
+            {onOpenFullDetail ? (
+              <button
+                type="button"
+                onClick={() => onOpenFullDetail(current)}
+                title="Ver ficha completa"
+                className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center font-black leading-none shadow-lg flex-shrink-0 touch-manipulation active:scale-95 transition-transform ${getCardStyle(current.rating)}`}
+              >
+                <span className="text-[8px] opacity-70 font-bold mb-0.5">{current.positions?.[0]}</span><span className="text-xl">{current.rating}</span>
+              </button>
+            ) : (
+              <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center font-black leading-none shadow-lg flex-shrink-0 ${getCardStyle(current.rating)}`}><span className="text-[8px] opacity-70 font-bold mb-0.5">{current.positions?.[0]}</span><span className="text-xl">{current.rating}</span></div>
+            )}
             <div className="flex-1 min-w-0">
               <div className="font-black uppercase italic text-lg truncate tracking-tighter leading-tight text-black dark:text-white">{current.name}</div>
               <div className="text-[10px] text-green-500/80 font-black uppercase tracking-widest mb-1 mt-0.5 truncate">{current.positions?.join(' · ')}</div>

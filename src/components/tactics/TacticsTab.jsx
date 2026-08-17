@@ -18,6 +18,7 @@ export default function TacticsTab({ onNavigateToScouting }) {
   const [pickingSlot, setPickingSlot] = useState(null);
   const [selectedPlayerInfo, setSelectedPlayerInfo] = useState(null);
   const [infoSlot, setInfoSlot] = useState(null);
+  const [fullDetailPlayer, setFullDetailPlayer] = useState(null);
   const [editingPlayer, setEditingPlayer] = useState(null);
 
   const openInfo = (player, slot) => { setSelectedPlayerInfo(player); setInfoSlot(slot); };
@@ -58,7 +59,20 @@ export default function TacticsTab({ onNavigateToScouting }) {
           onClose={() => setSelectedPlayerInfo(null)}
           onEdit={(p) => { setSelectedPlayerInfo(null); setEditingPlayer(p); }}
           onReplace={(slot) => { setSelectedPlayerInfo(null); setPickingSlot(slot); }}
+          onOpenFullDetail={(p) => { setSelectedPlayerInfo(null); setFullDetailPlayer(p); }}
           hideMarketStatus
+        />
+      )}
+
+      {/* Al pulsar la media y posición principal dentro de la tarjeta resumida de la modal de
+          acción rápida, se abre la misma ficha de detalle completa (solo lectura) que en
+          Plantilla, con su lápiz propio para pasar a edición. */}
+      {fullDetailPlayer && (
+        <PlayerInfoModal
+          player={fullDetailPlayer}
+          onClose={() => setFullDetailPlayer(null)}
+          onEdit={(p) => { setFullDetailPlayer(null); setEditingPlayer(p); }}
+          hideTacticsActions
         />
       )}
 

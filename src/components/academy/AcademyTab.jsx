@@ -8,6 +8,7 @@ import { getCardStyle } from '../../utils/cardStyle';
 import { parsePotentialRange } from '../../utils/format';
 import { ALL_POSITIONS } from '../../constants/positions';
 import PlayerForm from '../squad/PlayerForm';
+import PlayerInfoModal from '../squad/PlayerInfoModal';
 import ConfirmModal from '../common/ConfirmModal';
 import UpdateRatingModal from './UpdateRatingModal';
 import PromoteToFirstTeamModal from './PromoteToFirstTeamModal';
@@ -75,7 +76,7 @@ function PotentialBar({ rating, potential }) {
 // Mismo gesto de deslizar y menú "..." que las filas de la Plantilla (PlayerList.jsx), pero
 // simplificado: un canterano no participa del mercado, así que aquí solo hay Editar y Borrar
 // (sin transferible/cedible/vender/ceder ni la opción "Más" intermedia en móvil).
-function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete }) {
+function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail }) {
   const { rowRef, offset, dragging, pastThreshold, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
@@ -134,7 +135,13 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete }) {
             oculto detrás en reposo. El resto de la tarjeta (evolución + botones) no se mueve. */}
         <div className="relative flex items-center gap-3 md:gap-4">
           <div className="relative flex items-center gap-3 md:gap-4 flex-1 min-w-0 md:transition-transform md:duration-300 md:ease-in-out md:group-hover:translate-x-11">
-            <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span></div>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); if (offset < 0) { close(); return; } onViewDetail?.(p); }}
+              className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 touch-manipulation active:scale-95 transition-transform ${getCardStyle(p.rating)}`}
+            >
+              <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span>
+            </button>
             <div className="flex-1 min-w-0">
               <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{p.name}</div>
               <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest">{p.positions?.join(' · ')}</div>
@@ -188,6 +195,7 @@ export default function AcademyTab() {
   const { players, playerToDelete, setPlayerToDelete, confirmDeletePlayer } = useClubData();
   const [updatingPlayer, setUpdatingPlayer] = useState(null);
   const [promotingPlayer, setPromotingPlayer] = useState(null);
+  const [selectedPlayerInfo, setSelectedPlayerInfo] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [formPrefill, setFormPrefill] = useState(null);
@@ -312,6 +320,7 @@ export default function AcademyTab() {
             key={p.id} p={p}
             onUpdate={setUpdatingPlayer} onPromote={setPromotingPlayer}
             onEdit={openEditForm} onDelete={setPlayerToDelete}
+            onViewDetail={setSelectedPlayerInfo}
           />
         ))}
       </div>
@@ -319,6 +328,14 @@ export default function AcademyTab() {
       {updatingPlayer && <UpdateRatingModal player={updatingPlayer} onClose={() => setUpdatingPlayer(null)} />}
       {promotingPlayer && <PromoteToFirstTeamModal player={promotingPlayer} onClose={() => setPromotingPlayer(null)} />}
       {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} initialStep={formInitialStep} lockedType="Cantera" onClose={() => setShowForm(false)} />}
+      {selectedPlayerInfo && (
+        <PlayerInfoModal
+          player={selectedPlayerInfo}
+          onClose={() => setSelectedPlayerInfo(null)}
+          onEdit={(p) => { setSelectedPlayerInfo(null); openEditForm(p); }}
+          hideTacticsActions
+        />
+      )}
 
       {playerToDelete && (
         <ConfirmModal
