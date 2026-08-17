@@ -8,12 +8,11 @@ import { useEffect, useRef, useState } from 'react';
 // decide en los primeros píxeles de movimiento y ya no cambia durante ese mismo toque.
 //
 // Deslizamiento corto: deja la fila abierta (revela Editar/Eliminar). Deslizamiento largo —
-// más de la mitad del ancho de la propia fila — activa la zona de borrado: a partir de ahí,
-// "deleteProgress" crece de 0 a 1 de forma continua (no en un solo salto) a medida que se
-// sigue arrastrando hasta el tope, para que el rótulo rojo de "Borrar" se expanda con
-// suavidad en vez de aparecer de golpe. Si se suelta dentro de esa zona (deleteProgress > 0,
-// equivalente al antiguo "pastThreshold"), dispara onFullSwipe (que siempre debe abrir una
-// confirmación antes de borrar nada).
+// más de la mitad del ancho de la propia fila — dispara onFullSwipe al soltar (que siempre
+// debe abrir una confirmación antes de borrar nada). Durante todo el gesto, "dragProgress"
+// crece de 0 (dedo en reposo) a 1 (tope de arrastre) de forma continua desde el primer
+// píxel de movimiento, para que el rótulo rojo de "Borrar" se expanda con la misma fluidez
+// en Plantilla, Academia y Operaciones.
 //
 // El efecto se suscribe UNA sola vez (deps []): si "onFullSwipe" (una función definida en
 // línea por el padre) formara parte de las dependencias, el efecto se desmontaría y volvería
@@ -23,13 +22,6 @@ import { useEffect, useRef, useState } from 'react';
 export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
-  const [pastThreshold, setPastThreshold] = useState(false);
-  const [deleteProgress, setDeleteProgress] = useState(0);
-  // Progreso continuo desde el primer píxel de arrastre (0) hasta el tope de recorrido (1),
-  // a diferencia de "deleteProgress" (que solo crece en el último tramo, tras cruzar el 50%
-  // del ancho). Pensado para overlays que deben sentirse fluidos y reactivos durante todo el
-  // gesto, no solo al final — usado hoy por Operaciones; el resto de listas sigue leyendo
-  // "deleteProgress" sin cambios.
   const [dragProgress, setDragProgress] = useState(0);
   const rowRef = useRef(null);
   const offsetRef = useRef(0);
@@ -64,12 +56,8 @@ export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
         const next = Math.max(drag.maxDrag, Math.min(0, drag.startOffset + dx));
         offsetRef.current = next;
         setOffset(next);
-        setPastThreshold(next <= drag.threshold);
-        // 0 justo al cruzar el 50% del ancho (drag.threshold), 1 al llegar al tope de
-        // arrastre (drag.maxDrag) — el tramo "extra" que ya existía tras el umbral, ahora
-        // usado para animar el crecimiento en vez de solo determinar un booleano.
-        const growth = next <= drag.threshold ? Math.min(1, (next - drag.threshold) / (drag.maxDrag - drag.threshold)) : 0;
-        setDeleteProgress(growth);
+        // 0 en reposo, 1 al llegar al tope de arrastre (drag.maxDrag): crece desde el primer
+        // píxel del gesto, no solo tras cruzar el umbral de borrado.
         setDragProgress(Math.min(1, next / drag.maxDrag));
       }
     };
@@ -88,8 +76,6 @@ export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
       drag.active = false;
       drag.axis = null;
       setDragging(false);
-      setPastThreshold(false);
-      setDeleteProgress(0);
       setDragProgress(0);
     };
     el.addEventListener('touchstart', onStart, { passive: true });
@@ -105,7 +91,7 @@ export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
   }, []);
 
   const close = () => { offsetRef.current = 0; setOffset(0); };
-  return { rowRef, offset, dragging, pastThreshold, deleteProgress, dragProgress, close };
+  return { rowRef, offset, dragging, dragProgress, close };
 }
 
 // Ancho del panel de acciones reveladas al deslizar: 3 botones de 64px (w-16) cada uno.

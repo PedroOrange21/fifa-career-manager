@@ -126,7 +126,7 @@ function PotentialInfoModal({ onClose }) {
 // simplificado: un canterano no participa del mercado, así que aquí solo hay Editar y Borrar
 // (sin transferible/cedible/vender/ceder ni la opción "Más" intermedia en móvil).
 function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail, onShowPotentialInfo }) {
-  const { rowRef, offset, dragging, deleteProgress, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
+  const { rowRef, offset, dragging, dragProgress, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
   const moreBtnDesktopRef = useRef(null);
@@ -219,10 +219,11 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail
           <button type="button" onClick={() => onPromote(p)} className="flex-1 py-2.5 rounded-xl bg-blue-500/10 text-blue-400 font-black uppercase text-[10px] hover:bg-blue-500/20 transition-all flex items-center justify-center gap-2 border border-blue-500/20 touch-manipulation"><ArrowUpCircle size={14} /> Subir al Primer Equipo</button>
         </div>
 
-        {/* Umbral de borrado continuo (solo móvil), igual que en la Plantilla: el rótulo rojo
-            se expande suavemente (deleteProgress) en vez de aparecer de golpe. */}
-        <div className="absolute inset-y-0 right-0 z-10 bg-red-500 sm:hidden pointer-events-none" style={{ width: `${deleteProgress * 100}%`, transition: dragging ? 'none' : 'width 200ms ease-out' }} />
-        <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden pointer-events-none" style={{ opacity: deleteProgress, transition: dragging ? 'none' : 'opacity 200ms ease-out' }}>
+        {/* Borrado fluido y continuo (solo móvil), idéntico a Operaciones: el rótulo rojo crece
+            desde el primer píxel de arrastre (dragProgress 0→1) en vez de aparecer solo tras
+            cruzar el 50% de la fila. */}
+        <div className="absolute inset-y-0 right-0 z-10 bg-red-500 sm:hidden pointer-events-none" style={{ width: `${dragProgress * 100}%`, transition: dragging ? 'none' : 'width 200ms ease-out' }} />
+        <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden pointer-events-none" style={{ opacity: dragProgress, transition: dragging ? 'none' : 'opacity 200ms ease-out' }}>
           <Trash2 size={18} /> Borrar
         </div>
       </div>

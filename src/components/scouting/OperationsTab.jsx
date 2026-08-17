@@ -95,9 +95,8 @@ function OperationRow({ player, chipClassName, chipTextClassName, onClick, onDel
         </div>
       </div>
 
-      {/* Borrado fluido y continuo (solo móvil): a diferencia de Plantilla/Academia (donde el
-          rojo solo aparece tras cruzar el 50% del ancho), aquí usamos "dragProgress" — crece
-          desde el primer píxel de arrastre hasta el tope del gesto, así el fondo rojo va
+      {/* Borrado fluido y continuo (solo móvil), idéntico a Plantilla y Academia: "dragProgress"
+          crece desde el primer píxel de arrastre hasta el tope del gesto, así el fondo rojo va
           ocupando la tarjeta progresivamente en vez de aparecer de golpe o quedar "atascado"
           detrás del panel estático de Borrar/Editar/Más. */}
       <div className="absolute inset-y-0 right-0 z-10 bg-red-500 sm:hidden pointer-events-none rounded-xl" style={{ width: `${dragProgress * 100}%`, transition: dragging ? 'none' : 'width 200ms ease-out' }} />
