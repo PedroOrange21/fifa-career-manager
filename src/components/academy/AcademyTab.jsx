@@ -72,18 +72,6 @@ function PotentialBar({ rating, potential }) {
   );
 }
 
-function EvolutionTimeline({ history }) {
-  if (!history || history.length === 0) return null;
-  const ordered = [...history].sort((a, b) => b.date - a.date);
-  return (
-    <div className="flex flex-wrap gap-1.5 mt-2">
-      {ordered.map((h, i) => (
-        <span key={i} className="text-[8px] text-fg-faint font-black bg-well px-2 py-0.5 rounded">{new Date(h.date).toLocaleDateString('es-ES')}: {h.rating}</span>
-      ))}
-    </div>
-  );
-}
-
 // Mismo gesto de deslizar y menú "..." que las filas de la Plantilla (PlayerList.jsx), pero
 // simplificado: un canterano no participa del mercado, así que aquí solo hay Editar y Borrar
 // (sin transferible/cedible/vender/ceder ni la opción "Más" intermedia en móvil).
@@ -163,7 +151,6 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete }) {
           </button>
         </div>
 
-        <EvolutionTimeline history={p.evolutionHistory} />
         <div className="flex gap-2 mt-1">
           <button type="button" onClick={() => onUpdate(p)} className="flex-1 py-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 font-black uppercase text-[10px] hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/20 touch-manipulation"><TrendingUp size={14} /> Actualizar Media</button>
           <button type="button" onClick={() => onPromote(p)} className="flex-1 py-2.5 rounded-xl bg-blue-500/10 text-blue-400 font-black uppercase text-[10px] hover:bg-blue-500/20 transition-all flex items-center justify-center gap-2 border border-blue-500/20 touch-manipulation"><ArrowUpCircle size={14} /> Subir al Primer Equipo</button>

@@ -486,8 +486,7 @@ export function ClubDataProvider({ children }) {
 
   const updateYouthRating = async (player, newRating) => {
     if (!user || !activeClubId) return;
-    const newHistory = [...(player.evolutionHistory || []), { date: Date.now(), rating: player.rating }];
-    await updateDoc(playerDoc(user.uid, activeClubId, player.id), { rating: newRating, evolutionHistory: newHistory });
+    await updateDoc(playerDoc(user.uid, activeClubId, player.id), { rating: newRating });
   };
 
   // Mientras hay una acción pendiente de consolidar (ventana de "Deshacer"), el jugador u

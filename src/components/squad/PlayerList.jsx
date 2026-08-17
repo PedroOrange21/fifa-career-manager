@@ -28,7 +28,6 @@ const SORT_GROUPS = [
 ];
 
 const SORT_OPTIONS = [
-  { id: 'name-asc', label: 'Nombre (A-Z)', icon: ArrowDownAZ },
   { id: 'status-role', label: 'Rol en Equipo', icon: Shirt },
   { id: 'ownership', label: 'Propiedad del Club', icon: ShieldCheck },
   { id: 'position', label: 'Posición en el Campo', icon: LayoutGrid },
@@ -96,6 +95,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   if (filterType === 'age-desc') filteredPlayers.sort((a, b) => b.age - a.age);
   if (filterType === 'age-asc') filteredPlayers.sort((a, b) => a.age - b.age);
   if (filterType === 'name-asc') filteredPlayers.sort((a, b) => a.name.localeCompare(b.name));
+  if (filterType === 'name-desc') filteredPlayers.sort((a, b) => b.name.localeCompare(a.name));
   if (filterType === 'status-role') {
     const getRoleScore = (p) => {
       if (Object.values(lineup).includes(p.id)) return 1; // Titular
@@ -179,6 +179,19 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
                   </div>
                 </div>
               ))}
+              {/* Fila de Nombre: mismos botones compactos que los grupos mayor/menor de arriba,
+                  pero con etiquetas A-Z/Z-A en vez de flechas — mismo patrón que en Academia. */}
+              <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl">
+                <span className="flex items-center gap-2 text-xs font-bold text-fg-secondary"><ArrowDownAZ size={14} className="shrink-0" /> Nombre</span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button type="button" onClick={() => { setFilterType('name-asc'); setShowSortMenu(false); }} title="A-Z" className={`px-2 h-7 flex items-center justify-center rounded-lg text-[10px] font-black transition-all ${filterType === 'name-asc' ? 'bg-green-500/10 text-green-500' : 'text-fg-faint hover:bg-well hover:text-fg-secondary'}`}>
+                    A-Z
+                  </button>
+                  <button type="button" onClick={() => { setFilterType('name-desc'); setShowSortMenu(false); }} title="Z-A" className={`px-2 h-7 flex items-center justify-center rounded-lg text-[10px] font-black transition-all ${filterType === 'name-desc' ? 'bg-green-500/10 text-green-500' : 'text-fg-faint hover:bg-well hover:text-fg-secondary'}`}>
+                    Z-A
+                  </button>
+                </div>
+              </div>
               <div className="h-px bg-border-subtle my-1 mx-1" />
               {SORT_OPTIONS.map(({ id, label, icon: Icon }) => (
                 <button key={id} onClick={() => { setFilterType(id); setShowSortMenu(false); }} className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl text-xs font-bold transition-all ${filterType === id ? 'bg-green-500/10 text-green-500' : 'text-fg-secondary hover:bg-well'}`}>
