@@ -28,12 +28,6 @@ const getEffectiveWage = (p) => {
   return p.wage || 0;
 };
 
-const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-const monthLabel = (key) => {
-  const [year, month] = key.split('-');
-  return `${MONTH_LABELS[Number(month) - 1]} ${year.slice(2)}`;
-};
-
 function StatCard({ icon: Icon, label, value, accent = 'text-fg' }) {
   return (
     <div className="bg-surface rounded-2xl border border-border-subtle shadow-lg p-3 md:p-3.5 min-w-0">
@@ -110,6 +104,48 @@ function GroupBreakdown({ views, activeView, onChangeView }) {
   );
 }
 
+// Tarjeta de rentabilidad de traspasos con 3 vistas conmutables: "Todos" (beneficio neto de
+// toda venta, canterano o no), "Canteranos" (ingreso bruto de ventas sin coste de fichaje
+// previo) y "No Canteranos" (balance neto compra-venta de jugadores fichados). Se calcula a
+// partir de las transacciones de tipo "venta", que ya guardan originalCost/netProfit por
+// operación (ver sellPlayer en ClubDataContext).
+function ProfitabilityCard({ transactions }) {
+  const [view, setView] = useState('all');
+  const ventas = transactions.filter((t) => t.type === 'venta');
+  const academyVentas = ventas.filter((t) => (t.originalCost ?? 0) === 0);
+  const signedVentas = ventas.filter((t) => (t.originalCost ?? 0) > 0);
+
+  const allProfit = ventas.reduce((sum, t) => sum + (t.netProfit ?? ((t.totalAmount ?? t.amount) - (t.originalCost || 0))), 0);
+  const academyIncome = academyVentas.reduce((sum, t) => sum + (t.totalAmount ?? t.amount), 0);
+  const signedNet = signedVentas.reduce((sum, t) => sum + (t.netProfit ?? ((t.totalAmount ?? t.amount) - (t.originalCost || 0))), 0);
+
+  const views = {
+    all: { label: 'Todos', value: allProfit },
+    academy: { label: 'Canteranos', value: academyIncome },
+    signed: { label: 'No Canteranos', value: signedNet },
+  };
+  const active = views[view];
+
+  return (
+    <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
+      <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><TrendingUp size={13} /> Beneficio por Traspasos</h3>
+      <div className="flex bg-well p-1 rounded-2xl border border-border-subtle mb-4">
+        {Object.entries(views).map(([id, v]) => (
+          <button key={id} type="button" onClick={() => setView(id)} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all touch-manipulation ${view === id ? 'bg-surface text-fg shadow-sm border border-border-subtle' : 'text-fg-muted hover:text-fg-secondary'}`}>
+            {v.label}
+          </button>
+        ))}
+      </div>
+      <div className={`text-2xl md:text-3xl font-black italic tracking-tighter truncate ${active.value >= 0 ? 'text-green-500' : 'text-red-500'}`}>{active.value >= 0 ? '+' : ''}{formatCurrency(active.value)}</div>
+      <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest mt-1.5">
+        {view === 'all' && 'Beneficio total de todos los traspasos'}
+        {view === 'academy' && 'Total ingresado por ventas de canteranos'}
+        {view === 'signed' && 'Balance neto de compras vs. ventas de fichajes'}
+      </p>
+    </div>
+  );
+}
+
 export default function FinanceStatsTab() {
   const { activeClub } = useClubs();
   const { players, transactions } = useClubData();
@@ -120,21 +156,21 @@ export default function FinanceStatsTab() {
   const totalEarned = useMemo(() => transactions.filter((t) => t.type === 'venta').reduce((sum, t) => sum + (t.amount || 0), 0), [transactions]);
   const netBalance = totalEarned - totalSpent;
 
-  // Evolución mensual de ingresos (ventas) vs. gastos (compras): últimos 6 meses con algún
-  // movimiento registrado, agrupados por año-mes.
-  const monthly = useMemo(() => {
+  // Evolución de ingresos (ventas) vs. gastos (compras) agrupada por Temporada (no por mes):
+  // cada transacción guarda su "seasonNumber" en el momento en que se registró (ver
+  // logTransaction); las anteriores a ese cambio no lo tienen y se asumen de la Temporada 1.
+  const seasonly = useMemo(() => {
     const map = {};
     transactions.forEach((t) => {
       if (t.type !== 'compra' && t.type !== 'venta') return;
-      const d = new Date(t.date);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (!map[key]) map[key] = { key, spent: 0, earned: 0 };
-      if (t.type === 'compra') map[key].spent += t.amount || 0;
-      else map[key].earned += t.amount || 0;
+      const season = t.seasonNumber || 1;
+      if (!map[season]) map[season] = { season, spent: 0, earned: 0 };
+      if (t.type === 'compra') map[season].spent += t.amount || 0;
+      else map[season].earned += t.amount || 0;
     });
-    return Object.values(map).sort((a, b) => a.key.localeCompare(b.key)).slice(-6);
+    return Object.values(map).sort((a, b) => a.season - b.season);
   }, [transactions]);
-  const maxMonthly = Math.max(1, ...monthly.flatMap((m) => [m.spent, m.earned]));
+  const maxSeasonly = Math.max(1, ...seasonly.flatMap((s) => [s.spent, s.earned]));
 
   // Gasto salarial por demarcación/rol, con el listado de jugadores de cada línea para el
   // acordeón desplegable.
@@ -188,20 +224,22 @@ export default function FinanceStatsTab() {
         <StatCard icon={Scale} label="Balance Neto" value={formatCurrency(netBalance)} accent={netBalance >= 0 ? 'text-green-500' : 'text-red-500'} />
       </div>
 
+      <ProfitabilityCard transactions={transactions} />
+
       <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><LineChart size={13} /> Evolución de Ingresos vs. Gastos</h3>
-        {monthly.length === 0 ? (
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><LineChart size={13} /> Evolución de Ingresos vs. Gastos por Temporada</h3>
+        {seasonly.length === 0 ? (
           <div className="py-10 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Sin movimientos todavía</div>
         ) : (
           <>
             <div className="flex items-end justify-between gap-2 h-32">
-              {monthly.map((m) => (
-                <div key={m.key} className="flex-1 flex flex-col items-center justify-end h-full">
+              {seasonly.map((s) => (
+                <div key={s.season} className="flex-1 flex flex-col items-center justify-end h-full">
                   <div className="w-full flex items-end justify-center gap-1 flex-1">
-                    <div className="w-2.5 bg-green-500 rounded-t-sm transition-all" style={{ height: `${Math.max((m.earned / maxMonthly) * 100, m.earned > 0 ? 4 : 0)}%` }} title={`Ingresos: ${formatCurrency(m.earned)}`} />
-                    <div className="w-2.5 bg-red-500 rounded-t-sm transition-all" style={{ height: `${Math.max((m.spent / maxMonthly) * 100, m.spent > 0 ? 4 : 0)}%` }} title={`Gastos: ${formatCurrency(m.spent)}`} />
+                    <div className="w-2.5 bg-green-500 rounded-t-sm transition-all" style={{ height: `${Math.max((s.earned / maxSeasonly) * 100, s.earned > 0 ? 4 : 0)}%` }} title={`Ingresos: ${formatCurrency(s.earned)}`} />
+                    <div className="w-2.5 bg-red-500 rounded-t-sm transition-all" style={{ height: `${Math.max((s.spent / maxSeasonly) * 100, s.spent > 0 ? 4 : 0)}%` }} title={`Gastos: ${formatCurrency(s.spent)}`} />
                   </div>
-                  <span className="text-[8px] text-fg-faint font-black uppercase tracking-widest mt-1.5">{monthLabel(m.key)}</span>
+                  <span className="text-[8px] text-fg-faint font-black uppercase tracking-widest mt-1.5">Temp. {s.season}</span>
                 </div>
               ))}
             </div>

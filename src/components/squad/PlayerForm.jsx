@@ -907,7 +907,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                         <ReviewRow label="Sueldo Mensual (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
                           <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
                         </ReviewRow>
-                        <ReviewRow label="Años Contrato *" active={editField === 'contractYears'} onOpen={() => setEditField('contractYears')} display={form.contractYears ? `${form.contractYears} Años` : 'Sin definir'}>
+                        <ReviewRow label="Años Contrato" active={editField === 'contractYears'} onOpen={() => setEditField('contractYears')} display={form.contractYears ? `${form.contractYears} Años` : 'Sin definir'}>
                           <Dropdown value={form.contractYears} options={contractYearOptions} onChange={(v) => { set({ contractYears: v }); setEditField(null); }} placeholder="Seleccionar" />
                         </ReviewRow>
                         <ReviewRow label="Cláusula de Rescisión (€)" active={editField === 'releaseClause'} onOpen={() => setEditField('releaseClause')} display={`${form.releaseClause || '0'} €`}>

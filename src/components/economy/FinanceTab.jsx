@@ -6,11 +6,11 @@ import { formatCurrency, formatValueInput, parseValue } from '../../utils/format
 import WageBreakdownModal from './WageBreakdownModal';
 
 // Línea de desglose reutilizada dentro del panel expandible de cada transacción.
-function DetailLine({ label, value }) {
+function DetailLine({ label, value, valueClassName = 'text-fg' }) {
   return (
     <div className="flex justify-between items-center gap-2 text-[10px]">
       <span className="font-bold text-fg-muted">{label}</span>
-      <span className="font-black text-fg text-right">{value}</span>
+      <span className={`font-black text-right ${valueClassName}`}>{value}</span>
     </div>
   );
 }
@@ -129,6 +129,7 @@ export default function FinanceTab() {
                           <DetailLine label="Añadido a Presupuesto" value={formatCurrency(t.amount)} />
                           <DetailLine label="Retención del Club" value={formatCurrency(t.retainedAmount || 0)} />
                           {t.wageFreed ? <DetailLine label="Salario Liberado" value={`${formatCurrency(t.wageFreed)}/mes`} /> : null}
+                          {t.netProfit != null ? <DetailLine label="Beneficio / Pérdida" value={`${t.netProfit >= 0 ? '+' : ''}${formatCurrency(t.netProfit)}`} valueClassName={t.netProfit >= 0 ? 'text-green-500' : 'text-red-500'} /> : null}
                         </>
                       )}
                       {t.type === 'cesion' && (

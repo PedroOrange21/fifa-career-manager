@@ -69,6 +69,9 @@ export default function PromoteToFirstTeamModal({ player, onClose }) {
         contractYears: parseInt(contractYears),
         releaseClause: parseValue(releaseClause) || null,
         potential: null,
+        // Marca de procedencia: sin coste de fichaje real, para que una futura venta calcule
+        // el beneficio sobre 0 € en vez de confundirlo con un fichaje gratuito genérico.
+        fromAcademy: true,
       }, player.id);
       onClose();
     } catch (err) {

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { X, Tag } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { X, Tag, ShieldAlert } from 'lucide-react';
 import { formatValueInput, parseValue, formatCurrency, formatMoneyLiveWithCursor } from '../../utils/format';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -28,6 +28,13 @@ export default function SellPlayerModal({ player, onClose }) {
   const [customInputType, setCustomInputType] = useState('percent');
   const [customPercent, setCustomPercent] = useState(String(DEFAULT_ALLOCATION));
   const [customAmount, setCustomAmount] = useState('');
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
+  // Snapshot del estado inicial (dirty check): si el usuario cambia cualquier campo y luego
+  // intenta cerrar, se le avisa antes de descartar lo escrito.
+  const initialStateRef = useRef({ price, allocationPercent, customMode, customInputType, customPercent, customAmount });
+  const isDirty = JSON.stringify({ price, allocationPercent, customMode, customInputType, customPercent, customAmount }) !== JSON.stringify(initialStateRef.current);
+  const handleCloseClick = () => { if (isDirty) setShowDiscardConfirm(true); else onClose(); };
 
   const totalAmount = parseValue(price);
 
@@ -46,6 +53,11 @@ export default function SellPlayerModal({ player, onClose }) {
     budgetAmount = Math.round(totalAmount * (effectivePercent / 100));
   }
   const retainedAmount = totalAmount - budgetAmount;
+
+  // Rentabilidad respecto al coste de fichaje original: un canterano promovido (fromAcademy)
+  // nunca tuvo precio de compra, así que el 100% del traspaso cuenta como beneficio.
+  const originalCost = player.fromAcademy ? 0 : (player.value || 0);
+  const netProfit = totalAmount - originalCost;
 
   const pickPreset = (pct) => { setCustomMode(false); setAllocationPercent(pct); };
   // Al entrar en "Otro" se parte del porcentaje que estuviera activo (preset o el propio
@@ -67,17 +79,22 @@ export default function SellPlayerModal({ player, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-[160] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/95 z-[160] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={handleCloseClick}>
       <form onSubmit={handleSubmit} className="bg-surface border border-border p-6 rounded-[32px] w-full max-w-sm shadow-2xl relative max-h-[90dvh] overflow-y-auto no-scrollbar" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-4"><h3 className="font-black italic text-red-500 text-sm uppercase flex items-center gap-2"><Tag size={16} /> Vender a {player.name}</h3><button type="button" onClick={onClose} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button></div>
+        <div className="flex justify-between items-center mb-4"><h3 className="font-black italic text-red-500 text-sm uppercase flex items-center gap-2"><Tag size={16} /> Vender a {player.name}</h3><button type="button" onClick={handleCloseClick} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button></div>
 
         <div className="space-y-1 mb-5">
           <label className="text-[9px] font-black text-fg-muted ml-1">Precio de Venta (€)</label>
           <input type="text" autoFocus required inputMode="numeric" placeholder="Ej: 60.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-red-500 text-center font-black text-lg text-fg placeholder:text-fg-faint" value={price} onChange={(e) => formatMoneyLiveWithCursor(e.target, setPrice)} />
+          {/* Coste original de adquisición, sutil y justo debajo del precio, para tener a la
+              vista de un vistazo qué rentabilidad supone el importe que se está introduciendo. */}
+          <p className="text-[9px] text-fg-faint font-bold ml-1">
+            {player.fromAcademy ? `Procedencia: Cantera (Coste ${formatCurrency(0)})` : `Coste de compra: ${formatCurrency(originalCost)}`}
+          </p>
         </div>
 
         <div className="space-y-2 mb-5">
-          <label className="text-[9px] font-black text-fg-muted ml-1">% Asignado a Fichajes</label>
+          <label className="text-[9px] font-black text-fg-muted ml-1">Presupuesto Asignado para Fichajes</label>
           <div className="grid grid-cols-5 gap-1.5">
             {ALLOCATION_PRESETS.map((pct) => (
               <button key={pct} type="button" onClick={() => pickPreset(pct)} className={`py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${!customMode && allocationPercent === pct ? 'bg-red-500 text-black' : 'bg-well text-fg-muted hover:bg-well-strong border border-border-subtle'}`}>
@@ -123,10 +140,29 @@ export default function SellPlayerModal({ player, onClose }) {
             <span className="font-bold text-fg-muted">Masa Salarial Liberada</span>
             <span className="font-black text-blue-400">+{formatCurrency(player.wage || 0)}/mes</span>
           </div>
+          <div className="h-px bg-border-subtle" />
+          <div className="flex justify-between items-center text-xs">
+            <span className="font-bold text-fg-muted">Beneficio / Pérdida Neto</span>
+            <span className={`font-black ${netProfit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{netProfit >= 0 ? '+' : ''}{formatCurrency(netProfit)}</span>
+          </div>
         </div>
 
         <button type="submit" disabled={totalAmount <= 0} className="w-full bg-red-500 text-black p-4 rounded-xl font-black uppercase text-xs tracking-wider hover:bg-red-400 transition-all disabled:opacity-50">Confirmar Venta</button>
       </form>
+
+      {showDiscardConfirm && (
+        <div className="fixed inset-0 bg-black/90 z-[250] flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-surface border border-border p-6 rounded-[32px] w-full max-w-sm text-center shadow-2xl">
+            <ShieldAlert className="text-red-500 mx-auto mb-4" size={40} />
+            <h3 className="text-lg font-black uppercase italic mb-2 text-fg">¿Descartar cambios?</h3>
+            <p className="text-[10px] text-fg-muted mb-6 font-bold uppercase tracking-widest">Se perderán los datos introducidos.</p>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setShowDiscardConfirm(false)} className="flex-1 py-4 rounded-2xl bg-well text-fg-muted font-black uppercase text-[10px] hover:bg-well-strong transition-all touch-manipulation">Cancelar</button>
+              <button type="button" onClick={onClose} className="flex-1 py-4 rounded-2xl bg-red-500 text-black font-black uppercase text-[10px] shadow-lg shadow-red-500/20 hover:bg-red-400 transition-all touch-manipulation">Salir y Descartar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

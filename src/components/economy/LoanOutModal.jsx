@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { X, ArrowRightLeft } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { X, ArrowRightLeft, ShieldAlert } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
@@ -22,6 +22,13 @@ export default function LoanOutModal({ player, onClose }) {
   const [hasBuyOption, setHasBuyOption] = useState(false);
   const [buyOption, setBuyOption] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
+  // Dirty check: si el usuario ha tocado cualquier campo y luego intenta cerrar, se avisa
+  // antes de descartar lo escrito — mismo criterio que en SellPlayerModal.
+  const initialStateRef = useRef({ destinationClub, duration, wagePercentage, hasBuyOption, buyOption });
+  const isDirty = JSON.stringify({ destinationClub, duration, wagePercentage, hasBuyOption, buyOption }) !== JSON.stringify(initialStateRef.current);
+  const handleCloseClick = () => { if (isDirty) setShowDiscardConfirm(true); else onClose(); };
 
   // Desglose salarial en tiempo real: cuánto sigue pagando nuestro club y cuánto asume (o se
   // ahorra) el club de destino, en mensual y anual, recalculado en cada movimiento de la barra.
@@ -45,11 +52,11 @@ export default function LoanOutModal({ player, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-[160] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/95 z-[160] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={handleCloseClick}>
       <form onSubmit={handleSubmit} className="bg-surface border border-border p-6 rounded-[32px] w-full max-w-sm shadow-2xl relative max-h-[90dvh] overflow-y-auto no-scrollbar" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-black italic text-yellow-500 text-sm uppercase flex items-center gap-2"><ArrowRightLeft size={16} /> Ceder a {player.name}</h3>
-          <button type="button" onClick={onClose} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
+          <button type="button" onClick={handleCloseClick} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
         </div>
         <div className="space-y-4">
           <div className="space-y-1">
@@ -94,6 +101,20 @@ export default function LoanOutModal({ player, onClose }) {
         </div>
         <button type="submit" disabled={isSubmitting} className="w-full bg-yellow-500 text-black p-4 rounded-xl font-black uppercase text-xs tracking-wider mt-6 hover:bg-yellow-400 transition-all disabled:opacity-50">{isSubmitting ? 'Guardando...' : 'Confirmar Cesión'}</button>
       </form>
+
+      {showDiscardConfirm && (
+        <div className="fixed inset-0 bg-black/90 z-[250] flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-surface border border-border p-6 rounded-[32px] w-full max-w-sm text-center shadow-2xl">
+            <ShieldAlert className="text-red-500 mx-auto mb-4" size={40} />
+            <h3 className="text-lg font-black uppercase italic mb-2 text-fg">¿Descartar cambios?</h3>
+            <p className="text-[10px] text-fg-muted mb-6 font-bold uppercase tracking-widest">Se perderán los datos introducidos.</p>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setShowDiscardConfirm(false)} className="flex-1 py-4 rounded-2xl bg-well text-fg-muted font-black uppercase text-[10px] hover:bg-well-strong transition-all touch-manipulation">Cancelar</button>
+              <button type="button" onClick={onClose} className="flex-1 py-4 rounded-2xl bg-red-500 text-black font-black uppercase text-[10px] shadow-lg shadow-red-500/20 hover:bg-red-400 transition-all touch-manipulation">Salir y Descartar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

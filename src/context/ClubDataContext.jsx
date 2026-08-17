@@ -151,9 +151,11 @@ export function ClubDataProvider({ children }) {
   // lo retenido por la directiva) — "amount" sigue siendo siempre el impacto real en el
   // presupuesto de fichajes, para que las estadísticas financieras que suman "amount" reflejen
   // dinero realmente disponible, no el total bruto acordado.
+  // seasonNumber: temporada en curso en el momento del movimiento, para poder agrupar el
+  // historial por temporadas (en vez de por mes) en Estadísticas Financieras.
   const logTransaction = async (type, playerName, amount, club = null, extra = null) => {
     if (!user || !activeClubId) return;
-    await addDoc(transactionsCol(user.uid, activeClubId), { type, playerName, amount, club, date: Date.now(), ...(extra || {}) });
+    await addDoc(transactionsCol(user.uid, activeClubId), { type, playerName, amount, club, date: Date.now(), seasonNumber: activeClub?.currentSeasonNumber || 1, ...(extra || {}) });
   };
 
   // Lista de Seguimiento / Objetivos de Mercado (pestaña "Objetivos" de Mercado): jugadores
@@ -318,9 +320,14 @@ export function ClubDataProvider({ children }) {
       : Math.round(salePrice * (allocationPercent / 100));
     const retainedAmount = salePrice - budgetAmount;
     const effectivePercent = salePrice > 0 ? Math.round((budgetAmount / salePrice) * 100) : allocationPercent;
+    // Rentabilidad respecto al coste de fichaje original: un canterano promovido (marcado con
+    // "fromAcademy" al subirlo al primer equipo, ver PromoteToFirstTeamModal) nunca tuvo precio
+    // de compra, así que el 100% del traspaso cuenta como beneficio.
+    const originalCost = player.fromAcademy ? 0 : (player.value || 0);
+    const netProfit = salePrice - originalCost;
     deferPlayerRemoval(player, `Jugador ${player.name} vendido`, async () => {
       adjustBudget(budgetAmount);
-      logTransaction('venta', player.name, budgetAmount, null, { totalAmount: salePrice, retainedAmount, allocationPercent: effectivePercent, wageFreed: player.wage || 0 });
+      logTransaction('venta', player.name, budgetAmount, null, { totalAmount: salePrice, retainedAmount, allocationPercent: effectivePercent, wageFreed: player.wage || 0, originalCost, netProfit });
     });
   };
 
