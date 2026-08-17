@@ -5,20 +5,21 @@ import { useEffect, useRef, useState } from 'react';
 const DELETE_ZONE_EXTRA = 80;
 
 // Gesto de deslizar compartido por las filas de jugador de toda la app (Plantilla, Academia,
-// Operaciones). El botón de "Borrar" siempre es el primero en asomar al arrastrar (ver
-// SwipeableRow: el panel está anclado a la derecha y el último botón del array — Borrar — es
-// el más próximo al borde). Por eso "dragProgress" empieza a crecer desde el primer píxel del
-// gesto, de forma continua y proporcional al arrastre, en vez de esperar a que se revele el
-// panel completo: así el rótulo rojo se adelanta en cuanto Borrar empieza a mostrarse.
+// Operaciones), en dos fases claramente delimitadas por "actionWidth" (el ancho real del panel
+// de botones de cada fila — 2, 3 o 4 acciones según la lista, ver SwipeableRow):
 //
-// El resto del recorrido sigue delimitado por "actionWidth" (el ancho real del panel de
-// botones de cada fila — 2, 3 o 4 acciones según la lista) solo a efectos de qué ocurre al
-// SOLTAR el dedo: soltar más allá del panel completo (offset ≤ -actionWidth) dispara
-// onFullSwipe directamente (que siempre debe abrir una confirmación antes de borrar nada);
-// soltar pasada la mitad del panel lo deja abierto revelando los botones; soltar antes de eso
-// cierra la fila. "dragProgress" sigue creciendo hasta 1 en el tope de recorrido (actionWidth +
-// DELETE_ZONE_EXTRA), un poco más allá de ese punto de soltar, para que la animación nunca se
-// sienta "cortada" justo cuando se dispara el borrado.
+// Fase 1 (0 a -actionWidth): arrastre corto. La fila se desliza revelando progresivamente el
+// panel de acciones (Editar/Borrar/Más/Recuperar…) que hay fijo detrás, visibles y pulsables
+// con total normalidad. Sin rótulo rojo todavía. Al soltar dentro de esta fase: si se pasó de
+// la mitad del panel, éste queda abierto (offset = -actionWidth); si no, la fila vuelve a su
+// sitio.
+//
+// Fase 2 (más allá de -actionWidth): arrastre continuo a fondo, superando por completo el
+// bloque de botones. "dragProgress" crece de 0 a 1 según se avanza desde el borde del panel
+// hasta el tope de recorrido (actionWidth + DELETE_ZONE_EXTRA), para que el rótulo rojo de
+// "Borrar" cubra la tarjeta de forma fluida en vez de aparecer de golpe. Soltar en cualquier
+// punto de esta fase dispara onFullSwipe (que siempre debe abrir una confirmación antes de
+// borrar nada) — no hace falta llegar al 100%.
 //
 // Usa un listener nativo de touchmove con { passive: false } porque React registra los
 // onTouchMove sintéticos como pasivos por defecto y no deja llamar a preventDefault() desde la
@@ -70,10 +71,10 @@ export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
         const next = Math.max(drag.maxDrag, Math.min(0, drag.startOffset + dx));
         offsetRef.current = next;
         setOffset(next);
-        // Crece de 0 (dedo en reposo) a 1 (tope de arrastre) desde el primer píxel del gesto,
-        // no solo al superar el panel de botones — el rótulo rojo se adelanta en cuanto Borrar
-        // (el primer botón en asomar) empieza a revelarse.
-        setDragProgress(Math.min(1, next / drag.maxDrag));
+        // 0 mientras se está dentro del panel de botones (Fase 1), crece de 0 a 1 solo al
+        // superarlo (Fase 2), hasta el tope de recorrido.
+        const growth = next <= drag.threshold ? Math.min(1, (next - drag.threshold) / (drag.maxDrag - drag.threshold)) : 0;
+        setDragProgress(growth);
       }
     };
     const onEnd = () => {
