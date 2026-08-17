@@ -730,7 +730,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                     {form.secondaryPositions.length > 0 && <div className="text-center text-[9px] font-bold uppercase opacity-70 mt-0.5 truncate">{form.secondaryPositions.join(' · ')}</div>}
                   </div>
 
-                  <div className="w-full flex justify-end items-center mt-4 mb-1 px-1">
+                  <div className="w-full mx-auto text-center mt-4 mb-1 px-1">
                     <span className="text-[8px] font-bold uppercase tracking-widest text-fg-faint">Toca un dato para editarlo</span>
                   </div>
 

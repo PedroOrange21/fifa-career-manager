@@ -164,10 +164,11 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
         {/* Cuerpo con scroll propio: la ficha en modo lectura ahora replica todas las
             secciones del Paso 4 de PlayerForm y puede superar la altura del modal, sobre todo
             en jugadores Cedido. El botón de cerrar (y en Plantilla, también el lápiz) quedan
-            fuera de este contenedor, fijos en la esquina superior del marco exterior — con
-            espacio superior extra (pt-8 en Táctica, pt-28 en Plantilla) para que la tarjeta de
-            cabecera nunca quede debajo de esos botones. */}
-        <div className={`overflow-y-auto no-scrollbar flex-1 min-h-0 ${hideMarketStatus ? 'pt-8' : hideTacticsActions ? 'pt-28' : 'pt-1'}`}>
+            fuera de este contenedor, flotando en la esquina superior derecha sin ocupar espacio
+            en el flujo — por eso el contenido empieza arriba del todo (pt-1), igual que antes;
+            en Plantilla la tarjeta FIFA es más estrecha que la columna de botones y queda
+            centrada, así que no hay solape real con ellos. */}
+        <div className={`overflow-y-auto no-scrollbar flex-1 min-h-0 ${hideMarketStatus ? 'pt-8' : 'pt-1'}`}>
         {/* Plantilla (hideTacticsActions): cabecera con la misma tarjeta FIFA de vista previa
             que encabeza la pantalla de "Editar Jugador" (Paso 4 de PlayerForm) — media, posición
             principal, bandera, foto, nombre y posiciones secundarias — en modo puramente
