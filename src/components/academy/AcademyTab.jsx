@@ -30,24 +30,36 @@ const SORT_OPTIONS = [
   { id: 'position-asc', label: 'Posición en el Campo', icon: LayoutGrid },
 ];
 
-// Código de color inteligente de la badge de potencial: cruza edad actual, media actual y
-// techo del rango de potencial para estimar cuán probable es que el canterano llegue a su
-// máximo. Verde = muy joven con mucho margen de crecimiento todavía; Rojo/Naranja = edad ya
-// avanzada para lo poco que le queda de margen hasta su potencial (progresión estancada);
-// Amarillo = cualquier otro caso, progresión dentro de lo normal.
+// Código de color inteligente de la badge de potencial: calcula el ritmo de progresión
+// (puntos de media por año) que necesitaría el canterano para alcanzar su potencial objetivo
+// antes de los 22 años (edad de referencia habitual para dar el salto al primer equipo).
+// Verde = ritmo cómodo, Amarillo = exigente, Rojo = prácticamente inalcanzable. Se recalcula
+// en cada render a partir de los datos actuales del jugador (rating/potential/age), así que
+// responde de inmediato a cualquier cambio en "players" (alta de un canterano nuevo o
+// actualización de su media), sin necesidad de estado ni memoización propios.
 const PROJECTION_STYLES = {
   green: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
   yellow: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
   red: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
 };
+const TARGET_AGE = 22;
+const PACE_THRESHOLD_GREEN = 3.5;
+const PACE_THRESHOLD_YELLOW = 6.0;
+function getPotentialStatusColor(overall, age, minPotential, maxPotential) {
+  if (minPotential == null && maxPotential == null) return 'yellow';
+  const targetPotential = minPotential != null && maxPotential != null
+    ? (minPotential + maxPotential) / 2
+    : (maxPotential ?? minPotential);
+  const yearsLeft = Math.max(1, TARGET_AGE - (age || 0));
+  const requiredPace = (targetPotential - overall) / yearsLeft;
+  if (requiredPace <= PACE_THRESHOLD_GREEN) return 'green';
+  if (requiredPace <= PACE_THRESHOLD_YELLOW) return 'yellow';
+  return 'red';
+}
 function getProjectionTier(p) {
-  const ceiling = parsePotentialRange(p.potential)?.max;
-  if (!ceiling) return 'yellow';
-  const gap = ceiling - p.rating;
-  const age = p.age || 0;
-  if (age <= 18 && gap >= 12) return 'green';
-  if (age >= 21 && gap <= 5) return 'red';
-  return 'yellow';
+  const parsed = parsePotentialRange(p.potential);
+  if (!parsed) return 'yellow';
+  return getPotentialStatusColor(p.rating, p.age, parsed.min, parsed.max);
 }
 
 // Orden táctico natural en el terreno de juego (Portero → Defensas → Centrocampistas →
