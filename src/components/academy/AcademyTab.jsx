@@ -32,36 +32,28 @@ const SORT_OPTIONS = [
   { id: 'position-asc', label: 'Posición en el Campo', icon: LayoutGrid },
 ];
 
-// Código de color inteligente de la badge de potencial: calcula el ritmo de progresión
-// (puntos de media por año) que necesitaría el canterano para alcanzar su potencial objetivo
-// antes de los 22 años (edad de referencia habitual para dar el salto al primer equipo).
-// Verde = ritmo cómodo, Amarillo = exigente, Rojo = prácticamente inalcanzable. Se recalcula
-// en cada render a partir de los datos actuales del jugador (rating/potential/age), así que
-// responde de inmediato a cualquier cambio en "players" (alta de un canterano nuevo o
-// actualización de su media), sin necesidad de estado ni memoización propios.
+// Código de color de la badge de potencial, estilo EA FC: clasifica al canterano según el
+// techo máximo de su rango de proyección (p. ej. "82-90" -> 90; con un valor único, ese mismo
+// número), la misma cifra que ya usa PotentialBar para la barra de progreso. PROJECTION_STYLES
+// es la única fuente de verdad de los 4 estilos — tanto la badge real de cada tarjeta como la
+// tabla del modal "Más info" (ver POTENTIAL_INFO_TIERS) leen de aquí, así que no pueden
+// desincronizarse entre sí.
 const PROJECTION_STYLES = {
-  green: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+  gold: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  blue: 'text-sky-400 bg-sky-500/10 border-sky-500/20',
   yellow: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
-  red: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
+  gray: 'text-fg-muted bg-well-strong border-border-subtle',
 };
-const TARGET_AGE = 22;
-const PACE_THRESHOLD_GREEN = 3.5;
-const PACE_THRESHOLD_YELLOW = 6.0;
-function getPotentialStatusColor(overall, age, minPotential, maxPotential) {
-  if (minPotential == null && maxPotential == null) return 'yellow';
-  const targetPotential = minPotential != null && maxPotential != null
-    ? (minPotential + maxPotential) / 2
-    : (maxPotential ?? minPotential);
-  const yearsLeft = Math.max(1, TARGET_AGE - (age || 0));
-  const requiredPace = (targetPotential - overall) / yearsLeft;
-  if (requiredPace <= PACE_THRESHOLD_GREEN) return 'green';
-  if (requiredPace <= PACE_THRESHOLD_YELLOW) return 'yellow';
-  return 'red';
+function getPotentialTier(maxPotential) {
+  if (maxPotential == null) return 'gray';
+  if (maxPotential >= 90) return 'gold';
+  if (maxPotential >= 85) return 'blue';
+  if (maxPotential >= 80) return 'yellow';
+  return 'gray';
 }
 function getProjectionTier(p) {
   const parsed = parsePotentialRange(p.potential);
-  if (!parsed) return 'yellow';
-  return getPotentialStatusColor(p.rating, p.age, parsed.min, parsed.max);
+  return getPotentialTier(parsed?.max ?? null);
 }
 
 // Orden táctico natural en el terreno de juego (Portero → Defensas → Centrocampistas →
@@ -87,17 +79,21 @@ function PotentialBar({ rating, potential }) {
   );
 }
 
+// Referencia "tier" (clave de PROJECTION_STYLES) explícita en cada fila: la tabla del modal
+// pinta cada rango con `PROJECTION_STYLES[tier]`, exactamente el mismo objeto que usa la badge
+// real de la tarjeta (getProjectionTier), así que ambas vistas quedan literalmente enlazadas al
+// mismo estilo — es imposible que se desincronicen entre sí.
 const POTENTIAL_INFO_TIERS = [
-  { range: '90 - 99', label: 'Verde Brillante / Oro', badgeClass: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400', desc: 'Tiene potencial para ser especial: futura estrella mundial.' },
-  { range: '85 - 89', label: 'Verde / Azul Claro', badgeClass: 'bg-sky-500/15 border-sky-500/30 text-sky-400', desc: 'Un gran potencial: jugador de primer nivel.' },
-  { range: '80 - 84', label: 'Amarillo / Naranja', badgeClass: 'bg-yellow-500/15 border-yellow-500/30 text-yellow-400', desc: 'Mostrando gran potencial: buen jugador de rotación o titular.' },
-  { range: '< 80', label: 'Gris / Neutro', badgeClass: 'bg-well-strong border-border-subtle text-fg-muted', desc: 'Todavía en desarrollo, sin etiqueta especial.' },
+  { tier: 'gold', range: '90 - 99', label: 'Oro / Verde Brillante', desc: 'Tiene potencial para ser especial: futura estrella mundial.' },
+  { tier: 'blue', range: '85 - 89', label: 'Azul / Verde Azulado', desc: 'Un gran potencial: jugador de primer nivel.' },
+  { tier: 'yellow', range: '80 - 84', label: 'Amarillo / Naranja', desc: 'Mostrando gran potencial: buen jugador de rotación o titular.' },
+  { tier: 'gray', range: '< 80', label: 'Gris / Neutro', desc: 'En desarrollo, sin rango de potencial destacado.' },
 ];
 
 // Popover explicativo del criterio de color del potencial: el techo de proyección que da el
-// ojeador (rango tipo "64-88") sitúa al canterano en una de estas franjas, y ese mismo techo,
-// combinado con la edad actual, es lo que decide si el semáforo de la fila sale verde, amarillo
-// o rojo (ver getPotentialStatusColor más abajo).
+// ojeador (rango tipo "64-88" -> 88, o un valor único) sitúa al canterano en una de estas 4
+// franjas (ver getPotentialTier más arriba), y esas mismas franjas son las que pinta la badge
+// real de cada tarjeta.
 function PotentialInfoModal({ onClose }) {
   useBodyScrollLock();
   useAutoHideChrome();
@@ -112,7 +108,7 @@ function PotentialInfoModal({ onClose }) {
         <div className="space-y-2">
           {POTENTIAL_INFO_TIERS.map((tier) => (
             <div key={tier.range} className="flex items-center gap-3 p-3 rounded-xl bg-well border border-border-subtle">
-              <span className={`shrink-0 w-14 text-center text-[10px] font-black py-1.5 rounded-lg border ${tier.badgeClass}`}>{tier.range}</span>
+              <span className={`shrink-0 w-14 text-center text-[10px] font-black py-1.5 rounded-lg border ${PROJECTION_STYLES[tier.tier]}`}>{tier.range}</span>
               <div className="min-w-0">
                 <div className="text-[10px] font-black uppercase tracking-widest text-fg">{tier.label}</div>
                 <div className="text-[10px] text-fg-muted font-bold leading-snug mt-0.5">{tier.desc}</div>
@@ -120,7 +116,7 @@ function PotentialInfoModal({ onClose }) {
             </div>
           ))}
         </div>
-        <p className="text-[9px] text-fg-faint font-bold leading-relaxed mt-4 pt-3 border-t border-border-subtle">Junto al techo de proyección, la app también tiene en cuenta la edad actual del canterano para calibrar el color de cada tarjeta: cuanto menos tiempo le quede para alcanzarlo, más exigente es el ritmo de progresión requerido.</p>
+        <p className="text-[9px] text-fg-faint font-bold leading-relaxed mt-4 pt-3 border-t border-border-subtle">Si el canterano todavía no tiene un rango de potencial asignado, o su techo máximo es inferior a 80, la badge se muestra en gris neutro.</p>
       </div>
     </div>
   );
