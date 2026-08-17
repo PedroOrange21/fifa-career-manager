@@ -37,23 +37,21 @@ function TargetRow({ t, onSign, onEdit, onDelete, selected, onToggleSelect }) {
 
   return (
     <div className={`p-3 md:p-4 border-l-4 transition-colors ${STATUS_BORDER[t.status] || STATUS_BORDER.Seguimiento} ${selected ? 'bg-green-500/5' : 'bg-surface'}`}>
-      <div className="flex items-start gap-3 md:gap-4">
-        <div className="relative shrink-0">
-          {/* Checkbox pequeño y sutil, superpuesto en la esquina superior izquierda de la
-              insignia en vez de ocupar su propio hueco en la fila, para no sobrecargar el
-              diseño de la tarjeta. */}
-          <button
-            type="button"
-            onClick={() => onToggleSelect(t.id)}
-            title={selected ? 'Quitar de la selección' : 'Seleccionar para el planificador'}
-            className={`absolute -top-1.5 -left-1.5 z-10 w-4 h-4 rounded-md border-2 flex items-center justify-center transition-all touch-manipulation ${selected ? 'bg-green-500 border-green-500' : 'border-border-subtle bg-well hover:border-green-500/50'}`}
-          >
-            {selected && <Check size={9} className="text-black" strokeWidth={3.5} />}
-          </button>
-          <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none ${getCardStyle(t.rating || 0)}`}>
-            <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{t.primaryPosition || positions[0] || '—'}</span>
-            <span className="text-lg md:text-xl">{t.rating || '—'}</span>
-          </div>
+      <div className="flex items-start gap-2 md:gap-2.5">
+        {/* Checkbox pequeño y sutil, como elemento propio de la fila (no superpuesto sobre la
+            insignia) para que ambos convivan sin tocarse; el "gap" del contenedor ya separa
+            limpiamente checkbox y badge. */}
+        <button
+          type="button"
+          onClick={() => onToggleSelect(t.id)}
+          title={selected ? 'Quitar de la selección' : 'Seleccionar para el planificador'}
+          className={`mt-1.5 md:mt-2 w-4 h-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all touch-manipulation ${selected ? 'bg-green-500 border-green-500' : 'border-border-subtle bg-well hover:border-green-500/50'}`}
+        >
+          {selected && <Check size={9} className="text-black" strokeWidth={3.5} />}
+        </button>
+        <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(t.rating || 0)}`}>
+          <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{t.primaryPosition || positions[0] || '—'}</span>
+          <span className="text-lg md:text-xl">{t.rating || '—'}</span>
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{t.name}</div>
