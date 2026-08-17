@@ -49,9 +49,14 @@ const getEffectiveWage = (p) => {
   return p.wage || 0;
 };
 
-function StatCard({ icon: Icon, label, value, accent = 'text-fg' }) {
+function StatCard({ icon: Icon, label, value, accent = 'text-fg', onInfoClick }) {
   return (
-    <div className="bg-surface rounded-2xl border border-border-subtle shadow-lg p-3 md:p-3.5 min-w-0">
+    <div className="relative bg-surface rounded-2xl border border-border-subtle shadow-lg p-3 md:p-3.5 min-w-0">
+      {onInfoClick && (
+        <button type="button" onClick={onInfoClick} className="absolute top-1.5 right-1.5 p-1 text-fg-faint hover:text-fg transition-colors touch-manipulation">
+          <Info size={11} />
+        </button>
+      )}
       <Icon size={13} className={`mb-1 md:mb-1.5 ${accent}`} />
       <div className={`text-[11px] sm:text-xs md:text-base font-black italic leading-tight truncate ${accent}`}>{value}</div>
       <div className="text-[7px] md:text-[8px] font-black uppercase tracking-widest text-fg-faint leading-tight mt-0.5">{label}</div>
@@ -276,6 +281,8 @@ export default function FinanceStatsTab() {
   // "signing" (Gasto en Fichajes) activo por defecto, tal y como se pidió.
   const [breakdownView, setBreakdownView] = useState('signing');
   const [showBalanceInfo, setShowBalanceInfo] = useState(false);
+  const [statInfo, setStatInfo] = useState(null);
+  const [showEvolutionInfo, setShowEvolutionInfo] = useState(false);
 
   const totalSpent = useMemo(() => transactions.filter((t) => t.type === 'compra').reduce((sum, t) => sum + (t.amount || 0), 0), [transactions]);
   const totalEarned = useMemo(() => transactions.filter((t) => t.type === 'venta').reduce((sum, t) => sum + (t.amount || 0), 0), [transactions]);
@@ -349,17 +356,41 @@ export default function FinanceStatsTab() {
   return (
     <div className="space-y-4 animate-in fade-in">
       <div className="grid grid-cols-3 gap-2">
-        <StatCard icon={TrendingDown} label="Gasto en Fichajes" value={formatCurrency(totalSpent)} accent="text-red-500" />
-        <StatCard icon={TrendingUp} label="Ingresos (Bruto)" value={formatCurrency(totalEarned)} accent="text-green-500" />
-        <StatCard icon={Scale} label="Balance Neto" value={formatCurrency(netBalance)} accent={netBalance >= 0 ? 'text-green-500' : 'text-red-500'} />
+        <StatCard icon={TrendingDown} label="Gasto en Fichajes" value={formatCurrency(totalSpent)} accent="text-red-500" onInfoClick={() => setStatInfo('spent')} />
+        <StatCard icon={TrendingUp} label="Ingresos (Bruto)" value={formatCurrency(totalEarned)} accent="text-green-500" onInfoClick={() => setStatInfo('earned')} />
+        <StatCard icon={Scale} label="Balance Neto" value={formatCurrency(netBalance)} accent={netBalance >= 0 ? 'text-green-500' : 'text-red-500'} onInfoClick={() => setStatInfo('balance')} />
       </div>
+      {statInfo && (
+        <InfoModal
+          title={statInfo === 'spent' ? 'Gasto en Fichajes' : statInfo === 'earned' ? 'Ingresos (Bruto)' : 'Balance Neto'}
+          onClose={() => setStatInfo(null)}
+        >
+          {statInfo === 'spent' && <p>Refleja el gasto acumulado en traspasos y compras directas de jugadores.</p>}
+          {statInfo === 'earned' && <p>Es el dinero bruto total ingresado por todas las ventas de futbolistas realizadas.</p>}
+          {statInfo === 'balance' && (
+            <>
+              <p>Es la diferencia directa entre los ingresos brutos y los gastos totales en fichajes.</p>
+              <p className="p-2.5 bg-well rounded-xl border border-border-subtle text-fg font-black text-center">Ingresos (Bruto) − Gasto en Fichajes = Balance Neto</p>
+            </>
+          )}
+        </InfoModal>
+      )}
 
       <ProfitabilityCard transactions={transactions} />
 
       <SigningSpendCard transactions={transactions} />
 
       <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><LineChart size={13} /> Evolución de Ingresos vs. Gastos por Temporada</h3>
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2"><LineChart size={13} /> Evolución de Ingresos vs. Gastos por Temporada</h3>
+          <button type="button" onClick={() => setShowEvolutionInfo(true)} className="p-1 -m-1 text-fg-faint hover:text-fg transition-colors shrink-0 touch-manipulation"><Info size={13} /></button>
+        </div>
+        {showEvolutionInfo && (
+          <InfoModal title="Evolución de Ingresos vs. Gastos por Temporada" onClose={() => setShowEvolutionInfo(false)}>
+            <p>Compara el balance financiero total acumulado curso a curso, contrastando lo ingresado por ventas con lo gastado en fichajes en cada temporada.</p>
+            <p>Cada barra verde es el total de ventas de esa temporada; cada barra roja, el total gastado en fichajes en esa misma temporada.</p>
+          </InfoModal>
+        )}
         {seasonly.length === 0 ? (
           <div className="py-10 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Sin movimientos todavía</div>
         ) : (
