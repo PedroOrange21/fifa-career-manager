@@ -18,6 +18,11 @@ const STATUS_BORDER = {
   Descartado: 'border-l-border-subtle',
 };
 
+// Escritorio (ratón real): el texto se revela con :hover y un solo clic abre el formulario.
+// Táctil: el primer toque despliega el texto (sin abrir) y el segundo lo confirma — mismo
+// patrón que "Fichar Jugador" en la Plantilla (PlayerList.jsx).
+const HAS_HOVER = typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
 const emptyFilters = { position: '', status: '', ageMin: '', ageMax: '', ratingMin: '', ratingMax: '' };
 
 const positionsOf = (t) => t.positions || (t.primaryPosition ? [t.primaryPosition, ...(t.secondaryPositions || [])] : []);
@@ -33,17 +38,22 @@ function TargetRow({ t, onSign, onEdit, onDelete, selected, onToggleSelect }) {
   return (
     <div className={`p-3 md:p-4 border-l-4 transition-colors ${STATUS_BORDER[t.status] || STATUS_BORDER.Seguimiento} ${selected ? 'bg-green-500/5' : 'bg-surface'}`}>
       <div className="flex items-start gap-3 md:gap-4">
-        <button
-          type="button"
-          onClick={() => onToggleSelect(t.id)}
-          title={selected ? 'Quitar de la selección' : 'Seleccionar para el planificador'}
-          className={`w-6 h-6 md:w-[22px] md:h-[22px] mt-1.5 md:mt-2 rounded-md border-2 flex items-center justify-center shrink-0 transition-all touch-manipulation ${selected ? 'bg-green-500 border-green-500' : 'border-border-subtle bg-well hover:border-green-500/50'}`}
-        >
-          {selected && <Check size={13} className="text-black" strokeWidth={3.5} />}
-        </button>
-        <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(t.rating || 0)}`}>
-          <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{t.primaryPosition || positions[0] || '—'}</span>
-          <span className="text-lg md:text-xl">{t.rating || '—'}</span>
+        <div className="relative shrink-0">
+          {/* Checkbox pequeño y sutil, superpuesto en la esquina superior izquierda de la
+              insignia en vez de ocupar su propio hueco en la fila, para no sobrecargar el
+              diseño de la tarjeta. */}
+          <button
+            type="button"
+            onClick={() => onToggleSelect(t.id)}
+            title={selected ? 'Quitar de la selección' : 'Seleccionar para el planificador'}
+            className={`absolute -top-1.5 -left-1.5 z-10 w-4 h-4 rounded-md border-2 flex items-center justify-center transition-all touch-manipulation ${selected ? 'bg-green-500 border-green-500' : 'border-border-subtle bg-well hover:border-green-500/50'}`}
+          >
+            {selected && <Check size={9} className="text-black" strokeWidth={3.5} />}
+          </button>
+          <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none ${getCardStyle(t.rating || 0)}`}>
+            <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{t.primaryPosition || positions[0] || '—'}</span>
+            <span className="text-lg md:text-xl">{t.rating || '—'}</span>
+          </div>
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{t.name}</div>
@@ -110,7 +120,7 @@ function BudgetPlannerCard({ targets, selectedIds }) {
   const totalWageMonthly = activeTargets.reduce((sum, t) => sum + (t.wage || 0), 0);
 
   return (
-    <div className="flex-1 min-w-0 bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl">
+    <div className="w-full min-w-0 bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl">
       <div className="flex items-center justify-between gap-2 mb-2">
         <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-1.5 truncate"><Wallet size={12} className="shrink-0" /> Planificador de Fichajes</span>
         {hasSelection && (
@@ -165,6 +175,9 @@ export default function MarketTab({ onSignTarget }) {
   const [showFilters, setShowFilters] = useState(false);
   const filtersRef = useRef(null);
   useOnClickOutside(filtersRef, () => setShowFilters(false), showFilters);
+  const [addConfirming, setAddConfirming] = useState(false);
+  const addRef = useRef(null);
+  useOnClickOutside(addRef, () => setAddConfirming(false), addConfirming);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const toggleSelect = (id) => setSelectedIds((prev) => {
     const next = new Set(prev);
@@ -192,6 +205,12 @@ export default function MarketTab({ onSignTarget }) {
   const openNewForm = () => { setEditingTarget(null); setShowForm(true); };
   const openEditForm = (t) => { setEditingTarget(t); setShowForm(true); };
 
+  const handleAddClick = () => {
+    if (HAS_HOVER) { openNewForm(); return; }
+    if (addConfirming) { openNewForm(); setAddConfirming(false); }
+    else { setAddConfirming(true); }
+  };
+
   const signTarget = (t) => {
     onSignTarget({
       photo: t.photo || '',
@@ -215,6 +234,14 @@ export default function MarketTab({ onSignTarget }) {
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-faint" size={14} />
           <input type="text" placeholder="Buscar objetivo..." className="w-full h-9 bg-well pl-9 pr-3 rounded-xl border border-border-subtle outline-none focus:border-green-500 text-sm font-bold text-fg placeholder:text-fg-faint" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+        </div>
+        <div ref={addRef} className="group/fichar shrink-0">
+          <button type="button" onClick={handleAddClick} title="Añadir Objetivo" className={`flex items-center h-9 pl-3 pr-3 rounded-xl font-black uppercase text-[10px] shadow-lg shadow-green-500/20 transition-colors duration-300 active:scale-95 ${addConfirming ? 'bg-green-400 text-black' : 'bg-green-500 text-black hover:bg-green-400'}`}>
+            <Plus size={14} className="shrink-0" />
+            <span className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${addConfirming ? 'max-w-[160px] ml-1.5' : 'max-w-0 ml-0 group-hover/fichar:max-w-[160px] group-hover/fichar:ml-1.5'}`}>
+              Añadir Nuevo Objetivo
+            </span>
+          </button>
         </div>
         <div className="relative shrink-0" ref={filtersRef}>
           <button onClick={() => setShowFilters((o) => !o)} className={`h-9 px-3 flex items-center gap-1.5 rounded-xl border transition-all ${activeFilterCount > 0 ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:text-fg'}`} title="Filtros">
@@ -267,14 +294,10 @@ export default function MarketTab({ onSignTarget }) {
         <span className="text-[10px] text-fg-muted font-black uppercase tracking-widest flex items-center gap-2"><Target size={14} /> {sorted.length} Objetivos en Seguimiento</span>
       </div>
 
-      {/* Planificador a la izquierda (flex-1) + "Añadir Objetivo" desplazado a la derecha,
-          compacto en móvil (solo icono) y con etiqueta a partir de md. */}
-      <div className="flex items-stretch gap-2">
-        <BudgetPlannerCard targets={targets} selectedIds={selectedIds} />
-        <button onClick={openNewForm} className="shrink-0 w-14 md:w-auto md:px-5 bg-green-500 text-black rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 hover:bg-green-400 touch-manipulation">
-          <Plus size={18} /> <span className="hidden md:inline">Añadir Objetivo</span>
-        </button>
-      </div>
+      {/* "Añadir Objetivo" ya vive en la barra superior (junto a la búsqueda, animado igual
+          que "Fichar Jugador" en Plantilla), así que el planificador ocupa su propia fila
+          completa. */}
+      <BudgetPlannerCard targets={targets} selectedIds={selectedIds} />
 
       <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
         {sorted.length === 0 && (<div className="p-16 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">{targets.length === 0 ? 'Sin Objetivos Todavía' : 'Sin Resultados'}</div>)}
