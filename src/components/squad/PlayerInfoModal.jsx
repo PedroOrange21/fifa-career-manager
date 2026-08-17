@@ -145,17 +145,19 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
             extra respecto a la tarjeta (ver "pt-8" del contenedor con scroll más abajo) para
             que nunca se solape con ella; fuera de Táctica mantiene su tamaño habitual. */}
         <button onClick={onClose} className={`absolute z-10 bg-well rounded-full hover:bg-well-strong text-fg-muted hover:text-fg transition-colors ${hideMarketStatus ? 'top-3 right-3 p-1.5' : 'top-4 right-4 p-2'}`}><X size={hideMarketStatus ? 14 : 18} /></button>
-        {/* Fuera de Táctica (Plantilla/Operaciones): único lápiz junto al botón de cerrar, en
-            la cabecera del marco exterior — mismo criterio que la ficha de detalle completa. */}
+        {/* Fuera de Táctica (Plantilla/Operaciones): único lápiz en la cabecera del marco
+            exterior. En Plantilla (hideTacticsActions) va apilado verticalmente justo debajo
+            de la "X" (misma esquina, right-4); en Operaciones se mantiene junto a la "X". */}
         {!hideMarketStatus && (
-          <button onClick={() => onEdit(current)} title="Editar Jugador" className="absolute top-4 right-16 p-2 rounded-full bg-well text-fg-faint hover:text-blue-500 hover:bg-well-strong transition-colors z-10"><Edit2 size={16} /></button>
+          <button onClick={() => onEdit(current)} title="Editar Jugador" className={`absolute p-2 rounded-full bg-well text-fg-faint hover:text-blue-500 hover:bg-well-strong transition-colors z-10 ${hideTacticsActions ? 'top-16 right-4' : 'top-4 right-16'}`}><Edit2 size={16} /></button>
         )}
         {/* Cuerpo con scroll propio: la ficha en modo lectura ahora replica todas las
             secciones del Paso 4 de PlayerForm y puede superar la altura del modal, sobre todo
-            en jugadores Cedido. El botón de cerrar queda fuera de este contenedor, fijo en la
-            esquina superior del marco exterior — en Táctica con más espacio superior (pt-8)
-            para que la tarjeta (y su lápiz interno) nunca quede debajo del botón de cerrar. */}
-        <div className={`overflow-y-auto no-scrollbar flex-1 min-h-0 ${hideMarketStatus ? 'pt-8' : 'pt-1'}`}>
+            en jugadores Cedido. El botón de cerrar (y en Plantilla, también el lápiz) quedan
+            fuera de este contenedor, fijos en la esquina superior del marco exterior — con
+            espacio superior extra (pt-8 en Táctica, pt-28 en Plantilla) para que la tarjeta de
+            cabecera nunca quede debajo de esos botones. */}
+        <div className={`overflow-y-auto no-scrollbar flex-1 min-h-0 ${hideMarketStatus ? 'pt-8' : hideTacticsActions ? 'pt-28' : 'pt-1'}`}>
         {/* Plantilla (hideTacticsActions): cabecera con la misma tarjeta FIFA de vista previa
             que encabeza la pantalla de "Editar Jugador" (Paso 4 de PlayerForm) — media, posición
             principal, bandera, foto, nombre y posiciones secundarias — en modo puramente
