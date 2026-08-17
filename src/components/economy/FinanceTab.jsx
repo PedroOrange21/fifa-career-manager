@@ -81,7 +81,14 @@ export default function FinanceTab() {
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${t.type === 'compra' ? 'bg-red-500/10 text-red-500' : t.type === 'cesion' ? 'bg-blue-500/10 text-blue-500' : 'bg-green-500/10 text-green-500'}`}>{t.type === 'compra' ? <TrendingDown size={16} /> : t.type === 'cesion' ? <ArrowRightLeft size={16} /> : <TrendingUp size={16} />}</div>
                 <div className="min-w-0">
                   <div className="font-bold text-sm text-fg truncate">{t.playerName}</div>
-                  <div className="text-[9px] text-fg-faint font-black uppercase tracking-widest">{t.type === 'cesion' ? 'Ahorro salarial · ' : ''}{new Date(t.date).toLocaleDateString('es-ES')}</div>
+                  <div className="text-[9px] text-fg-faint font-black uppercase tracking-widest truncate">
+                    {t.type === 'cesion' && 'Ahorro salarial · '}
+                    {/* Ventas con desglose de directiva (traspaso total vs. neto ya reflejado
+                        en "amount"): solo se muestra si difiere, para no repetir el mismo
+                        importe dos veces en transacciones donde se asignó el 100%. */}
+                    {t.type === 'venta' && t.totalAmount != null && t.totalAmount !== t.amount && `Traspaso ${formatCurrency(t.totalAmount)} · Retenido ${formatCurrency(t.retainedAmount || 0)} · `}
+                    {new Date(t.date).toLocaleDateString('es-ES')}
+                  </div>
                 </div>
               </div>
               <div className={`font-black text-sm shrink-0 ${t.type === 'compra' ? 'text-red-500' : t.type === 'cesion' ? 'text-blue-500' : 'text-green-500'}`}>{t.type === 'compra' ? '-' : '+'}{formatCurrency(t.amount)}</div>

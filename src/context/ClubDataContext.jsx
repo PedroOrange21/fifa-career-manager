@@ -147,9 +147,13 @@ export function ClubDataProvider({ children }) {
   // club: opcional — solo se conoce para las cesiones (destinationClub). Las compras/ventas no
   // registran un club "contrario" en el modelo de datos actual, así que ese campo queda vacío
   // y la vista de Operaciones lo omite con gracia en vez de inventar un dato inexistente.
-  const logTransaction = async (type, playerName, amount, club = null) => {
+  // extra: campos adicionales opcionales (p. ej. en una venta, el importe total del traspaso y
+  // lo retenido por la directiva) — "amount" sigue siendo siempre el impacto real en el
+  // presupuesto de fichajes, para que las estadísticas financieras que suman "amount" reflejen
+  // dinero realmente disponible, no el total bruto acordado.
+  const logTransaction = async (type, playerName, amount, club = null, extra = null) => {
     if (!user || !activeClubId) return;
-    await addDoc(transactionsCol(user.uid, activeClubId), { type, playerName, amount, club, date: Date.now() });
+    await addDoc(transactionsCol(user.uid, activeClubId), { type, playerName, amount, club, date: Date.now(), ...(extra || {}) });
   };
 
   // Lista de Seguimiento / Objetivos de Mercado (pestaña "Objetivos" de Mercado): jugadores
@@ -283,11 +287,17 @@ export function ClubDataProvider({ children }) {
     });
   };
 
-  const sellPlayer = (player, salePrice) => {
+  // allocationPercent: porcentaje del traspaso que la directiva libera de inmediato al
+  // presupuesto de fichajes (por defecto 80%); el resto queda "retenido" por la directiva —
+  // simplemente no se suma al presupuesto disponible, modelando fondos del club que no van a
+  // reinversión inmediata en el mercado.
+  const sellPlayer = (player, salePrice, allocationPercent = 80) => {
     if (!player || player.type === 'Cedido') return;
+    const budgetAmount = Math.round(salePrice * (allocationPercent / 100));
+    const retainedAmount = salePrice - budgetAmount;
     deferPlayerRemoval(player, `Jugador ${player.name} vendido`, async () => {
-      adjustBudget(salePrice);
-      logTransaction('venta', player.name, salePrice);
+      adjustBudget(budgetAmount);
+      logTransaction('venta', player.name, budgetAmount, null, { totalAmount: salePrice, retainedAmount, allocationPercent });
     });
   };
 
