@@ -69,19 +69,30 @@ function OperationRow({ player, chipClassName, chipTextClassName, onClick, onDel
         ref={rowRef}
         onClick={(e) => { if (offset < 0) { close(); return; } onClick?.(e); }}
         style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
-        className={`relative flex items-center justify-between gap-3 px-3 py-2 rounded-xl border cursor-pointer touch-pan-y group ${chipClassName}`}
+        className="relative rounded-xl cursor-pointer touch-pan-y group"
       >
-        <div className="flex items-center gap-3 min-w-0 flex-1 md:transition-transform md:duration-300 md:ease-in-out md:group-hover:translate-x-9">
-          <div className={`w-8 h-8 rounded-lg flex shrink-0 items-center justify-center font-black text-[10px] ${getCardStyle(player.rating)}`}>{player.rating}</div>
-          <div className="flex flex-col min-w-0"><span className="text-[10px] font-bold uppercase italic text-black dark:text-white truncate">{player.name}</span><span className={`text-[8px] font-black uppercase tracking-widest truncate ${chipTextClassName}`}>{player.positions?.join(' · ')}</span></div>
-        </div>
-        {children}
+        {/* chipClassName (ej. "bg-red-500/5 border-red-500/10") es semitransparente a
+            propósito para el tinte de color de cada lista — pero eso significa que, sin una
+            base opaca detrás, el panel de swipe (Borrar/Editar/Más) se transparentaba por
+            debajo de la fila incluso en reposo, "solapándose" visualmente con el texto. Se
+            arregla con una capa base 100% opaca (bg-surface) y el tinte encima, en vez de
+            aplicar chipClassName directamente sobre el contenido. */}
+        <div className="absolute inset-0 bg-surface rounded-xl" />
+        <div className={`absolute inset-0 rounded-xl border ${chipClassName}`} />
+        <div className="relative flex items-center justify-between gap-3 px-3 py-2">
+          <div className="flex items-center gap-3 min-w-0 flex-1 md:transition-transform md:duration-300 md:ease-in-out md:group-hover:translate-x-9">
+            <div className={`w-8 h-8 rounded-lg flex shrink-0 items-center justify-center font-black text-[10px] ${getCardStyle(player.rating)}`}>{player.rating}</div>
+            <div className="flex flex-col min-w-0"><span className="text-[10px] font-bold uppercase italic text-black dark:text-white truncate">{player.name}</span><span className={`text-[8px] font-black uppercase tracking-widest truncate ${chipTextClassName}`}>{player.positions?.join(' · ')}</span></div>
+          </div>
+          {children}
 
-        {/* Escritorio: "..." fijo a la izquierda, oculto hasta hacer hover en la fila (mismo
-            patrón que PlayerRow), para no competir por espacio con el contenido de la derecha. */}
-        <button ref={moreBtnDesktopRef} type="button" onClick={toggleMore} title="Más opciones" className="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
-          <MoreHorizontal size={13} />
-        </button>
+          {/* Escritorio: "..." fijo a la izquierda, oculto hasta hacer hover en la fila (mismo
+              patrón que PlayerRow), para no competir por espacio con el contenido de la
+              derecha. */}
+          <button ref={moreBtnDesktopRef} type="button" onClick={toggleMore} title="Más opciones" className="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
+            <MoreHorizontal size={13} />
+          </button>
+        </div>
       </div>
 
       {pastThreshold && (

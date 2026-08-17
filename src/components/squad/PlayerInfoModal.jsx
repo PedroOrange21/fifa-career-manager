@@ -256,6 +256,8 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
                 <SectionHeader emoji="💰" title="Economía" />
                 <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
                   <DetailRow label="Adquisición" value={current.type} />
+                  <DetailRow label="Club de Procedencia" value={current.sourceClub || 'Sin definir'} />
+                  <DetailRow label="Rol Pactado" value={current.agreedRole || 'Sin definir'} />
                   <DetailRow label="Valor de Mercado (€)" value={formatCurrency(current.marketValue || current.value)} />
                   {current.type === 'Comprado' && (
                     <>

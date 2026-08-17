@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Wallet, TrendingUp, TrendingDown, ArrowRightLeft, Users2, Edit2, Check, X, List, ChevronDown, ChevronUp } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, ArrowRightLeft, ArrowDownToLine, Users2, Edit2, Check, X, List, ChevronDown, ChevronUp } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency, formatValueInput, parseValue } from '../../utils/format';
@@ -87,30 +87,40 @@ export default function FinanceTab() {
         <div className="divide-y divide-border-subtle">
           {transactions.length === 0 && (<div className="p-10 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Sin movimientos todavía</div>)}
           {transactions.map((t) => {
-            // Solo venta y cesión tienen condiciones adicionales que merezcan un desglose;
-            // una compra es un único importe sin más matices que mostrar.
-            const hasDetail = t.type === 'venta' || t.type === 'cesion';
+            // Las 4 clases de movimiento tienen ya condiciones/contexto propio que merece un
+            // desglose (compra y cesión entrante incluyen la instantánea de fichaje guardada
+            // en ClubDataContext; venta y cesión saliente, el reparto económico ya existente).
             const isOpen = expandedTx === t.id;
+            const isOutflow = t.type === 'compra' || t.type === 'cesion_entrante';
+            // Clases literales completas (no interpoladas) a propósito: el escáner de
+            // contenido de Tailwind necesita ver el nombre de la clase entero en el código
+            // fuente para generarla — construirlo con un `${...}` dinámico (ej. `bg-${color}-
+            // 500/10`) hace que se pierda silenciosamente en el CSS final.
+            const iconWrapClass = t.type === 'compra' ? 'bg-red-500/10 text-red-500' : t.type === 'cesion' ? 'bg-blue-500/10 text-blue-500' : t.type === 'cesion_entrante' ? 'bg-purple-500/10 text-purple-500' : 'bg-green-500/10 text-green-500';
+            const amountClass = t.type === 'compra' ? 'text-red-500' : t.type === 'cesion' ? 'text-blue-500' : t.type === 'cesion_entrante' ? 'text-purple-500' : 'text-green-500';
+            const Icon = t.type === 'compra' ? TrendingDown : t.type === 'cesion' ? ArrowRightLeft : t.type === 'cesion_entrante' ? ArrowDownToLine : TrendingUp;
             return (
               <div key={t.id}>
                 <div className="p-3 md:p-4 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${t.type === 'compra' ? 'bg-red-500/10 text-red-500' : t.type === 'cesion' ? 'bg-blue-500/10 text-blue-500' : 'bg-green-500/10 text-green-500'}`}>{t.type === 'compra' ? <TrendingDown size={16} /> : t.type === 'cesion' ? <ArrowRightLeft size={16} /> : <TrendingUp size={16} />}</div>
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconWrapClass}`}><Icon size={16} /></div>
                     <div className="min-w-0">
                       <div className="font-bold text-sm text-fg truncate">{t.playerName}</div>
-                      <div className="text-[9px] text-fg-faint font-black uppercase tracking-widest truncate">{t.type === 'cesion' && 'Ahorro salarial · '}{new Date(t.date).toLocaleDateString('es-ES')}</div>
+                      <div className="text-[9px] text-fg-faint font-black uppercase tracking-widest truncate">
+                        {t.type === 'cesion' && 'Ahorro salarial · '}
+                        {t.type === 'cesion_entrante' && 'Cesión entrante · '}
+                        {new Date(t.date).toLocaleDateString('es-ES')}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <div className={`font-black text-sm ${t.type === 'compra' ? 'text-red-500' : t.type === 'cesion' ? 'text-blue-500' : 'text-green-500'}`}>{t.type === 'compra' ? '-' : '+'}{formatCurrency(t.amount)}</div>
-                    {hasDetail && (
-                      <button type="button" onClick={() => setExpandedTx(isOpen ? null : t.id)} title="Ver desglose" className="p-1 rounded-lg text-fg-faint hover:text-fg hover:bg-well transition-colors">
-                        {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-                    )}
+                    <div className={`font-black text-sm ${amountClass}`}>{isOutflow ? '-' : '+'}{formatCurrency(t.amount)}</div>
+                    <button type="button" onClick={() => setExpandedTx(isOpen ? null : t.id)} title="Ver desglose" className="p-1 rounded-lg text-fg-faint hover:text-fg hover:bg-well transition-colors">
+                      {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
                   </div>
                 </div>
-                {isOpen && hasDetail && (
+                {isOpen && (
                   <div className="px-3 pb-3 md:px-4 md:pb-4 -mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
                     <div className="p-3 bg-well rounded-xl border border-border-subtle space-y-1.5">
                       {t.type === 'venta' && (
@@ -128,6 +138,15 @@ export default function FinanceTab() {
                           <DetailLine label="% Pagado por Nosotros" value={`${t.wagePercentage ?? 0}%`} />
                           <DetailLine label="Ahorro Mensual" value={`${formatCurrency(t.amount)}/mes`} />
                           {t.buyOption ? <DetailLine label="Opción de Compra" value={formatCurrency(t.buyOption)} /> : null}
+                        </>
+                      )}
+                      {(t.type === 'compra' || t.type === 'cesion_entrante') && (
+                        <>
+                          <DetailLine label="Precio de Traspaso Pagado" value={`-${formatCurrency(t.amount)}`} />
+                          <DetailLine label={t.type === 'compra' ? 'Club de Procedencia' : 'Club de Origen'} value={(t.type === 'compra' ? t.sourceClub : t.club) || 'Sin definir'} />
+                          <DetailLine label="Rol Pactado" value={t.agreedRole || 'Sin definir'} />
+                          {t.wageMonthly ? <DetailLine label="Impacto Salarial" value={`+${formatCurrency(t.wageMonthly)}/mes · +${formatCurrency(t.wageMonthly * 12)}/año`} /> : null}
+                          <DetailLine label="Posición y Media" value={t.position ? `${t.position} · ${t.rating ?? '—'}` : 'Sin definir'} />
                         </>
                       )}
                     </div>

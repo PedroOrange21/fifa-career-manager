@@ -261,9 +261,26 @@ export function ClubDataProvider({ children }) {
     if (!user || !activeClubId) return;
     const id = editingId || crypto.randomUUID();
     await setDoc(playerDoc(user.uid, activeClubId, id), playerData, { merge: true });
-    if (!editingId && !skipFinancialEffects && playerData.type === 'Comprado' && playerData.value > 0) {
-      adjustBudget(-playerData.value);
-      logTransaction('compra', playerData.name, playerData.value);
+    if (!editingId && !skipFinancialEffects) {
+      // Instantánea de contexto (procedencia, rol pactado, posición/media al fichar) guardada
+      // en la propia transacción, para que el desglose del historial siga siendo consultable
+      // más adelante aunque el jugador cambie de datos o abandone el club.
+      const snapshot = {
+        sourceClub: playerData.sourceClub || null,
+        agreedRole: playerData.agreedRole || null,
+        position: playerData.positions?.[0] || null,
+        rating: playerData.rating ?? null,
+      };
+      if (playerData.type === 'Comprado' && playerData.value > 0) {
+        adjustBudget(-playerData.value);
+        logTransaction('compra', playerData.name, playerData.value, null, { ...snapshot, wageMonthly: playerData.wage || 0 });
+      } else if (playerData.type === 'Cedido') {
+        // Una cesión entrante no tiene coste de traspaso en este modelo (no se descuenta
+        // presupuesto), pero sí un impacto salarial recurrente: el % que asumimos del sueldo
+        // total del jugador, ya calculado igual que en la propia ficha de detalle.
+        const wageMonthly = Math.round((playerData.wage || 0) * ((playerData.wagePercentage || 0) / 100));
+        logTransaction('cesion_entrante', playerData.name, 0, playerData.originClub || null, { ...snapshot, wageMonthly });
+      }
     }
     return id;
   };

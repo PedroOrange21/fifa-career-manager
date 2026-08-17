@@ -50,6 +50,16 @@ const LOAN_DURATION_OPTIONS = [
   { value: '2 Temporadas', label: '2 Temporadas' },
 ];
 
+// Rol Pactado: expectativa de peso en la plantilla acordada al fichar/traer cedido al
+// jugador (no aplica a Cantera, que todavía no tiene un rol competitivo definido).
+const AGREED_ROLE_OPTIONS = [
+  { value: 'Crucial', label: 'Crucial' },
+  { value: 'Importante', label: 'Importante' },
+  { value: 'Rotación', label: 'Rotación' },
+  { value: 'Esporádico', label: 'Esporádico' },
+  { value: 'Promesa', label: 'Promesa' },
+];
+
 // Campos de texto/número compactos, uniformes en toda la tarjeta: 16px (text-base) en
 // móvil para evitar el auto-zoom de Safari/Chrome, algo más compactos en escritorio.
 const FIELD_BASE = 'w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-black text-base md:text-sm text-fg placeholder:text-fg-faint';
@@ -89,6 +99,11 @@ const toFormState = (p) => {
     wage: formatValueInput(String(p?.wage || '')),
     releaseClause: formatValueInput(String(p?.releaseClause || '')),
     contractYears: p?.contractYears || '',
+    // Club de Procedencia y Rol Pactado: contexto de scouting/plantilla aplicable a cualquier
+    // incorporación al primer equipo (Comprado o Cedido), distinto de "Club de Origen" (que es
+    // específico del modelo de cesión entrante, el club que sigue siendo dueño del jugador).
+    sourceClub: p?.sourceClub || '',
+    agreedRole: p?.agreedRole || '',
     // No editables por el asistente en sí (transferStatus se cambia desde la Plantilla/Táctica,
     // no aquí), pero deben conservarse al guardar: si no se incluyeran en el payload de
     // handleConfirm, cualquier edición desde el Paso 4 resetearía en silencio a un jugador
@@ -407,6 +422,10 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
         value: form.type === 'Comprado' ? parseValue(form.value) : 0,
         loanDuration: form.type === 'Cedido' ? form.loanDuration : null,
         originClub: form.type === 'Cedido' ? form.originClub.trim() : null,
+        // Club de Procedencia y Rol Pactado: aplican a Comprado y Cedido por igual, nunca a
+        // Cantera (ver guard del propio campo en el Paso 3/Revisión).
+        sourceClub: form.type !== 'Cantera' && form.sourceClub.trim() ? form.sourceClub.trim() : null,
+        agreedRole: form.type !== 'Cantera' && form.agreedRole ? form.agreedRole : null,
         buyOption: form.type === 'Cedido' && form.hasBuyOption ? (parseValue(form.buyOption) || null) : null,
         wagePercentage: form.type === 'Cedido' && form.wagePercentage ? parseInt(form.wagePercentage) : null,
         // Conserva el estado de mercado real del jugador (Activo/Cedible/Transferible/
@@ -641,6 +660,20 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                       </div>
                     </div>
                   )}
+                  {/* Club de Procedencia y Rol Pactado: aplican a cualquier incorporación al
+                      primer equipo (Comprado o Cedido), nunca a Cantera. */}
+                  {form.type !== 'Cantera' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1 relative">
+                        <label className="text-[9px] font-black text-fg-muted ml-1">Club de Procedencia</label>
+                        <input type="text" placeholder="Ej: Sporting Gijón" onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.sourceClub} onChange={(e) => set({ sourceClub: e.target.value })} />
+                      </div>
+                      <div className="space-y-1 relative">
+                        <label className="text-[9px] font-black text-fg-muted ml-1">Rol Pactado</label>
+                        <Dropdown value={form.agreedRole} options={AGREED_ROLE_OPTIONS} onChange={(v) => set({ agreedRole: v })} placeholder="Seleccionar" labelClassName="text-xs" />
+                      </div>
+                    </div>
+                  )}
                   {form.type === 'Comprado' && !hidePurchasePrice && (
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Precio de Compra (€) *</label>
@@ -843,6 +876,17 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                         </div>
                         <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
                       </ReviewRow>
+                    )}
+
+                    {form.type !== 'Cantera' && (
+                      <>
+                        <ReviewRow label="Club de Procedencia" active={editField === 'sourceClub'} onOpen={() => setEditField('sourceClub')} display={form.sourceClub || 'Sin definir'}>
+                          <input autoFocus type="text" placeholder="Ej: Sporting Gijón" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.sourceClub} onChange={(e) => set({ sourceClub: e.target.value })} />
+                        </ReviewRow>
+                        <ReviewRow label="Rol Pactado" active={editField === 'agreedRole'} onOpen={() => setEditField('agreedRole')} display={form.agreedRole || 'Sin definir'}>
+                          <Dropdown value={form.agreedRole} options={AGREED_ROLE_OPTIONS} onChange={(v) => { set({ agreedRole: v }); setEditField(null); }} placeholder="Seleccionar" />
+                        </ReviewRow>
+                      </>
                     )}
 
                     {/* Valor de Mercado: oculto para Cantera, igual que en el Paso 3. */}
