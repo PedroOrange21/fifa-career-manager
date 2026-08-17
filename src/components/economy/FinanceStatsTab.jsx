@@ -1,8 +1,29 @@
 import { useMemo, useState } from 'react';
-import { TrendingUp, TrendingDown, Scale, LineChart, Shirt, Wallet, Tag, ChevronDown, Info } from 'lucide-react';
+import { TrendingUp, TrendingDown, Scale, LineChart, Shirt, Wallet, Tag, ChevronDown, Info, X } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency } from '../../utils/format';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
+
+// Popover explicativo genérico para los iconos "ℹ️" de las tarjetas de Estadísticas: mismo
+// patrón de bottom-sheet/modal ya usado en Academia (PotentialInfoModal), reutilizado aquí para
+// no depender de un simple `title` nativo (que en móvil no se puede ni pulsar).
+function InfoModal({ title, children, onClose }) {
+  useBodyScrollLock();
+  useAutoHideChrome();
+  return (
+    <div className="fixed inset-0 bg-black/80 z-[300] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-surface border border-border w-full sm:max-w-sm rounded-t-[28px] sm:rounded-[28px] p-5 md:p-6 max-h-[85dvh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-black italic uppercase text-fg flex items-center gap-2 text-sm"><Info size={16} className="text-emerald-500" /> {title}</h3>
+          <button type="button" onClick={onClose} className="p-1.5 -mr-1.5 text-fg-faint hover:text-fg transition-colors touch-manipulation"><X size={18} /></button>
+        </div>
+        <div className="text-[11px] text-fg-muted font-bold leading-relaxed space-y-2.5">{children}</div>
+      </div>
+    </div>
+  );
+}
 
 // Misma agrupación por línea (POR/DEF/MED/DEL) que en Objetivos de Mercado, para desglosar el
 // gasto por demarcación en vez de por las 15 posiciones exactas.
@@ -112,6 +133,7 @@ function GroupBreakdown({ views, activeView, onChangeView }) {
 function ProfitabilityCard({ transactions }) {
   const [view, setView] = useState('all');
   const [showList, setShowList] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const ventas = [...transactions.filter((t) => t.type === 'venta')].sort((a, b) => b.date - a.date);
   const academyVentas = ventas.filter((t) => (t.originalCost ?? 0) === 0);
   const signedVentas = ventas.filter((t) => (t.originalCost ?? 0) > 0);
@@ -133,8 +155,16 @@ function ProfitabilityCard({ transactions }) {
     <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
       <div className="flex items-center justify-between gap-2 mb-4">
         <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2"><TrendingUp size={13} /> Beneficio por Traspasos (Neto)</h3>
-        <Info size={13} className="text-fg-faint shrink-0 cursor-help" title="Plusvalía real: precio de venta menos el coste original de fichaje de cada jugador. No confundir con los Ingresos por Ventas (Bruto), que es el total cobrado sin restar ese coste." />
+        <button type="button" onClick={() => setShowInfo(true)} className="p-1 -m-1 text-fg-faint hover:text-fg transition-colors shrink-0 touch-manipulation"><Info size={13} /></button>
       </div>
+      {showInfo && (
+        <InfoModal title="Beneficio por Traspasos (Neto)" onClose={() => setShowInfo(false)}>
+          <p>Es el beneficio neto real obtenido en cada venta: al dinero ingresado por el traspaso se le descuenta el coste original de compra del jugador.</p>
+          <p className="p-2.5 bg-well rounded-xl border border-border-subtle text-fg font-black text-center">Precio de Venta − Coste Original = Beneficio Neto</p>
+          <p>En el caso de los canteranos, el coste original de fichaje es <span className="text-fg font-black">0 €</span>, así que el 100% de lo ingresado por su venta se contabiliza como beneficio.</p>
+          <p>No confundir con "Ingresos (Bruto)", que es el total cobrado por todas las ventas sin restar ese coste.</p>
+        </InfoModal>
+      )}
       <div className="flex bg-well p-1 rounded-2xl border border-border-subtle mb-4">
         {Object.entries(views).map(([id, v]) => (
           <button key={id} type="button" onClick={() => switchView(id)} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all touch-manipulation ${view === id ? 'bg-surface text-fg shadow-sm border border-border-subtle' : 'text-fg-muted hover:text-fg-secondary'}`}>
@@ -217,7 +247,20 @@ function SigningSpendCard({ transactions }) {
               </div>
               <div className="mt-1.5 space-y-0.5">
                 <div className="flex items-center justify-between gap-2 text-[9px]"><span className="font-bold text-fg-muted">Coste del Traspaso</span><span className="font-black text-red-500">-{formatCurrency(t.amount)}</span></div>
-                <div className="flex items-center justify-between gap-2 text-[9px]"><span className="font-bold text-fg-muted">Ficha Salarial Pactada</span><span className="font-black text-fg-secondary">{t.wageMonthly ? `${formatCurrency(t.wageMonthly)}/mes` : 'Sin definir'}</span></div>
+                {/* Dos filas superpuestas (mes arriba, año abajo) en vez de un único valor
+                    inline, para que quede claro que la ficha salarial pactada es mensual y a
+                    la vez se vea su equivalente anual sin tener que calcularlo a mano. */}
+                <div className="flex items-start justify-between gap-2 text-[9px]">
+                  <span className="font-bold text-fg-muted pt-px">Ficha Salarial Pactada</span>
+                  {t.wageMonthly ? (
+                    <span className="text-right leading-tight shrink-0">
+                      <span className="block font-black text-fg-secondary">{formatCurrency(t.wageMonthly)}/mes</span>
+                      <span className="block font-bold text-fg-faint text-[8px] mt-0.5">{formatCurrency(t.wageMonthly * 12)}/año</span>
+                    </span>
+                  ) : (
+                    <span className="font-black text-fg-secondary">Sin definir</span>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -232,6 +275,7 @@ export default function FinanceStatsTab() {
   const { players, transactions } = useClubData();
   // "signing" (Gasto en Fichajes) activo por defecto, tal y como se pidió.
   const [breakdownView, setBreakdownView] = useState('signing');
+  const [showBalanceInfo, setShowBalanceInfo] = useState(false);
 
   const totalSpent = useMemo(() => transactions.filter((t) => t.type === 'compra').reduce((sum, t) => sum + (t.amount || 0), 0), [transactions]);
   const totalEarned = useMemo(() => transactions.filter((t) => t.type === 'venta').reduce((sum, t) => sum + (t.amount || 0), 0), [transactions]);
@@ -306,7 +350,7 @@ export default function FinanceStatsTab() {
     <div className="space-y-4 animate-in fade-in">
       <div className="grid grid-cols-3 gap-2">
         <StatCard icon={TrendingDown} label="Gasto en Fichajes" value={formatCurrency(totalSpent)} accent="text-red-500" />
-        <StatCard icon={TrendingUp} label="Ingresos Ventas (Bruto)" value={formatCurrency(totalEarned)} accent="text-green-500" />
+        <StatCard icon={TrendingUp} label="Ingresos (Bruto)" value={formatCurrency(totalEarned)} accent="text-green-500" />
         <StatCard icon={Scale} label="Balance Neto" value={formatCurrency(netBalance)} accent={netBalance >= 0 ? 'text-green-500' : 'text-red-500'} />
       </div>
 
@@ -344,8 +388,17 @@ export default function FinanceStatsTab() {
       <div className="bg-gradient-to-br from-surface to-well/40 p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
         <div className="flex items-center justify-between gap-2 mb-3">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2"><Wallet size={13} /> Proyección de Balance</h3>
-          <Info size={13} className="text-fg-faint shrink-0 cursor-help" title="Estimación del saldo al cierre de temporada teniendo en cuenta la masa salarial restante." />
+          <button type="button" onClick={() => setShowBalanceInfo(true)} className="p-1 -m-1 text-fg-faint hover:text-fg transition-colors shrink-0 touch-manipulation"><Info size={13} /></button>
         </div>
+        {showBalanceInfo && (
+          <InfoModal title="Proyección de Balance" onClose={() => setShowBalanceInfo(false)}>
+            <p>Estima el saldo disponible al cierre de temporada combinando tres cifras:</p>
+            <p className="p-2.5 bg-well rounded-xl border border-border-subtle text-fg font-black text-center leading-relaxed">Presupuesto Actual<br />+ Ingresos Previstos<br />− Masa Salarial Restante<br />= Balance Final Estimado</p>
+            <p><span className="text-fg font-black">Presupuesto Actual:</span> el saldo de traspasos disponible hoy mismo.</p>
+            <p><span className="text-fg font-black">Ingresos Previstos:</span> la media histórica de lo ingresado por temporada en ventas.</p>
+            <p><span className="text-fg font-black">Masa Salarial Restante:</span> la masa salarial mensual actual acumulada hasta final de temporada (estimada en {MONTHS_REMAINING_ESTIMATE} meses).</p>
+          </InfoModal>
+        )}
         <div className={`text-lg sm:text-xl md:text-3xl font-black italic tracking-tighter truncate ${finalBalance >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(finalBalance)}</div>
         <div className={`inline-flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${finalBalance >= 0 ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
           {finalBalance >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />} {finalBalance >= 0 ? 'Superávit Previsto' : 'Riesgo de Déficit'}
