@@ -136,7 +136,10 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
   return (
     <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
       <div className="bg-surface border border-border p-6 rounded-[32px] w-full max-w-sm shadow-2xl relative max-h-[88dvh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-well rounded-full hover:bg-well-strong text-fg-muted hover:text-fg z-10"><X size={18} /></button>
+        {/* En Táctica (acción rápida) el botón de cerrar es más pequeño y sutil, con margen
+            extra respecto a la tarjeta (ver "pt-8" del contenedor con scroll más abajo) para
+            que nunca se solape con ella; fuera de Táctica mantiene su tamaño habitual. */}
+        <button onClick={onClose} className={`absolute z-10 bg-well rounded-full hover:bg-well-strong text-fg-muted hover:text-fg transition-colors ${hideMarketStatus ? 'top-3 right-3 p-1.5' : 'top-4 right-4 p-2'}`}><X size={hideMarketStatus ? 14 : 18} /></button>
         {/* Fuera de Táctica (Plantilla/Operaciones): único lápiz junto al botón de cerrar, en
             la cabecera del marco exterior — mismo criterio que la ficha de detalle completa. */}
         {!hideMarketStatus && (
@@ -145,8 +148,9 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
         {/* Cuerpo con scroll propio: la ficha en modo lectura ahora replica todas las
             secciones del Paso 4 de PlayerForm y puede superar la altura del modal, sobre todo
             en jugadores Cedido. El botón de cerrar queda fuera de este contenedor, fijo en la
-            esquina superior del marco exterior. */}
-        <div className="overflow-y-auto no-scrollbar flex-1 min-h-0 pt-1">
+            esquina superior del marco exterior — en Táctica con más espacio superior (pt-8)
+            para que la tarjeta (y su lápiz interno) nunca quede debajo del botón de cerrar. */}
+        <div className={`overflow-y-auto no-scrollbar flex-1 min-h-0 ${hideMarketStatus ? 'pt-8' : 'pt-1'}`}>
         <div className="p-4 pt-5 bg-well rounded-[24px] border border-border-subtle flex flex-col gap-4 relative">
           {/* En Táctica (acción rápida): el lápiz vive dentro de la propia tarjeta del
               jugador, en su esquina superior derecha, y se desplaza con ella en vez de
@@ -159,7 +163,7 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
             <div className={`flex-1 min-w-0 ${hideMarketStatus ? 'pr-6' : ''}`}>
               <div className="font-black uppercase italic text-lg truncate tracking-tighter leading-tight text-black dark:text-white">{current.name}</div>
               <div className="text-[10px] text-green-500/80 font-black uppercase tracking-widest mb-1 mt-0.5 truncate">{current.positions?.join(' · ')}</div>
-              <div className="flex flex-wrap items-center gap-1.5 mt-1"><span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{current.age} Años</span><span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{current.preferredFoot || 'Diestro'}</span>{(current.marketValue || current.value) ? <span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{abbreviateValue(current.marketValue || current.value)}</span> : null}{current.type === 'Cedido' ? (<span className="text-[8px] flex items-center gap-1 text-yellow-500 font-black uppercase tracking-widest bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20"><ArrowDownToLine size={10} className="shrink-0" /> Cedido ({formatLoanDuration(current.loanDuration)})</span>) : current.type && !(hideMarketStatus && current.type === 'Comprado') ? (<span className={`text-[8px] flex items-center gap-1 px-2 py-0.5 rounded font-black uppercase tracking-wider ${current.type === 'Cantera' ? 'bg-emerald-600/20 text-emerald-400' : 'bg-blue-600/20 text-blue-400'}`}>{current.type === 'Cantera' && <GraduationCap size={10} className="shrink-0" />} {current.type}</span>) : null}</div>
+              <div className="flex flex-wrap items-center gap-1.5 mt-1"><span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{current.age} Años</span>{!hideMarketStatus && <span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{current.preferredFoot || 'Diestro'}</span>}{(current.marketValue || current.value) ? <span className="text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well-strong px-2 py-0.5 rounded">{abbreviateValue(current.marketValue || current.value)}</span> : null}{current.type === 'Cedido' ? (<span className="text-[8px] flex items-center gap-1 text-yellow-500 font-black uppercase tracking-widest bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20"><ArrowDownToLine size={10} className="shrink-0" /> Cedido ({formatLoanDuration(current.loanDuration)})</span>) : current.type && !(hideMarketStatus && current.type === 'Comprado') ? (<span className={`text-[8px] flex items-center gap-1 px-2 py-0.5 rounded font-black uppercase tracking-wider ${current.type === 'Cantera' ? 'bg-emerald-600/20 text-emerald-400' : 'bg-blue-600/20 text-blue-400'}`}>{current.type === 'Cantera' && <GraduationCap size={10} className="shrink-0" />} {current.type}</span>) : null}</div>
             </div>
           </div>
         </div>
