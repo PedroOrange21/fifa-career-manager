@@ -131,7 +131,10 @@ function ProfitabilityCard({ transactions }) {
 
   return (
     <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
-      <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><TrendingUp size={13} /> Beneficio por Traspasos</h3>
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2"><TrendingUp size={13} /> Beneficio por Traspasos (Neto)</h3>
+        <Info size={13} className="text-fg-faint shrink-0 cursor-help" title="Plusvalía real: precio de venta menos el coste original de fichaje de cada jugador. No confundir con los Ingresos por Ventas (Bruto), que es el total cobrado sin restar ese coste." />
+      </div>
       <div className="flex bg-well p-1 rounded-2xl border border-border-subtle mb-4">
         {Object.entries(views).map(([id, v]) => (
           <button key={id} type="button" onClick={() => switchView(id)} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all touch-manipulation ${view === id ? 'bg-surface text-fg shadow-sm border border-border-subtle' : 'text-fg-muted hover:text-fg-secondary'}`}>
@@ -163,9 +166,8 @@ function ProfitabilityCard({ transactions }) {
               <div key={t.id} className="p-2.5 bg-well rounded-xl border border-border-subtle">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-black text-fg truncate">{t.playerName}</span>
-                  <span className="text-[8px] font-black text-fg-faint uppercase tracking-widest shrink-0">T{t.seasonNumber || 1}</span>
+                  <span className="text-[8px] font-black text-fg-faint uppercase tracking-widest shrink-0">TEMP {t.seasonNumber || 1}</span>
                 </div>
-                <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest mt-0.5">{t.position || '—'} · {t.rating ?? '—'}</div>
                 {/* Dos filas: origen del jugador (comprado o cantera) y el precio de venta,
                     con el beneficio/pérdida junto a esta última. */}
                 <div className="mt-1.5 space-y-0.5">
@@ -178,6 +180,47 @@ function ProfitabilityCard({ transactions }) {
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Tarjeta desglosable análoga a ProfitabilityCard, pero para el lado del gasto: cada
+// transacción de tipo "compra" ya guarda el coste del traspaso (amount) y la ficha salarial
+// pactada (wageMonthly, ver logTransaction en ClubDataContext), así que no hace falta cruzar
+// con la plantilla actual — funciona igual aunque el jugador ya no esté en el club.
+function SigningSpendCard({ transactions }) {
+  const [showList, setShowList] = useState(false);
+  const compras = [...transactions.filter((t) => t.type === 'compra')].sort((a, b) => b.date - a.date);
+  const total = compras.reduce((sum, t) => sum + (t.amount || 0), 0);
+
+  return (
+    <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
+      <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><Tag size={13} /> Gasto en Fichajes</h3>
+      <div className="text-2xl md:text-3xl font-black italic tracking-tighter truncate text-red-500">-{formatCurrency(total)}</div>
+      <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest mt-1.5">Total pagado en traspasos por fichajes</p>
+
+      <button type="button" onClick={() => setShowList((v) => !v)} className="w-full flex items-center justify-between mt-4 pt-3 border-t border-border-subtle text-[9px] font-black uppercase tracking-widest text-fg-muted hover:text-fg transition-colors touch-manipulation">
+        <span>{compras.length} Fichaje{compras.length === 1 ? '' : 's'}</span>
+        <ChevronDown size={14} className={`transition-transform duration-200 ${showList ? 'rotate-180' : ''}`} />
+      </button>
+      {showList && (
+        <div className="mt-2 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+          {compras.length === 0 ? (
+            <div className="py-4 text-center text-[9px] font-bold text-fg-faint uppercase tracking-widest">Sin fichajes registrados</div>
+          ) : compras.map((t) => (
+            <div key={t.id} className="p-2.5 bg-well rounded-xl border border-border-subtle">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-black text-fg truncate">{t.playerName}</span>
+                <span className="text-[8px] font-black text-fg-faint uppercase tracking-widest shrink-0">TEMP {t.seasonNumber || 1}</span>
+              </div>
+              <div className="mt-1.5 space-y-0.5">
+                <div className="flex items-center justify-between gap-2 text-[9px]"><span className="font-bold text-fg-muted">Coste del Traspaso</span><span className="font-black text-red-500">-{formatCurrency(t.amount)}</span></div>
+                <div className="flex items-center justify-between gap-2 text-[9px]"><span className="font-bold text-fg-muted">Ficha Salarial Pactada</span><span className="font-black text-fg-secondary">{t.wageMonthly ? `${formatCurrency(t.wageMonthly)}/mes` : 'Sin definir'}</span></div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -263,11 +306,13 @@ export default function FinanceStatsTab() {
     <div className="space-y-4 animate-in fade-in">
       <div className="grid grid-cols-3 gap-2">
         <StatCard icon={TrendingDown} label="Gasto en Fichajes" value={formatCurrency(totalSpent)} accent="text-red-500" />
-        <StatCard icon={TrendingUp} label="Ingresos por Ventas" value={formatCurrency(totalEarned)} accent="text-green-500" />
+        <StatCard icon={TrendingUp} label="Ingresos Ventas (Bruto)" value={formatCurrency(totalEarned)} accent="text-green-500" />
         <StatCard icon={Scale} label="Balance Neto" value={formatCurrency(netBalance)} accent={netBalance >= 0 ? 'text-green-500' : 'text-red-500'} />
       </div>
 
       <ProfitabilityCard transactions={transactions} />
+
+      <SigningSpendCard transactions={transactions} />
 
       <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
         <h3 className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2 mb-4"><LineChart size={13} /> Evolución de Ingresos vs. Gastos por Temporada</h3>
@@ -282,7 +327,7 @@ export default function FinanceStatsTab() {
                     <div className="w-2.5 bg-green-500 rounded-t-sm transition-all" style={{ height: `${Math.max((s.earned / maxSeasonly) * 100, s.earned > 0 ? 4 : 0)}%` }} title={`Ingresos: ${formatCurrency(s.earned)}`} />
                     <div className="w-2.5 bg-red-500 rounded-t-sm transition-all" style={{ height: `${Math.max((s.spent / maxSeasonly) * 100, s.spent > 0 ? 4 : 0)}%` }} title={`Gastos: ${formatCurrency(s.spent)}`} />
                   </div>
-                  <span className="text-[8px] text-fg-faint font-black uppercase tracking-widest mt-1.5">Temp. {s.season}</span>
+                  <span className="text-[8px] text-fg-faint font-black uppercase tracking-widest mt-1.5">TEMP {s.season}</span>
                 </div>
               ))}
             </div>
