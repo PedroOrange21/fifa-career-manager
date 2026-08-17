@@ -46,19 +46,18 @@ function OperationRow({ player, chipClassName, chipTextClassName, onClick, onDel
     setShowMore(true);
   };
 
-  // Swipe hacia la izquierda: panel de gestión de solo 2 botones, sin Borrar (vive en el swipe
-  // hacia la derecha) — idéntico al de Plantilla en jugadores cedidos: Recuperar (o Ejec. Opc.
-  // Compra si la cesión la tiene pactada) y Editar. Cuando "moreActions" trae más de una
-  // acción (Cedidos con opción de compra: Recuperar + Ejecutar Opción de Compra), el swipe
-  // muestra solo la más relevante — la de Ejecutar Opción de Compra tiene prioridad, el
-  // desplegable de escritorio ("...") sigue mostrando ambas por separado, sin cambios. Va al
-  // final del array, más pegada al borde y por tanto la primera en asomar al deslizar; Editar
-  // queda más al fondo. "shortLabel" (si existe) sustituye al texto largo del desplegable de
-  // escritorio para que quepa sin desbordar el botón de 64px del panel de swipe.
-  const primaryMoreAction = moreActions.find((a) => a.key === 'buyoption') || moreActions[0];
+  // Swipe hacia la izquierda: panel de gestión, sin Borrar (vive en el swipe hacia la
+  // derecha) — idéntico al de Plantilla en jugadores cedidos. Cuando la cesión tiene opción de
+  // compra pactada, Ejecutar Opción de Compra y Recuperar conviven como botones separados
+  // (mismo orden que el desplegable de escritorio "..."): Editar primero en el array (el más
+  // al fondo, revelado último), Recuperar en medio, y Ejecutar Opción de Compra al final (el
+  // más pegado al borde, primero en asomar al deslizar). Para Transferibles/Cedibles,
+  // "moreActions" trae una única acción ("Quitar de..."), sin cambios. "shortLabel" (si
+  // existe) sustituye al texto largo del desplegable de escritorio para que quepa sin
+  // desbordar el botón de 64px del panel de swipe.
   const swipeButtons = [
     { key: 'edit', icon: Edit2, label: 'Editar', onClick: onEdit },
-    ...(primaryMoreAction ? [{ key: primaryMoreAction.key, icon: primaryMoreAction.icon, label: primaryMoreAction.shortLabel || primaryMoreAction.label, onClick: primaryMoreAction.onClick }] : []),
+    ...moreActions.map(({ key, icon, label, shortLabel, onClick: onAction }) => ({ key, icon, label: shortLabel || label, onClick: onAction })),
   ];
 
   return (

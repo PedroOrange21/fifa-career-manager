@@ -582,16 +582,15 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall, onExecuteBuyOption, on
     { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete() },
   ];
 
-  // Swipe hacia la izquierda: panel de gestión de solo 2 botones, sin Borrar (vive en el swipe
-  // hacia la derecha) — idéntico al de Operaciones: Recuperar (o Ejec. Opc. Compra si la
-  // cesión tiene opción de compra pactada) y Editar. Recuperar/Ejec. Opc. Compra va el último
-  // del array, más pegado al borde y por tanto el primero en asomar al deslizar; Editar queda
-  // más al fondo.
+  // Swipe hacia la izquierda: panel de gestión, sin Borrar (vive en el swipe hacia la
+  // derecha) — idéntico al de Operaciones. Cuando la cesión tiene opción de compra pactada,
+  // Ejecutar Opción de Compra y Recuperar conviven como botones separados: Editar primero en
+  // el array (el más al fondo, revelado último), Recuperar en medio, y Ejecutar Opción de
+  // Compra al final (el más pegado al borde, primero en asomar al deslizar).
   const swipeButtons = [
     { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit() },
-    p.outboundLoan?.buyOption
-      ? { key: 'buyoption', icon: DollarSign, label: 'Ejec. Opc. Compra', onClick: () => onExecuteBuyOption(p) }
-      : { key: 'recall', icon: RotateCcw, label: 'Recuperar', onClick: onRecall },
+    { key: 'recall', icon: RotateCcw, label: 'Recuperar', onClick: onRecall },
+    ...(p.outboundLoan?.buyOption ? [{ key: 'buyoption', icon: DollarSign, label: 'Ejec. Opc. Compra', onClick: () => onExecuteBuyOption(p) }] : []),
   ];
 
   return (
