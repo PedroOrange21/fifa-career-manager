@@ -4,7 +4,7 @@ import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, Shie
 import { useClubData } from '../../context/ClubDataContext';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { getCardStyle } from '../../utils/cardStyle';
-import { abbreviateValue, formatLoanDuration } from '../../utils/format';
+import { abbreviateValue, abbreviateName, formatLoanDuration } from '../../utils/format';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import SwipeableRow from '../common/SwipeableRow';
 import PlayerForm from './PlayerForm';
@@ -483,7 +483,13 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
               <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span><span className="text-lg md:text-xl">{p.rating}</span>
             </button>
             <div className="flex-1 min-w-0">
-              <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight flex items-center gap-2 text-black dark:text-white">{p.name}</div>
+              {/* En móvil, mientras el badge de estado/cantera está expandido (texto largo tipo
+                  "Jugador en el banquillo"), se contrae el nombre a su formato abreviado —
+                  mismo formato que Táctica (abbreviateName) — para que nunca colisione con el
+                  badge, que se despliega por encima del contenido de la tarjeta. En escritorio
+                  estos estados nunca se activan (los badges usan hover puro, sin estado), así
+                  que el nombre siempre se ve completo ahí. */}
+              <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight flex items-center gap-2 text-black dark:text-white">{(statusBadgeExpanded || canteraBadgeExpanded) ? abbreviateName(p.name) : p.name}</div>
               <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest mb-1">{p.positions?.join(' · ') || p.pos}</div>
               <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                 <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{p.age} Años</span>
