@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Edit2, Trash2, UserPlus, ShieldAlert, Target, Search, SlidersHorizontal, X, MapPin, ChevronDown, Check, Wallet } from 'lucide-react';
+import { Plus, Edit2, Trash2, UserPlus, ShieldAlert, Target, Search, SlidersHorizontal, X, MapPin, ChevronDown, ChevronUp, Check, Wallet } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { getCardStyle } from '../../utils/cardStyle';
@@ -103,6 +103,7 @@ function TargetRow({ t, onSign, onEdit, onDelete, selected, onToggleSelect }) {
 // el coste total de fichar a toda la lista sin perder su selección.
 function BudgetPlannerCard({ targets, selectedIds }) {
   const [view, setView] = useState('all');
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const hadSelectionRef = useRef(false);
   const hasSelection = selectedIds.size > 0;
 
@@ -111,6 +112,12 @@ function BudgetPlannerCard({ targets, selectedIds }) {
     if (!hasSelection) setView('all');
     hadSelectionRef.current = hasSelection;
   }, [hasSelection]);
+
+  const switchView = (id) => {
+    if (id === view) return;
+    setShowBreakdown(false);
+    setView(id);
+  };
 
   const selectedTargets = targets.filter((t) => selectedIds.has(t.id));
   const activeTargets = view === 'selected' ? selectedTargets : targets;
@@ -123,8 +130,8 @@ function BudgetPlannerCard({ targets, selectedIds }) {
         <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-1.5 truncate"><Wallet size={12} className="shrink-0" /> Planificador de Fichajes</span>
         {hasSelection && (
           <div className="flex bg-well p-0.5 rounded-lg border border-border-subtle shrink-0">
-            <button type="button" onClick={() => setView('selected')} className={`px-2 py-1 rounded-md text-[8px] font-black uppercase transition-all touch-manipulation ${view === 'selected' ? 'bg-surface text-fg shadow-sm' : 'text-fg-faint hover:text-fg-secondary'}`}>Selec.</button>
-            <button type="button" onClick={() => setView('all')} className={`px-2 py-1 rounded-md text-[8px] font-black uppercase transition-all touch-manipulation ${view === 'all' ? 'bg-surface text-fg shadow-sm' : 'text-fg-faint hover:text-fg-secondary'}`}>Todos</button>
+            <button type="button" onClick={() => switchView('selected')} className={`px-2 py-1 rounded-md text-[8px] font-black uppercase transition-all touch-manipulation ${view === 'selected' ? 'bg-surface text-fg shadow-sm' : 'text-fg-faint hover:text-fg-secondary'}`}>Selec.</button>
+            <button type="button" onClick={() => switchView('all')} className={`px-2 py-1 rounded-md text-[8px] font-black uppercase transition-all touch-manipulation ${view === 'all' ? 'bg-surface text-fg shadow-sm' : 'text-fg-faint hover:text-fg-secondary'}`}>Todos</button>
           </div>
         )}
       </div>
@@ -159,6 +166,45 @@ function BudgetPlannerCard({ targets, selectedIds }) {
             </div>
           </div>
         </>
+      )}
+
+      {/* Flecha desplegable, mismo patrón interactivo que el Historial de Transacciones
+          (FinanceTab.jsx): despliega/repliega un desglose jugador a jugador de los objetivos
+          computados en la vista activa (seleccionados o todos). */}
+      {targets.length > 0 && (
+        <button type="button" onClick={() => setShowBreakdown((v) => !v)} className="w-full flex items-center justify-between mt-3 pt-2.5 border-t border-border-subtle text-[9px] font-black uppercase tracking-widest text-fg-muted hover:text-fg transition-colors touch-manipulation">
+          <span>{activeTargets.length} Jugador{activeTargets.length === 1 ? '' : 'es'} en el Desglose</span>
+          {showBreakdown ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+      )}
+      {showBreakdown && (
+        <div className="mt-2 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+          {activeTargets.length === 0 ? (
+            <div className="py-4 text-center text-[9px] font-bold text-fg-faint uppercase tracking-widest">Sin objetivos en esta vista</div>
+          ) : (
+            <>
+              {activeTargets.map((t) => (
+                <div key={t.id} className="p-2.5 bg-well rounded-xl border border-border-subtle">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-black text-fg truncate">{t.name}</span>
+                    <span className="text-[8px] font-black text-fg-faint uppercase tracking-widest shrink-0">{t.primaryPosition || positionsOf(t)[0] || '—'} · {t.rating ?? '—'}</span>
+                  </div>
+                  <div className="mt-1.5 space-y-0.5">
+                    <div className="flex items-center justify-between gap-2 text-[9px]"><span className="font-bold text-fg-muted">Traspaso Estimado</span><span className="font-black text-fg-secondary">{t.estimatedValue > 0 ? formatCurrency(t.estimatedValue) : 'Sin Valor'}</span></div>
+                    <div className="flex items-center justify-between gap-2 text-[9px]"><span className="font-bold text-fg-muted">Sueldo Estimado</span><span className="font-black text-fg-secondary">{t.wage > 0 ? `${formatCurrency(t.wage)}/mes · ${formatCurrency(t.wage * 12)}/año` : 'Sin Salario'}</span></div>
+                  </div>
+                </div>
+              ))}
+              {/* Fila resumen: mismos totales que ya muestra la cabecera de la tarjeta, pero
+                  repetidos aquí al cierre del desglose para que quede claro qué representa la
+                  suma de todas las filas anteriores. */}
+              <div className="p-2.5 bg-well-strong rounded-xl border border-border-subtle">
+                <div className="flex items-center justify-between gap-2 text-[9px]"><span className="font-black uppercase tracking-widest text-fg-secondary">Total Traspasos</span><span className="font-black text-fg">{formatCurrency(totalTransfer)}</span></div>
+                <div className="flex items-center justify-between gap-2 text-[9px] mt-1"><span className="font-black uppercase tracking-widest text-fg-secondary">Total Masa Salarial</span><span className="font-black text-fg">{formatCurrency(totalWageMonthly)}/mes · {formatCurrency(totalWageMonthly * 12)}/año</span></div>
+              </div>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
