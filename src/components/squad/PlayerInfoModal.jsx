@@ -144,12 +144,22 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
         {/* En Táctica (acción rápida) el botón de cerrar es más pequeño y sutil, con margen
             extra respecto a la tarjeta (ver "pt-8" del contenedor con scroll más abajo) para
             que nunca se solape con ella; fuera de Táctica mantiene su tamaño habitual. */}
-        <button onClick={onClose} className={`absolute z-10 bg-well rounded-full hover:bg-well-strong text-fg-muted hover:text-fg transition-colors ${hideMarketStatus ? 'top-3 right-3 p-1.5' : 'top-4 right-4 p-2'}`}><X size={hideMarketStatus ? 14 : 18} /></button>
-        {/* Fuera de Táctica (Plantilla/Operaciones): único lápiz en la cabecera del marco
-            exterior. En Plantilla (hideTacticsActions) va apilado verticalmente justo debajo
-            de la "X" (misma esquina, right-4); en Operaciones se mantiene junto a la "X". */}
-        {!hideMarketStatus && (
-          <button onClick={() => onEdit(current)} title="Editar Jugador" className={`absolute p-2 rounded-full bg-well text-fg-faint hover:text-blue-500 hover:bg-well-strong transition-colors z-10 ${hideTacticsActions ? 'top-16 right-4' : 'top-4 right-16'}`}><Edit2 size={16} /></button>
+        {hideTacticsActions ? (
+          /* Plantilla: "X" y lápiz apilados en una única columna vertical (flex-col), ambos
+             dentro del mismo contenedor absoluto — así el lápiz queda garantizado estrictamente
+             debajo de la "X", sin depender de calcular offsets "top" por separado. */
+          <div className="absolute top-4 right-4 z-10 flex flex-col items-center gap-2">
+            <button onClick={onClose} className="p-2 bg-well rounded-full hover:bg-well-strong text-fg-muted hover:text-fg transition-colors"><X size={18} /></button>
+            <button onClick={() => onEdit(current)} title="Editar Jugador" className="p-2 rounded-full bg-well text-fg-faint hover:text-blue-500 hover:bg-well-strong transition-colors"><Edit2 size={16} /></button>
+          </div>
+        ) : (
+          <>
+            <button onClick={onClose} className={`absolute z-10 bg-well rounded-full hover:bg-well-strong text-fg-muted hover:text-fg transition-colors ${hideMarketStatus ? 'top-3 right-3 p-1.5' : 'top-4 right-4 p-2'}`}><X size={hideMarketStatus ? 14 : 18} /></button>
+            {/* Operaciones: único lápiz junto a la "X" en la cabecera del marco exterior. */}
+            {!hideMarketStatus && (
+              <button onClick={() => onEdit(current)} title="Editar Jugador" className="absolute top-4 right-16 p-2 rounded-full bg-well text-fg-faint hover:text-blue-500 hover:bg-well-strong transition-colors z-10"><Edit2 size={16} /></button>
+            )}
+          </>
         )}
         {/* Cuerpo con scroll propio: la ficha en modo lectura ahora replica todas las
             secciones del Paso 4 de PlayerForm y puede superar la altura del modal, sobre todo
