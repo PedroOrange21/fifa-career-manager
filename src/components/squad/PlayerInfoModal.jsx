@@ -1,9 +1,10 @@
-import { X, Edit2, RefreshCcw, Trash2, Tag, Armchair, ArrowRightLeft, GraduationCap, ArrowDownToLine, MoreHorizontal, Undo2 } from 'lucide-react';
+import { X, Edit2, RefreshCcw, Trash2, Tag, Armchair, Shirt, ArrowRightLeft, GraduationCap, ArrowDownToLine, MoreHorizontal, Undo2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue, formatLoanDuration, formatCurrency } from '../../utils/format';
 import { isUncalledZone } from '../../utils/slots';
+import { FORMATIONS } from '../../constants/formations';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
@@ -43,7 +44,7 @@ function DetailRow({ label, value }) {
 export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onReplace, hideMarketStatus = false, hideTacticsActions = false }) {
   useBodyScrollLock();
   useAutoHideChrome();
-  const { lineup, bench, assignPlayerToSlot, setPlayerTransferStatus, setPlayerToDelete, confirmDeletePlayer } = useClubData();
+  const { lineup, bench, formation, assignPlayerToSlot, setPlayerTransferStatus, setPlayerToDelete, confirmDeletePlayer } = useClubData();
   const [current, setCurrent] = useState(player);
   const [showSellModal, setShowSellModal] = useState(false);
   const [showLoanModal, setShowLoanModal] = useState(false);
@@ -89,6 +90,15 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
 
   const emptyBenchIdx = [0, 1, 2, 3, 4, 5, 6, 7, 8].find((i) => !bench[i]);
   const canSendToBench = current.transferStatus !== 'CedidoFuera' && !isUncalledZone(infoSlot) && !String(infoSlot).startsWith('bench-') && emptyBenchIdx !== undefined;
+
+  // Contexto Táctica, jugador ya en el banquillo: el botón izquierdo pasa de "Banquillo" a
+  // "Titular", buscando el primer hueco libre en el once inicial de la formación actual (mismo
+  // criterio de "primer hueco disponible" que ya usa Banquillo, sin exigir coincidencia de
+  // posición).
+  const isBenchSlot = String(infoSlot).startsWith('bench-');
+  const totalLineupSlots = FORMATIONS[formation]?.length || 11;
+  const emptyLineupIdx = isBenchSlot ? Array.from({ length: totalLineupSlots }, (_, i) => i).find((i) => !lineup[i]) : undefined;
+  const canPromoteToLineup = isBenchSlot && emptyLineupIdx !== undefined;
 
   // Un jugador cedido a nuestro club (type 'Cedido') no es propiedad del club: nunca puede
   // venderse, cederse ni marcarse como transferible/cedible.
@@ -146,55 +156,61 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
 
         {/* Detalle completo en modo lectura: réplica exacta de la estructura, secciones y
             campos del Paso 4 de PlayerForm.jsx (edición unificada), pero sin lápices
-            individuales — la edición se hace siempre desde el único lápiz de la cabecera. */}
-        <SectionHeader emoji="👤" title="Datos Personales" />
-        <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
-          <DetailRow label="Nombre" value={current.name} />
-          <DetailRow label="Nacionalidad" value={current.nationality || 'Sin definir'} />
-          <DetailRow label="Edad" value={current.age ? `${current.age} Años` : '—'} />
-        </div>
-
-        <SectionHeader emoji="⚽" title="Atributos Deportivos" />
-        <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
-          <DetailRow label="Media (OVR)" value={current.rating || '—'} />
-          <DetailRow label="Pierna" value={current.preferredFoot || 'Diestro'} />
-          <DetailRow label="Posiciones" value={current.positions?.join(' · ') || '—'} />
-          {current.type === 'Cantera' && <DetailRow label="Potencial" value={current.potential || 'Sin definir'} />}
-        </div>
-
-        {current.type !== 'Cantera' && (
+            individuales — la edición se hace siempre desde el único lápiz de la cabecera.
+            Solo aplica fuera de Táctica (hideMarketStatus): ahí la ficha se reduce a la
+            tarjeta resumida de arriba, sin estos bloques extensos. */}
+        {!hideMarketStatus && (
           <>
-            <SectionHeader emoji="💰" title="Economía" />
+            <SectionHeader emoji="👤" title="Datos Personales" />
             <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
-              <DetailRow label="Adquisición" value={current.type} />
-              <DetailRow label="Valor de Mercado (€)" value={formatCurrency(current.marketValue || current.value)} />
-              {current.type === 'Comprado' && (
-                <>
-                  <DetailRow label="Precio de Compra (€)" value={formatCurrency(current.value)} />
-                  <DetailRow label="Sueldo Mensual (€)" value={formatCurrency(current.wage)} />
-                  <DetailRow label="Años Contrato" value={current.contractYears ? `${current.contractYears} Años` : 'Sin definir'} />
-                  <DetailRow label="Cláusula de Rescisión (€)" value={formatCurrency(current.releaseClause)} />
-                </>
-              )}
-              {current.type === 'Cedido' && (
-                <>
-                  <DetailRow label="Club de Origen" value={current.originClub || 'Sin definir'} />
-                  <DetailRow label="Duración Cesión" value={current.loanDuration || 'Sin definir'} />
-                  <DetailRow label="Sueldo Mensual Total (€)" value={formatCurrency(current.wage)} />
-                  <DetailRow label="% Salario Pagado" value={`${current.wagePercentage || 0}%`} />
-                  <DetailRow label="¿Opción de Compra?" value={current.buyOption ? `Sí · ${formatCurrency(current.buyOption)}` : 'No'} />
-                </>
-              )}
+              <DetailRow label="Nombre" value={current.name} />
+              <DetailRow label="Nacionalidad" value={current.nationality || 'Sin definir'} />
+              <DetailRow label="Edad" value={current.age ? `${current.age} Años` : '—'} />
             </div>
-          </>
-        )}
 
-        {current.transferStatus === 'CedidoFuera' && current.outboundLoan && (
-          <>
-            <SectionHeader emoji="🔄" title="Cesión" />
+            <SectionHeader emoji="⚽" title="Atributos Deportivos" />
             <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
-              <DetailRow label="Duración de la Cesión" value={current.outboundLoan.duration || 'Sin definir'} />
+              <DetailRow label="Media (OVR)" value={current.rating || '—'} />
+              <DetailRow label="Pierna" value={current.preferredFoot || 'Diestro'} />
+              <DetailRow label="Posiciones" value={current.positions?.join(' · ') || '—'} />
+              {current.type === 'Cantera' && <DetailRow label="Potencial" value={current.potential || 'Sin definir'} />}
             </div>
+
+            {current.type !== 'Cantera' && (
+              <>
+                <SectionHeader emoji="💰" title="Economía" />
+                <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+                  <DetailRow label="Adquisición" value={current.type} />
+                  <DetailRow label="Valor de Mercado (€)" value={formatCurrency(current.marketValue || current.value)} />
+                  {current.type === 'Comprado' && (
+                    <>
+                      <DetailRow label="Precio de Compra (€)" value={formatCurrency(current.value)} />
+                      <DetailRow label="Sueldo Mensual (€)" value={formatCurrency(current.wage)} />
+                      <DetailRow label="Años Contrato" value={current.contractYears ? `${current.contractYears} Años` : 'Sin definir'} />
+                      <DetailRow label="Cláusula de Rescisión (€)" value={formatCurrency(current.releaseClause)} />
+                    </>
+                  )}
+                  {current.type === 'Cedido' && (
+                    <>
+                      <DetailRow label="Club de Origen" value={current.originClub || 'Sin definir'} />
+                      <DetailRow label="Duración Cesión" value={current.loanDuration || 'Sin definir'} />
+                      <DetailRow label="Sueldo Mensual Total (€)" value={formatCurrency(current.wage)} />
+                      <DetailRow label="% Salario Pagado" value={`${current.wagePercentage || 0}%`} />
+                      <DetailRow label="¿Opción de Compra?" value={current.buyOption ? `Sí · ${formatCurrency(current.buyOption)}` : 'No'} />
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+
+            {current.transferStatus === 'CedidoFuera' && current.outboundLoan && (
+              <>
+                <SectionHeader emoji="🔄" title="Cesión" />
+                <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+                  <DetailRow label="Duración de la Cesión" value={current.outboundLoan.duration || 'Sin definir'} />
+                </div>
+              </>
+            )}
           </>
         )}
 
@@ -221,15 +237,27 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
               <RefreshCcw size={16} /> Reemplazar
             </button>
 
-            {/* Fila inferior: Banquillo (izquierda) / No Convocado (centro) / "..." (derecha). */}
+            {/* Fila inferior: Banquillo/Titular (izquierda) / No Convocado (centro) / "..."
+                (derecha). El botón izquierdo alterna a "Titular" cuando el jugador ya está en
+                el banquillo, buscando hueco libre en el once inicial. */}
             <div className="grid grid-cols-3 gap-1.5 mt-2">
-              <button
-                onClick={() => { assignPlayerToSlot(`bench-${emptyBenchIdx}`, current.id); onClose(); }}
-                disabled={!canSendToBench}
-                className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-black uppercase text-[8px] leading-tight text-center transition-all duration-150 border ${!canSendToBench ? 'opacity-40 pointer-events-none bg-well-strong text-fg-faint border-transparent' : `${ACTION_STYLES.neutral} hover:scale-105 active:scale-95`}`}
-              >
-                <Armchair size={14} /> Banquillo
-              </button>
+              {isBenchSlot ? (
+                <button
+                  onClick={() => { assignPlayerToSlot(emptyLineupIdx, current.id); onClose(); }}
+                  disabled={!canPromoteToLineup}
+                  className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-black uppercase text-[8px] leading-tight text-center transition-all duration-150 border ${!canPromoteToLineup ? 'opacity-40 pointer-events-none bg-well-strong text-fg-faint border-transparent' : `${ACTION_STYLES.neutral} hover:scale-105 active:scale-95`}`}
+                >
+                  <Shirt size={14} /> Titular
+                </button>
+              ) : (
+                <button
+                  onClick={() => { assignPlayerToSlot(`bench-${emptyBenchIdx}`, current.id); onClose(); }}
+                  disabled={!canSendToBench}
+                  className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-black uppercase text-[8px] leading-tight text-center transition-all duration-150 border ${!canSendToBench ? 'opacity-40 pointer-events-none bg-well-strong text-fg-faint border-transparent' : `${ACTION_STYLES.neutral} hover:scale-105 active:scale-95`}`}
+                >
+                  <Armchair size={14} /> Banquillo
+                </button>
+              )}
               <button
                 onClick={() => { assignPlayerToSlot(infoSlot, null); onClose(); }}
                 disabled={isUncalledZone(infoSlot)}
