@@ -328,25 +328,29 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
     }
   };
 
+  // Devuelve { message, field } cuando el paso tiene un campo inválido, o null si está todo
+  // correcto. "field" es la misma clave de editField que usan las ReviewRow del Paso 4, para
+  // poder abrir directamente el campo afectado al editar un jugador ya existente (ver
+  // handleConfirm) sin tener que saltar a los pasos 1-3 del asistente.
   const validateStep = (s) => {
     if (s === 1) {
-      if (!form.firstName.trim()) return 'El nombre es obligatorio.';
+      if (!form.firstName.trim()) return { message: 'El nombre es obligatorio.', field: 'name' };
     }
     if (s === 2) {
-      if (!form.primaryPosition) return 'Selecciona la posición principal.';
-      if (!form.rating || isNaN(form.rating) || form.rating < 1 || form.rating > 99) return 'Media entre 1 y 99.';
-      if (!form.age || isNaN(form.age) || form.age < 15 || form.age > 50) return 'Edad entre 15 y 50.';
-      if (form.type === 'Cantera' && form.potential && !isValidPotentialInput(form.potential)) return 'Potencial entre 1 y 99, o un rango como 64-88.';
+      if (!form.primaryPosition) return { message: 'Selecciona la posición principal.', field: 'position' };
+      if (!form.rating || isNaN(form.rating) || form.rating < 1 || form.rating > 99) return { message: 'Media entre 1 y 99.', field: 'rating' };
+      if (!form.age || isNaN(form.age) || form.age < 15 || form.age > 50) return { message: 'Edad entre 15 y 50.', field: 'age' };
+      if (form.type === 'Cantera' && form.potential && !isValidPotentialInput(form.potential)) return { message: 'Potencial entre 1 y 99, o un rango como 64-88.', field: 'potential' };
     }
     if (s === 3) {
-      if (form.type !== 'Cantera' && (!form.marketValue || parseValue(form.marketValue) <= 0)) return 'Valor de mercado obligatorio.';
-      if (form.type !== 'Cantera' && (!form.wage || parseValue(form.wage) <= 0)) return 'El sueldo mensual es obligatorio.';
-      if (form.type === 'Comprado' && !hidePurchasePrice && (!form.value || parseValue(form.value) <= 0)) return 'Precio de compra obligatorio.';
-      if (form.type === 'Comprado' && !form.contractYears) return 'Selecciona los años de contrato.';
-      if (form.type === 'Cedido' && !form.originClub.trim()) return 'Club de origen obligatorio.';
-      if (form.type === 'Cedido' && form.hasBuyOption && (!form.buyOption || parseValue(form.buyOption) <= 0)) return 'Introduce el precio de la opción de compra.';
+      if (form.type !== 'Cantera' && (!form.marketValue || parseValue(form.marketValue) <= 0)) return { message: 'Valor de mercado obligatorio.', field: 'marketValue' };
+      if (form.type !== 'Cantera' && (!form.wage || parseValue(form.wage) <= 0)) return { message: 'El sueldo mensual es obligatorio.', field: 'wage' };
+      if (form.type === 'Comprado' && !hidePurchasePrice && (!form.value || parseValue(form.value) <= 0)) return { message: 'Precio de compra obligatorio.', field: 'value' };
+      if (form.type === 'Comprado' && !form.contractYears) return { message: 'Selecciona los años de contrato.', field: 'contractYears' };
+      if (form.type === 'Cedido' && !form.originClub.trim()) return { message: 'Club de origen obligatorio.', field: 'originClub' };
+      if (form.type === 'Cedido' && form.hasBuyOption && (!form.buyOption || parseValue(form.buyOption) <= 0)) return { message: 'Introduce el precio de la opción de compra.', field: 'buyOption' };
     }
-    return '';
+    return null;
   };
 
   // La Cantera no tiene sección de Economía (sin sueldo, cláusula ni costes): cuando el tipo
@@ -358,7 +362,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
   // --- Navegación: exclusivamente por los botones Anterior/Siguiente del pie. ---
   const goNext = () => {
     const err = validateStep(step);
-    if (err) { setFormError(err); return; }
+    if (err) { setFormError(err.message); return; }
     setFormError('');
     let next = step + 1;
     if (next === 3 && skipEconomyStep) next = 4;
@@ -375,7 +379,16 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
     if (isSubmitting) return;
     for (let s = 1; s <= 3; s++) {
       const err = validateStep(s);
-      if (err) { setFormError(err); setStep(s); return; }
+      if (err) {
+        setFormError(err.message);
+        // Al editar un jugador ya existente, la vista unificada (Paso 4) es la única pantalla:
+        // nunca se salta a los pasos 1-3 del asistente (eso abría de facto un wizard "fantasma"
+        // con su propio botón "Siguiente"). En su lugar, se abre directamente el campo
+        // afectado dentro de la propia revisión para corregirlo ahí mismo.
+        if (editingPlayer) setEditField(err.field);
+        else setStep(s);
+        return;
+      }
     }
     setFormError('');
     setIsSubmitting(true);
