@@ -1,9 +1,10 @@
-import { X, Edit2, RefreshCcw, Trash2, Tag, Armchair, Shirt, ArrowRightLeft, GraduationCap, ArrowDownToLine, MoreHorizontal, Undo2 } from 'lucide-react';
+import { X, Edit2, RefreshCcw, Trash2, Tag, Armchair, Shirt, ArrowRightLeft, GraduationCap, ArrowDownToLine, MoreHorizontal, Undo2, User } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue, formatLoanDuration, formatCurrency } from '../../utils/format';
 import { isUncalledZone } from '../../utils/slots';
+import { flagEmoji, detectCountry } from '../../constants/countries';
 import { FORMATIONS } from '../../constants/formations';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -53,6 +54,10 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
   const [showEndLoanConfirm, setShowEndLoanConfirm] = useState(false);
   const moreBtnRef = useRef(null);
   const moreMenuRef = useRef(null);
+
+  // Bandera del país: misma detección por texto libre que usa PlayerForm para la tarjeta de
+  // vista previa (sin desplegable, solo lectura aquí).
+  const selectedCountry = detectCountry(current.nationality);
 
   const changeStatus = async (status) => {
     await setPlayerTransferStatus(current.id, status);
@@ -151,9 +156,36 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
             esquina superior del marco exterior — en Táctica con más espacio superior (pt-8)
             para que la tarjeta (y su lápiz interno) nunca quede debajo del botón de cerrar. */}
         <div className={`overflow-y-auto no-scrollbar flex-1 min-h-0 ${hideMarketStatus ? 'pt-8' : 'pt-1'}`}>
+        {/* Plantilla (hideTacticsActions): cabecera con la misma tarjeta FIFA de vista previa
+            que encabeza la pantalla de "Editar Jugador" (Paso 4 de PlayerForm) — media, posición
+            principal, bandera, foto, nombre y posiciones secundarias — en modo puramente
+            visual/lectura, sin ningún control interactivo. */}
+        {hideTacticsActions && (
+          <div className="flex flex-col items-center mb-2">
+            <div className={`relative w-52 rounded-[28px] p-5 shadow-2xl border-2 border-black/10 ${getCardStyle(current.rating)}`}>
+              <div className="flex items-start justify-between">
+                <div className="flex flex-col items-center leading-none">
+                  <span className="text-4xl font-black">{current.rating}</span>
+                  <span className="text-[10px] font-black uppercase mt-1 tracking-wider">{current.positions?.[0]}</span>
+                </div>
+                {current.nationality && (
+                  <span className="w-7 h-7 rounded-full bg-black/20 flex items-center justify-center text-sm leading-none shrink-0 overflow-hidden">{selectedCountry ? flagEmoji(selectedCountry.code) : '🌍'}</span>
+                )}
+              </div>
+              <div className="flex justify-center my-3">
+                {current.photo ? (
+                  <img src={current.photo} alt="Foto" className="w-20 h-20 rounded-full object-cover border-4 border-black/10 shadow-lg" />
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-black/10 flex items-center justify-center border-4 border-black/10"><User size={30} /></div>
+                )}
+              </div>
+              <div className="text-center font-black uppercase italic text-sm tracking-tight border-t border-black/10 pt-2 truncate">{current.name}</div>
+              {current.positions?.length > 1 && <div className="text-center text-[9px] font-bold uppercase opacity-70 mt-0.5 truncate">{current.positions.slice(1).join(' · ')}</div>}
+            </div>
+          </div>
+        )}
         {/* Tarjeta resumida (badge + nombre + pills): solo en Táctica y Operaciones. En
-            Plantilla (hideTacticsActions) se elimina por completo — la ficha va directa a las
-            secciones de detalle de abajo, que ya incluyen nombre, media y posiciones. */}
+            Plantilla (hideTacticsActions) se usa en su lugar la tarjeta FIFA de arriba. */}
         {!hideTacticsActions && (
         <div className={`p-4 bg-well rounded-[24px] border border-border-subtle flex flex-col gap-4 relative ${hideMarketStatus ? 'pb-9' : ''}`}>
           {/* En Táctica (acción rápida): el lápiz vive dentro de la propia tarjeta del
