@@ -25,6 +25,12 @@ export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
   const [dragging, setDragging] = useState(false);
   const [pastThreshold, setPastThreshold] = useState(false);
   const [deleteProgress, setDeleteProgress] = useState(0);
+  // Progreso continuo desde el primer píxel de arrastre (0) hasta el tope de recorrido (1),
+  // a diferencia de "deleteProgress" (que solo crece en el último tramo, tras cruzar el 50%
+  // del ancho). Pensado para overlays que deben sentirse fluidos y reactivos durante todo el
+  // gesto, no solo al final — usado hoy por Operaciones; el resto de listas sigue leyendo
+  // "deleteProgress" sin cambios.
+  const [dragProgress, setDragProgress] = useState(0);
   const rowRef = useRef(null);
   const offsetRef = useRef(0);
   const onFullSwipeRef = useRef(onFullSwipe);
@@ -64,6 +70,7 @@ export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
         // usado para animar el crecimiento en vez de solo determinar un booleano.
         const growth = next <= drag.threshold ? Math.min(1, (next - drag.threshold) / (drag.maxDrag - drag.threshold)) : 0;
         setDeleteProgress(growth);
+        setDragProgress(Math.min(1, next / drag.maxDrag));
       }
     };
     const onEnd = () => {
@@ -83,6 +90,7 @@ export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
       setDragging(false);
       setPastThreshold(false);
       setDeleteProgress(0);
+      setDragProgress(0);
     };
     el.addEventListener('touchstart', onStart, { passive: true });
     el.addEventListener('touchmove', onMove, { passive: false });
@@ -97,7 +105,7 @@ export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
   }, []);
 
   const close = () => { offsetRef.current = 0; setOffset(0); };
-  return { rowRef, offset, dragging, pastThreshold, deleteProgress, close };
+  return { rowRef, offset, dragging, pastThreshold, deleteProgress, dragProgress, close };
 }
 
 // Ancho del panel de acciones reveladas al deslizar: 3 botones de 64px (w-16) cada uno.
