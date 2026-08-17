@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap, Undo2, LayoutGrid, ArrowUpCircle } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Shirt, Armchair, ArrowRightLeft, Tag, ShieldAlert, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown, Star, DollarSign, Calendar, ArrowDownAZ, MoreHorizontal, Handshake, GraduationCap, Undo2, LayoutGrid, ArrowUpCircle, RotateCcw } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { getCardStyle } from '../../utils/cardStyle';
@@ -253,6 +253,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
                 key={p.id} p={p}
                 onEdit={() => openEditForm(p)} onDelete={() => setPlayerToDelete(p.id)}
                 onRecall={() => setPlayerTransferStatus(p.id, 'Activo')}
+                onExecuteBuyOption={() => setSellingPlayer(p)}
                 onViewDetail={setSelectedPlayerInfo}
               />
             ))}
@@ -540,7 +541,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
 // activos, con el mismo orden de botones y el mismo aviso rojo de borrado continuo. En
 // escritorio, en vez de dos botones sueltos, se agrupan en un único "..." con las acciones
 // propias de un jugador cedido fuera (Recuperar, Editar, Borrar).
-function LoanedPlayerRow({ p, onEdit, onDelete, onRecall, onViewDetail }) {
+function LoanedPlayerRow({ p, onEdit, onDelete, onRecall, onExecuteBuyOption, onViewDetail }) {
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
   const moreBtnRef = useRef(null);
@@ -568,18 +569,29 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall, onViewDetail }) {
     setShowMore(true);
   };
 
+  // Mismas acciones e iconos que Operaciones para un cedido a otro club (RotateCcw para
+  // Recuperar, DollarSign para Ejecutar Opción de Compra), unificados al 100% entre ambas
+  // páginas.
   const MORE_ACTIONS = [
-    { key: 'recall', icon: ArrowRightLeft, label: 'Recuperar al Club', onClick: onRecall },
+    { key: 'recall', icon: RotateCcw, label: 'Recuperar al Club', onClick: onRecall },
+    // Solo si la cesión se pactó con opción de compra: ejecutarla abre el modal de Venta ya
+    // preparado con ese importe (ver SellPlayerModal, que da prioridad al buyOption de la
+    // cesión sobre el valor de mercado al precargar el precio).
+    ...(p.outboundLoan?.buyOption ? [{ key: 'buyoption', icon: DollarSign, label: 'Ejecutar Opción de Compra', onClick: () => onExecuteBuyOption(p) }] : []),
     { key: 'edit', icon: Edit2, label: 'Editar Jugador', onClick: () => onEdit() },
     { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete() },
   ];
 
-  // Swipe hacia la izquierda: panel de gestión, sin Borrar (vive en el swipe hacia la
-  // derecha). Recuperar va el último del array, más pegado al borde y por tanto el primero en
-  // asomar al deslizar; Editar queda más al fondo.
+  // Swipe hacia la izquierda: panel de gestión de solo 2 botones, sin Borrar (vive en el swipe
+  // hacia la derecha) — idéntico al de Operaciones: Recuperar (o Ejec. Opc. Compra si la
+  // cesión tiene opción de compra pactada) y Editar. Recuperar/Ejec. Opc. Compra va el último
+  // del array, más pegado al borde y por tanto el primero en asomar al deslizar; Editar queda
+  // más al fondo.
   const swipeButtons = [
     { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit() },
-    { key: 'recall', icon: ArrowRightLeft, label: 'Recuperar', onClick: onRecall },
+    p.outboundLoan?.buyOption
+      ? { key: 'buyoption', icon: DollarSign, label: 'Ejec. Opc. Compra', onClick: () => onExecuteBuyOption(p) }
+      : { key: 'recall', icon: RotateCcw, label: 'Recuperar', onClick: onRecall },
   ];
 
   return (

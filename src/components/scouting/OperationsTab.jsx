@@ -46,15 +46,19 @@ function OperationRow({ player, chipClassName, chipTextClassName, onClick, onDel
     setShowMore(true);
   };
 
-  // Swipe hacia la izquierda: panel de gestión, sin Borrar (vive en el swipe hacia la
-  // derecha). Las acciones propias de cada lista (Recuperar, Ejec. Opc. Compra, Quitar de
-  // Transferibles/Cedibles) van al final del array, más pegadas al borde y por tanto las
-  // primeras en asomar al deslizar; Editar queda más al fondo. "shortLabel" (si existe)
-  // sustituye al texto largo del desplegable de escritorio para que quepa sin desbordar el
-  // botón de 64px del panel de swipe (ver "Ejecutar Opción de Compra").
+  // Swipe hacia la izquierda: panel de gestión de solo 2 botones, sin Borrar (vive en el swipe
+  // hacia la derecha) — idéntico al de Plantilla en jugadores cedidos: Recuperar (o Ejec. Opc.
+  // Compra si la cesión la tiene pactada) y Editar. Cuando "moreActions" trae más de una
+  // acción (Cedidos con opción de compra: Recuperar + Ejecutar Opción de Compra), el swipe
+  // muestra solo la más relevante — la de Ejecutar Opción de Compra tiene prioridad, el
+  // desplegable de escritorio ("...") sigue mostrando ambas por separado, sin cambios. Va al
+  // final del array, más pegada al borde y por tanto la primera en asomar al deslizar; Editar
+  // queda más al fondo. "shortLabel" (si existe) sustituye al texto largo del desplegable de
+  // escritorio para que quepa sin desbordar el botón de 64px del panel de swipe.
+  const primaryMoreAction = moreActions.find((a) => a.key === 'buyoption') || moreActions[0];
   const swipeButtons = [
     { key: 'edit', icon: Edit2, label: 'Editar', onClick: onEdit },
-    ...moreActions.map(({ key, icon, label, shortLabel, onClick: onAction }) => ({ key, icon, label: shortLabel || label, onClick: onAction })),
+    ...(primaryMoreAction ? [{ key: primaryMoreAction.key, icon: primaryMoreAction.icon, label: primaryMoreAction.shortLabel || primaryMoreAction.label, onClick: primaryMoreAction.onClick }] : []),
   ];
 
   return (
@@ -179,7 +183,7 @@ export default function OperationsTab({ onRequestEditPlayer }) {
               chipClassName="bg-well border-border-subtle" chipTextClassName="text-fg-faint"
               onDelete={() => setPlayerToDelete(p.id)} onEdit={() => editPlayer(p)}
               moreActions={[
-                { key: 'recall', icon: RotateCcw, label: 'Recuperar Jugador', onClick: () => setPlayerTransferStatus(p.id, 'Activo') },
+                { key: 'recall', icon: RotateCcw, label: 'Recuperar Jugador', shortLabel: 'Recuperar', onClick: () => setPlayerTransferStatus(p.id, 'Activo') },
                 // Solo si la cesión se pactó con opción de compra: ejecutarla abre el modal de
                 // Venta ya preparado con ese importe (ver SellPlayerModal, que da prioridad al
                 // buyOption de la cesión sobre el valor de mercado al precargar el precio).
