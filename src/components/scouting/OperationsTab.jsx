@@ -86,6 +86,10 @@ export default function OperationsTab({ onRequestEditPlayer }) {
         </div>
       </div>
 
+      {/* Misma ficha de detalle de solo lectura que en Plantilla (cabecera FIFA, secciones
+          completas y único lápiz para editar) — sin el bloque de Estado de Mercado ni los
+          botones de acción, que aquí ya viven en la propia fila (Vender/Ceder) y en los
+          botones "+" de cada lista. */}
       {selectedPlayerInfo && (
         <PlayerInfoModal
           player={selectedPlayerInfo}
@@ -93,6 +97,7 @@ export default function OperationsTab({ onRequestEditPlayer }) {
           onClose={() => setSelectedPlayerInfo(null)}
           onEdit={(p) => { setSelectedPlayerInfo(null); onRequestEditPlayer(p); }}
           onReplace={() => {}}
+          hideTacticsActions
         />
       )}
 
