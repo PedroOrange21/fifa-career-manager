@@ -384,22 +384,23 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
       ? [endLoanAction, editAction, deleteAction]
       : [...marketWithEndLoan, editAction, deleteAction];
 
-  // Orden del panel: Borrar primero, Editar en el centro y el tercer botón al final. El panel
-  // está anclado a la derecha, así que el ÚLTIMO botón queda más pegado al borde del contenido
-  // y por tanto es el primero en asomar al deslizar (de izquierda a derecha ya desplegado:
-  // Borrar · Editar · tercero). Para los canteranos de la sección Academia (onPromote
-  // presente), ese tercer botón sustituye por completo el "..."/Más por un acceso directo a
-  // "Subir al Primer Equipo", que abre ya mismo el modal de contrato de promoción — no tiene
-  // sentido ofrecer el menú de mercado (siempre deshabilitado para ellos) como paso
-  // intermedio. El resto de jugadores mantiene el "..." con el menú completo.
+  // Orden del panel: el ÚLTIMO botón del array queda más pegado al borde del contenido y por
+  // tanto es el primero en asomar al deslizar — Borrar va el último a propósito, para que el
+  // rótulo rojo de borrado (dragProgress, ver useSwipeReveal) se adelante desde el primer
+  // instante del gesto en vez de esperar a revelar todo el panel. Editar y el tercer botón
+  // quedan más al fondo, revelados solo con un arrastre algo mayor. Para los canteranos de la
+  // sección Academia (onPromote presente), ese tercer botón sustituye por completo el "..."/Más
+  // por un acceso directo a "Subir al Primer Equipo", que abre ya mismo el modal de contrato de
+  // promoción — no tiene sentido ofrecer el menú de mercado (siempre deshabilitado para ellos)
+  // como paso intermedio. El resto de jugadores mantiene el "..." con el menú completo.
   const swipeButtons = [
-    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: () => onDelete(p.id), danger: true },
-    { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit(p) },
     isIncomingLoan
       ? { key: 'endLoan', icon: Undo2, label: 'Finalizar Cesión', onClick: () => onEndLoan(p) }
       : onPromote
         ? { key: 'promote', icon: ArrowUpCircle, label: 'Subir', onClick: () => onPromote(p) }
         : { key: 'more', ref: moreBtnMobileRef, icon: MoreHorizontal, label: 'Más', onClick: (e) => toggleMore(e, 'mobile'), closeOnClick: false },
+    { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit(p) },
+    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: () => onDelete(p.id), danger: true },
   ];
 
   return (
@@ -574,12 +575,13 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall, onViewDetail }) {
     { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete() },
   ];
 
-  // Mismo orden que PlayerRow (Borrar, Editar, tercero) — aquí el tercero es "Recuperar",
-  // siempre presente en vez de depender de un "Más" intermedio.
+  // Mismo orden que PlayerRow (Recuperar, Editar, Borrar al final): Borrar es el último del
+  // array, más pegado al borde y por tanto el primero en asomar al deslizar, para que el
+  // rótulo rojo de borrado se adelante desde el primer instante del gesto.
   const swipeButtons = [
-    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: () => onDelete(), danger: true },
-    { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit() },
     { key: 'recall', icon: ArrowRightLeft, label: 'Recuperar', onClick: onRecall },
+    { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit() },
+    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: () => onDelete(), danger: true },
   ];
 
   return (

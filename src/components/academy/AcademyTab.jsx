@@ -155,9 +155,11 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail
     { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete(p.id) },
   ];
 
+  // Borrar va el último del array (más pegado al borde, primero en asomar al deslizar) para
+  // que el rótulo rojo de borrado se adelante desde el primer instante del gesto.
   const swipeButtons = [
-    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: () => onDelete(p.id), danger: true },
     { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit(p) },
+    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: () => onDelete(p.id), danger: true },
   ];
 
   return (

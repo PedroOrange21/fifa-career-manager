@@ -46,10 +46,14 @@ function OperationRow({ player, chipClassName, chipTextClassName, onClick, onDel
     setShowMore(true);
   };
 
+  // Borrar va el último del array (más pegado al borde, primero en asomar al deslizar) para
+  // que el rótulo rojo de borrado se adelante desde el primer instante del gesto. "shortLabel"
+  // (si existe) sustituye al texto largo del desplegable de escritorio para que quepa sin
+  // desbordar el botón de 64px del panel de swipe (ver "Ejecutar Opción de Compra").
   const swipeButtons = [
-    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: onDelete, danger: true },
+    ...moreActions.map(({ key, icon, label, shortLabel, onClick: onAction }) => ({ key, icon, label: shortLabel || label, onClick: onAction })),
     { key: 'edit', icon: Edit2, label: 'Editar', onClick: onEdit },
-    ...moreActions.map(({ key, icon, label, onClick: onAction }) => ({ key, icon, label, onClick: onAction })),
+    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: onDelete, danger: true },
   ];
 
   return (
@@ -178,7 +182,7 @@ export default function OperationsTab({ onRequestEditPlayer }) {
                 // Solo si la cesión se pactó con opción de compra: ejecutarla abre el modal de
                 // Venta ya preparado con ese importe (ver SellPlayerModal, que da prioridad al
                 // buyOption de la cesión sobre el valor de mercado al precargar el precio).
-                ...(p.outboundLoan?.buyOption ? [{ key: 'buyoption', icon: DollarSign, label: 'Ejecutar Opción de Compra', onClick: () => setSellingPlayer(p) }] : []),
+                ...(p.outboundLoan?.buyOption ? [{ key: 'buyoption', icon: DollarSign, label: 'Ejecutar Opción de Compra', shortLabel: 'Ejec. Opc. Compra', onClick: () => setSellingPlayer(p) }] : []),
               ]}
             >
               {p.outboundLoan && (
