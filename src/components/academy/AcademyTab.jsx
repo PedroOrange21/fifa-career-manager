@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { TrendingUp, Calendar, ArrowUpDown, ArrowUp, ArrowDown, ArrowUpCircle, Edit2, Trash2, MoreHorizontal, ShieldAlert, Star, ArrowDownAZ, LayoutGrid, Plus, Search, Info, X } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
-import { useSwipeReveal } from '../../hooks/useSwipeReveal';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import { getCardStyle } from '../../utils/cardStyle';
@@ -12,6 +11,7 @@ import { ALL_POSITIONS } from '../../constants/positions';
 import PlayerForm from '../squad/PlayerForm';
 import PlayerInfoModal from '../squad/PlayerInfoModal';
 import ConfirmModal from '../common/ConfirmModal';
+import SwipeableRow from '../common/SwipeableRow';
 import UpdateRatingModal from './UpdateRatingModal';
 import PromoteToFirstTeamModal from './PromoteToFirstTeamModal';
 
@@ -62,9 +62,6 @@ const getPositionOrder = (p) => {
   const idx = ALL_POSITIONS.indexOf(p.positions?.[0]);
   return idx === -1 ? ALL_POSITIONS.length : idx;
 };
-
-// Ancho del panel de swipe con solo 2 botones (Borrar/Editar, sin "Más"): 2×64px.
-const ROW_ACTION_WIDTH = 128;
 
 function PotentialBar({ rating, potential }) {
   // Con un rango ("64-88") la barra apunta al techo superior del rango, no a la media: es la
@@ -126,7 +123,6 @@ function PotentialInfoModal({ onClose }) {
 // simplificado: un canterano no participa del mercado, así que aquí solo hay Editar y Borrar
 // (sin transferible/cedible/vender/ceder ni la opción "Más" intermedia en móvil).
 function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail, onShowPotentialInfo }) {
-  const { rowRef, offset, dragging, dragProgress, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
   const moreBtnDesktopRef = useRef(null);
@@ -159,20 +155,15 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail
     { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete(p.id) },
   ];
 
-  return (
-    <div className="relative overflow-hidden">
-      {/* Panel de swipe: solo en móvil (sm:hidden), solo Borrar y Editar. */}
-      <div className="absolute inset-y-0 right-0 flex sm:hidden">
-        <button type="button" onClick={() => { onDelete(p.id); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-red-500 text-white active:bg-red-400 touch-manipulation">
-          <Trash2 size={18} />
-          <span className="text-[8px] font-black uppercase">Borrar</span>
-        </button>
-        <button type="button" onClick={() => { onEdit(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well text-fg-muted active:bg-well-strong touch-manipulation">
-          <Edit2 size={18} />
-          <span className="text-[8px] font-black uppercase">Editar</span>
-        </button>
-      </div>
+  const swipeButtons = [
+    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: () => onDelete(p.id), danger: true },
+    { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit(p) },
+  ];
 
+  return (
+    <SwipeableRow onFullSwipe={() => onDelete(p.id)} buttons={swipeButtons}>
+      {({ rowRef, offset, dragging, close }) => (
+      <>
       <div
         ref={rowRef}
         onClick={() => { if (offset < 0) close(); }}
@@ -218,14 +209,6 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail
           <button type="button" onClick={() => onUpdate(p)} className="flex-1 py-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 font-black uppercase text-[10px] hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/20 touch-manipulation"><TrendingUp size={14} /> Actualizar Media</button>
           <button type="button" onClick={() => onPromote(p)} className="flex-1 py-2.5 rounded-xl bg-blue-500/10 text-blue-400 font-black uppercase text-[10px] hover:bg-blue-500/20 transition-all flex items-center justify-center gap-2 border border-blue-500/20 touch-manipulation"><ArrowUpCircle size={14} /> Subir al Primer Equipo</button>
         </div>
-
-        {/* Borrado fluido y continuo (solo móvil), idéntico a Operaciones: el rótulo rojo crece
-            desde el primer píxel de arrastre (dragProgress 0→1) en vez de aparecer solo tras
-            cruzar el 50% de la fila. */}
-        <div className="absolute inset-y-0 right-0 z-10 bg-red-500 sm:hidden pointer-events-none" style={{ width: `${dragProgress * 100}%`, transition: dragging ? 'none' : 'width 200ms ease-out' }} />
-        <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden pointer-events-none" style={{ opacity: dragProgress, transition: dragging ? 'none' : 'opacity 200ms ease-out' }}>
-          <Trash2 size={18} /> Borrar
-        </div>
       </div>
 
       {/* Menú "...": mismo patrón de portal que en la Plantilla, simplificado a solo
@@ -244,7 +227,9 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail
         </div>,
         document.body
       )}
-    </div>
+      </>
+      )}
+    </SwipeableRow>
   );
 }
 

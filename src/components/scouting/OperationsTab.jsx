@@ -4,30 +4,29 @@ import { Tag, Plus, ArrowRightLeft, Trash2, Edit2, MoreHorizontal, RotateCcw, Do
 import { useClubData } from '../../context/ClubDataContext';
 import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue } from '../../utils/format';
-import { useSwipeReveal, ROW_ACTION_WIDTH } from '../../hooks/useSwipeReveal';
+import SwipeableRow from '../common/SwipeableRow';
 import PlayerInfoModal from '../squad/PlayerInfoModal';
 import SellPlayerModal from '../economy/SellPlayerModal';
 import LoanOutModal from '../economy/LoanOutModal';
 import AddOperationPlayerModal from './AddOperationPlayerModal';
 import ConfirmModal from '../common/ConfirmModal';
 
-// Misma mecánica de deslizar que las filas de la Plantilla (PlayerList.jsx): panel de
-// Borrar/Editar/Más revelado al arrastrar en móvil, y un "..." equivalente revelado al hacer
-// hover en escritorio, ambos abriendo el mismo menú de acciones contextual ("moreActions"),
-// que varía según la lista (Transferibles/Cedibles/Cedidos a otros Clubes).
+// Mismo gestor de deslizamiento (SwipeableRow) que Plantilla y Academia: en vez de esconder
+// las acciones propias de cada lista (Recuperar, Ejecutar Opción de Compra, Quitar de
+// Transferibles/Cedibles) detrás de un botón "Más" intermedio, el panel de swipe las muestra
+// todas directamente junto a Borrar/Editar — el ancho del panel se adapta solo según cuántas
+// acciones tenga cada fila. En escritorio se mantiene el "..." con el mismo listado, para no
+// competir por espacio con el contenido de la derecha.
 function OperationRow({ player, chipClassName, chipTextClassName, onClick, onDelete, onEdit, moreActions, children }) {
-  const { rowRef, offset, dragging, dragProgress, close } = useSwipeReveal(onDelete, ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
   const moreBtnDesktopRef = useRef(null);
-  const moreBtnMobileRef = useRef(null);
   const moreMenuRef = useRef(null);
 
   useEffect(() => {
     if (!showMore) return;
     const handler = (e) => {
       if (moreBtnDesktopRef.current?.contains(e.target)) return;
-      if (moreBtnMobileRef.current?.contains(e.target)) return;
       if (moreMenuRef.current?.contains(e.target)) return;
       setShowMore(false);
     };
@@ -47,79 +46,62 @@ function OperationRow({ player, chipClassName, chipTextClassName, onClick, onDel
     setShowMore(true);
   };
 
+  const swipeButtons = [
+    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: onDelete, danger: true },
+    { key: 'edit', icon: Edit2, label: 'Editar', onClick: onEdit },
+    ...moreActions.map(({ key, icon, label, onClick: onAction }) => ({ key, icon, label, onClick: onAction })),
+  ];
+
   return (
-    <div className="relative overflow-hidden rounded-xl">
-      {/* Panel de swipe: solo en móvil (sm:hidden), Borrar / Editar / Más. */}
-      <div className="absolute inset-y-0 right-0 flex sm:hidden">
-        <button type="button" onClick={() => { onDelete(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-red-500 text-white active:bg-red-400 touch-manipulation">
-          <Trash2 size={16} />
-          <span className="text-[7px] font-black uppercase">Borrar</span>
-        </button>
-        <button type="button" onClick={() => { onEdit(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
-          <Edit2 size={16} />
-          <span className="text-[7px] font-black uppercase">Editar</span>
-        </button>
-        <button ref={moreBtnMobileRef} type="button" onClick={toggleMore} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
-          <MoreHorizontal size={16} />
-          <span className="text-[7px] font-black uppercase">Más</span>
-        </button>
-      </div>
-
-      <div
-        ref={rowRef}
-        onClick={(e) => { if (offset < 0) { close(); return; } onClick?.(e); }}
-        style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
-        className="relative rounded-xl cursor-pointer touch-pan-y group"
-      >
-        {/* chipClassName (ej. "bg-red-500/5 border-red-500/10") es semitransparente a
-            propósito para el tinte de color de cada lista — pero eso significa que, sin una
-            base opaca detrás, el panel de swipe (Borrar/Editar/Más) se transparentaba por
-            debajo de la fila incluso en reposo, "solapándose" visualmente con el texto. Se
-            arregla con una capa base 100% opaca (bg-surface) y el tinte encima, en vez de
-            aplicar chipClassName directamente sobre el contenido. */}
-        <div className="absolute inset-0 bg-surface rounded-xl" />
-        <div className={`absolute inset-0 rounded-xl border ${chipClassName}`} />
-        <div className="relative flex items-center justify-between gap-3 px-3 py-2">
-          <div className="flex items-center gap-3 min-w-0 flex-1 md:transition-transform md:duration-300 md:ease-in-out md:group-hover:translate-x-9">
-            <div className={`w-8 h-8 rounded-lg flex shrink-0 items-center justify-center font-black text-[10px] ${getCardStyle(player.rating)}`}>{player.rating}</div>
-            <div className="flex flex-col min-w-0"><span className="text-[10px] font-bold uppercase italic text-black dark:text-white truncate">{player.name}</span><span className={`text-[8px] font-black uppercase tracking-widest truncate ${chipTextClassName}`}>{player.positions?.join(' · ')}</span></div>
-          </div>
-          {children}
-
-          {/* Escritorio: "..." fijo a la izquierda, oculto hasta hacer hover en la fila (mismo
-              patrón que PlayerRow), para no competir por espacio con el contenido de la
-              derecha. */}
-          <button ref={moreBtnDesktopRef} type="button" onClick={toggleMore} title="Más opciones" className="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
-            <MoreHorizontal size={13} />
-          </button>
-        </div>
-      </div>
-
-      {/* Borrado fluido y continuo (solo móvil), idéntico a Plantilla y Academia: "dragProgress"
-          crece desde el primer píxel de arrastre hasta el tope del gesto, así el fondo rojo va
-          ocupando la tarjeta progresivamente en vez de aparecer de golpe o quedar "atascado"
-          detrás del panel estático de Borrar/Editar/Más. */}
-      <div className="absolute inset-y-0 right-0 z-10 bg-red-500 sm:hidden pointer-events-none rounded-xl" style={{ width: `${dragProgress * 100}%`, transition: dragging ? 'none' : 'width 200ms ease-out' }} />
-      <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden pointer-events-none" style={{ opacity: dragProgress, transition: dragging ? 'none' : 'opacity 200ms ease-out' }}>
-        <Trash2 size={18} /> Borrar
-      </div>
-
-      {showMore && moreRect && createPortal(
+    <SwipeableRow onFullSwipe={onDelete} buttons={swipeButtons} rounded>
+      {({ rowRef, offset, dragging, close }) => (
         <div
-          ref={moreMenuRef}
-          style={{ position: 'fixed', top: moreRect.top, right: moreRect.right, width: moreRect.width }}
-          className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
-          onClick={(e) => e.stopPropagation()}
+          ref={rowRef}
+          onClick={(e) => { if (offset < 0) { close(); return; } onClick?.(e); }}
+          style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
+          className="relative rounded-xl cursor-pointer touch-pan-y group"
         >
-          {moreActions.map(({ key, icon: Icon, label, onClick: onAction }) => (
-            <button key={key} type="button" onClick={() => { onAction(); setShowMore(false); close(); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase whitespace-nowrap transition-all touch-manipulation text-fg-secondary hover:bg-well">
-              <Icon size={14} className="shrink-0" /> {label}
+          {/* chipClassName (ej. "bg-red-500/5 border-red-500/10") es semitransparente a
+              propósito para el tinte de color de cada lista — pero eso significa que, sin una
+              base opaca detrás, el panel de swipe se transparentaba por debajo de la fila
+              incluso en reposo, "solapándose" visualmente con el texto. Se arregla con una
+              capa base 100% opaca (bg-surface) y el tinte encima, en vez de aplicar
+              chipClassName directamente sobre el contenido. */}
+          <div className="absolute inset-0 bg-surface rounded-xl" />
+          <div className={`absolute inset-0 rounded-xl border ${chipClassName}`} />
+          <div className="relative flex items-center justify-between gap-3 px-3 py-2">
+            <div className="flex items-center gap-3 min-w-0 flex-1 md:transition-transform md:duration-300 md:ease-in-out md:group-hover:translate-x-9">
+              <div className={`w-8 h-8 rounded-lg flex shrink-0 items-center justify-center font-black text-[10px] ${getCardStyle(player.rating)}`}>{player.rating}</div>
+              <div className="flex flex-col min-w-0"><span className="text-[10px] font-bold uppercase italic text-black dark:text-white truncate">{player.name}</span><span className={`text-[8px] font-black uppercase tracking-widest truncate ${chipTextClassName}`}>{player.positions?.join(' · ')}</span></div>
+            </div>
+            {children}
+
+            {/* Escritorio: "..." fijo a la izquierda, oculto hasta hacer hover en la fila (mismo
+                patrón que PlayerRow), para no competir por espacio con el contenido de la
+                derecha. */}
+            <button ref={moreBtnDesktopRef} type="button" onClick={toggleMore} title="Más opciones" className="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
+              <MoreHorizontal size={13} />
             </button>
-          ))}
-        </div>,
-        document.body
+          </div>
+
+          {showMore && moreRect && createPortal(
+            <div
+              ref={moreMenuRef}
+              style={{ position: 'fixed', top: moreRect.top, right: moreRect.right, width: moreRect.width }}
+              className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {moreActions.map(({ key, icon: Icon, label, onClick: onAction }) => (
+                <button key={key} type="button" onClick={() => { onAction(); setShowMore(false); close(); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase whitespace-nowrap transition-all touch-manipulation text-fg-secondary hover:bg-well">
+                  <Icon size={14} className="shrink-0" /> {label}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )}
+        </div>
       )}
-    </div>
+    </SwipeableRow>
   );
 }
 

@@ -6,7 +6,7 @@ import { ALL_POSITIONS } from '../../constants/positions';
 import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue, formatLoanDuration } from '../../utils/format';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
-import { useSwipeReveal, ROW_ACTION_WIDTH } from '../../hooks/useSwipeReveal';
+import SwipeableRow from '../common/SwipeableRow';
 import PlayerForm from './PlayerForm';
 import ConfirmModal from '../common/ConfirmModal';
 import SellPlayerModal from '../economy/SellPlayerModal';
@@ -305,7 +305,6 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
 }
 
 function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onMarkCedible, onSell, onLoan, onEndLoan, onPromote, onViewDetail }) {
-  const { rowRef, offset, dragging, dragProgress, close } = useSwipeReveal(() => onDelete(p.id), ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
   // En móvil, Editar/Eliminar ya se hacen con el swipe, así que el menú "..." solo suma las
@@ -385,43 +384,28 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
       ? [endLoanAction, editAction, deleteAction]
       : [...marketWithEndLoan, editAction, deleteAction];
 
+  // Orden del panel: Borrar primero, Editar en el centro y el tercer botón al final. El panel
+  // está anclado a la derecha, así que el ÚLTIMO botón queda más pegado al borde del contenido
+  // y por tanto es el primero en asomar al deslizar (de izquierda a derecha ya desplegado:
+  // Borrar · Editar · tercero). Para los canteranos de la sección Academia (onPromote
+  // presente), ese tercer botón sustituye por completo el "..."/Más por un acceso directo a
+  // "Subir al Primer Equipo", que abre ya mismo el modal de contrato de promoción — no tiene
+  // sentido ofrecer el menú de mercado (siempre deshabilitado para ellos) como paso
+  // intermedio. El resto de jugadores mantiene el "..." con el menú completo.
+  const swipeButtons = [
+    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: () => onDelete(p.id), danger: true },
+    { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit(p) },
+    isIncomingLoan
+      ? { key: 'endLoan', icon: Undo2, label: 'Finalizar Cesión', onClick: () => onEndLoan(p) }
+      : onPromote
+        ? { key: 'promote', icon: ArrowUpCircle, label: 'Subir', onClick: () => onPromote(p) }
+        : { key: 'more', ref: moreBtnMobileRef, icon: MoreHorizontal, label: 'Más', onClick: (e) => toggleMore(e, 'mobile'), closeOnClick: false },
+  ];
+
   return (
-    <div className="relative overflow-hidden">
-      {/* Panel de swipe: solo en móvil (sm:hidden). Orden en el flex: Borrar primero, Editar
-          en el centro y el tercer botón al final. El panel está anclado a la derecha, así que
-          el ÚLTIMO hijo del flex queda más pegado al borde del contenido y por tanto es el
-          primero en asomar al deslizar (de izquierda a derecha ya desplegado: Borrar · Editar
-          · tercero). Para los canteranos de la sección Academia (onPromote presente), ese
-          tercer botón sustituye por completo el "..."/Más por un acceso directo a "Subir al
-          Primer Equipo", que abre ya mismo el modal de contrato de promoción — no tiene
-          sentido ofrecer el menú de mercado (siempre deshabilitado para ellos) como paso
-          intermedio. El resto de jugadores mantiene el "..." con el menú completo. */}
-      <div className="absolute inset-y-0 right-0 flex sm:hidden">
-        <button type="button" onClick={() => { onDelete(p.id); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-red-500 text-white active:bg-red-400 touch-manipulation">
-          <Trash2 size={18} />
-          <span className="text-[8px] font-black uppercase">Borrar</span>
-        </button>
-        <button type="button" onClick={() => { onEdit(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well text-fg-muted active:bg-well-strong touch-manipulation">
-          <Edit2 size={18} />
-          <span className="text-[8px] font-black uppercase">Editar</span>
-        </button>
-        {isIncomingLoan ? (
-          <button type="button" onClick={() => { onEndLoan(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
-            <Undo2 size={18} />
-            <span className="text-[8px] font-black uppercase leading-tight text-center">Finalizar Cesión</span>
-          </button>
-        ) : onPromote ? (
-          <button type="button" onClick={() => { onPromote(p); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
-            <ArrowUpCircle size={18} />
-            <span className="text-[8px] font-black uppercase leading-tight text-center">Subir</span>
-          </button>
-        ) : (
-          <button ref={moreBtnMobileRef} type="button" onClick={(e) => toggleMore(e, 'mobile')} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
-            <MoreHorizontal size={18} />
-            <span className="text-[8px] font-black uppercase">Más</span>
-          </button>
-        )}
-      </div>
+    <SwipeableRow onFullSwipe={() => onDelete(p.id)} buttons={swipeButtons}>
+      {({ rowRef, offset, dragging, close }) => (
+      <>
       <div
         ref={rowRef}
         onClick={() => { if (offset < 0) close(); }}
@@ -526,17 +510,6 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
         <button ref={moreBtnDesktopRef} type="button" onClick={(e) => toggleMore(e, 'desktop')} title="Más opciones" className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
           <MoreHorizontal size={13} />
         </button>
-
-        {/* Borrado fluido y continuo (solo móvil, idéntico a Operaciones): el rótulo rojo de
-            "Borrar" crece desde el primer píxel de arrastre (dragProgress 0→1) hasta el tope
-            del gesto, en vez de aparecer solo tras cruzar el 50% de la fila, para que el
-            avance se sienta reactivo desde el primer instante del deslizamiento. En escritorio
-            "offset" nunca se mueve (no hay gesto táctil), así que esto nunca se activa
-            igualmente, pero se oculta por CSS para no dejarlo ambiguo. */}
-        <div className="absolute inset-y-0 right-0 z-10 bg-red-500 sm:hidden pointer-events-none" style={{ width: `${dragProgress * 100}%`, transition: dragging ? 'none' : 'width 200ms ease-out' }} />
-        <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden pointer-events-none" style={{ opacity: dragProgress, transition: dragging ? 'none' : 'opacity 200ms ease-out' }}>
-          <Trash2 size={18} /> Borrar
-        </div>
       </div>
 
       {/* Menú contextual del botón "...": mismo patrón de portal que el resto de la app
@@ -556,7 +529,9 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
         </div>,
         document.body
       )}
-    </div>
+      </>
+      )}
+    </SwipeableRow>
   );
 }
 
@@ -566,7 +541,6 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
 // escritorio, en vez de dos botones sueltos, se agrupan en un único "..." con las acciones
 // propias de un jugador cedido fuera (Recuperar, Editar, Borrar).
 function LoanedPlayerRow({ p, onEdit, onDelete, onRecall, onViewDetail }) {
-  const { rowRef, offset, dragging, dragProgress, close } = useSwipeReveal(onDelete, ROW_ACTION_WIDTH);
   const [showMore, setShowMore] = useState(false);
   const [moreRect, setMoreRect] = useState(null);
   const moreBtnRef = useRef(null);
@@ -600,22 +574,18 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall, onViewDetail }) {
     { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete() },
   ];
 
+  // Mismo orden que PlayerRow (Borrar, Editar, tercero) — aquí el tercero es "Recuperar",
+  // siempre presente en vez de depender de un "Más" intermedio.
+  const swipeButtons = [
+    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: () => onDelete(), danger: true },
+    { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit() },
+    { key: 'recall', icon: ArrowRightLeft, label: 'Recuperar', onClick: onRecall },
+  ];
+
   return (
-    <div className="relative overflow-hidden">
-      <div className="absolute inset-y-0 right-0 flex sm:hidden">
-        <button type="button" onClick={() => { onDelete(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-red-500 text-white active:bg-red-400 touch-manipulation">
-          <Trash2 size={18} />
-          <span className="text-[8px] font-black uppercase">Borrar</span>
-        </button>
-        <button type="button" onClick={() => { onEdit(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well text-fg-muted active:bg-well-strong touch-manipulation">
-          <Edit2 size={18} />
-          <span className="text-[8px] font-black uppercase">Editar</span>
-        </button>
-        <button type="button" onClick={() => { onRecall(); close(); }} className="w-16 flex flex-col items-center justify-center gap-1 bg-well-strong text-fg-muted active:bg-well touch-manipulation">
-          <ArrowRightLeft size={18} />
-          <span className="text-[8px] font-black uppercase leading-tight text-center">Recuperar</span>
-        </button>
-      </div>
+    <SwipeableRow onFullSwipe={onDelete} buttons={swipeButtons}>
+      {({ rowRef, offset, dragging, close }) => (
+      <>
       <div
         ref={rowRef}
         onClick={() => { if (offset < 0) close(); }}
@@ -661,13 +631,6 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall, onViewDetail }) {
         <button ref={moreBtnRef} type="button" onClick={toggleMore} title="Más opciones" className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 w-6 h-6 items-center justify-center rounded-lg text-zinc-500 hover:text-fg hover:bg-well-strong opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out md:group-hover:opacity-100 md:group-hover:pointer-events-auto touch-manipulation">
           <MoreHorizontal size={13} />
         </button>
-
-        {/* Borrado fluido y continuo (idéntico a Operaciones): ver comentario equivalente en
-            PlayerRow más arriba. */}
-        <div className="absolute inset-y-0 right-0 z-10 bg-red-500 sm:hidden pointer-events-none" style={{ width: `${dragProgress * 100}%`, transition: dragging ? 'none' : 'width 200ms ease-out' }} />
-        <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-white font-black uppercase text-sm sm:hidden pointer-events-none" style={{ opacity: dragProgress, transition: dragging ? 'none' : 'opacity 200ms ease-out' }}>
-          <Trash2 size={18} /> Borrar
-        </div>
       </div>
 
       {showMore && moreRect && createPortal(
@@ -684,6 +647,8 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall, onViewDetail }) {
         </div>,
         document.body
       )}
-    </div>
+      </>
+      )}
+    </SwipeableRow>
   );
 }
