@@ -384,32 +384,31 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
       ? [endLoanAction, editAction, deleteAction]
       : [...marketWithEndLoan, editAction, deleteAction];
 
-  // Orden del panel: el ÚLTIMO botón del array queda más pegado al borde del contenido y por
-  // tanto es el primero en asomar al deslizar — Borrar va el último a propósito, para que el
-  // rótulo rojo de borrado (dragProgress, ver useSwipeReveal) se adelante desde el primer
-  // instante del gesto en vez de esperar a revelar todo el panel. Editar y el tercer botón
-  // quedan más al fondo, revelados solo con un arrastre algo mayor. Para los canteranos de la
-  // sección Academia (onPromote presente), ese tercer botón sustituye por completo el "..."/Más
-  // por un acceso directo a "Subir al Primer Equipo", que abre ya mismo el modal de contrato de
-  // promoción — no tiene sentido ofrecer el menú de mercado (siempre deshabilitado para ellos)
-  // como paso intermedio. El resto de jugadores mantiene el "..." con el menú completo.
+  // Swipe hacia la izquierda: panel de gestión, sin Borrar (Borrar vive ahora en el swipe hacia
+  // la derecha, ver SwipeableRow). El ÚLTIMO botón del array queda más pegado al borde y por
+  // tanto es el primero en asomar — el tercer botón (Más/Finalizar Cesión/Subir) va el último
+  // a propósito, para que sea la primera acción visible; Editar queda más al fondo. Para los
+  // canteranos de la sección Academia (onPromote presente), ese tercer botón sustituye por
+  // completo el "..."/Más por un acceso directo a "Subir al Primer Equipo", que abre ya mismo
+  // el modal de contrato de promoción — no tiene sentido ofrecer el menú de mercado (siempre
+  // deshabilitado para ellos) como paso intermedio. El resto de jugadores mantiene el "..." con
+  // el menú completo.
   const swipeButtons = [
+    { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit(p) },
     isIncomingLoan
       ? { key: 'endLoan', icon: Undo2, label: 'Finalizar Cesión', onClick: () => onEndLoan(p) }
       : onPromote
         ? { key: 'promote', icon: ArrowUpCircle, label: 'Subir', onClick: () => onPromote(p) }
         : { key: 'more', ref: moreBtnMobileRef, icon: MoreHorizontal, label: 'Más', onClick: (e) => toggleMore(e, 'mobile'), closeOnClick: false },
-    { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit(p) },
-    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: () => onDelete(p.id), danger: true },
   ];
 
   return (
-    <SwipeableRow onFullSwipe={() => onDelete(p.id)} buttons={swipeButtons}>
+    <SwipeableRow onDelete={() => onDelete(p.id)} buttons={swipeButtons}>
       {({ rowRef, offset, dragging, close }) => (
       <>
       <div
         ref={rowRef}
-        onClick={() => { if (offset < 0) close(); }}
+        onClick={() => { if (offset !== 0) close(); }}
         style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
         className="relative bg-surface p-3 md:p-4 flex items-center justify-between hover:bg-well/50 transition-colors gap-4 touch-pan-y group"
       >
@@ -477,7 +476,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
                 resto de la fila. */}
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); if (offset < 0) { close(); return; } onViewDetail?.(p); }}
+              onClick={(e) => { e.stopPropagation(); if (offset !== 0) { close(); return; } onViewDetail?.(p); }}
               className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 touch-manipulation active:scale-95 transition-transform ${getCardStyle(p.rating)}`}
             >
               <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0] || p.pos}</span><span className="text-lg md:text-xl">{p.rating}</span>
@@ -575,22 +574,21 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall, onViewDetail }) {
     { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete() },
   ];
 
-  // Mismo orden que PlayerRow (Recuperar, Editar, Borrar al final): Borrar es el último del
-  // array, más pegado al borde y por tanto el primero en asomar al deslizar, para que el
-  // rótulo rojo de borrado se adelante desde el primer instante del gesto.
+  // Swipe hacia la izquierda: panel de gestión, sin Borrar (vive en el swipe hacia la
+  // derecha). Recuperar va el último del array, más pegado al borde y por tanto el primero en
+  // asomar al deslizar; Editar queda más al fondo.
   const swipeButtons = [
-    { key: 'recall', icon: ArrowRightLeft, label: 'Recuperar', onClick: onRecall },
     { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit() },
-    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: () => onDelete(), danger: true },
+    { key: 'recall', icon: ArrowRightLeft, label: 'Recuperar', onClick: onRecall },
   ];
 
   return (
-    <SwipeableRow onFullSwipe={onDelete} buttons={swipeButtons}>
+    <SwipeableRow onDelete={onDelete} buttons={swipeButtons}>
       {({ rowRef, offset, dragging, close }) => (
       <>
       <div
         ref={rowRef}
-        onClick={() => { if (offset < 0) close(); }}
+        onClick={() => { if (offset !== 0) close(); }}
         style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
         className="relative bg-surface p-3 md:p-4 flex items-center justify-between gap-4 touch-pan-y group"
       >
@@ -602,7 +600,7 @@ function LoanedPlayerRow({ p, onEdit, onDelete, onRecall, onViewDetail }) {
           <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); if (offset < 0) { close(); return; } onViewDetail?.(p); }}
+              onClick={(e) => { e.stopPropagation(); if (offset !== 0) { close(); return; } onViewDetail?.(p); }}
               className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 touch-manipulation active:scale-95 transition-transform ${getCardStyle(p.rating)}`}
             >
               <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span>

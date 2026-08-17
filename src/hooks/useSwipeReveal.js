@@ -1,25 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 
-// Distancia extra de arrastre, más allá del panel de botones, necesaria para que el rótulo
-// rojo de "Borrar" llegue al 100% (dragProgress === 1). Fija, no depende del ancho de la fila.
+// Ancho fijo del botón de Borrar (el único que vive en el lado derecho del gesto).
+export const DELETE_BUTTON_WIDTH = 64;
+// Distancia extra de arrastre, más allá del botón de Borrar, necesaria para que el rótulo
+// rojo llegue al 100% (dragProgress === 1) y se comprometa el borrado directo.
 const DELETE_ZONE_EXTRA = 80;
 
 // Gesto de deslizar compartido por las filas de jugador de toda la app (Plantilla, Academia,
-// Operaciones), en dos fases claramente delimitadas por "actionWidth" (el ancho real del panel
-// de botones de cada fila — 2, 3 o 4 acciones según la lista, ver SwipeableRow):
+// Operaciones), dividido por DIRECCIÓN:
 //
-// Fase 1 (0 a -actionWidth): arrastre corto. La fila se desliza revelando progresivamente el
-// panel de acciones (Editar/Borrar/Más/Recuperar…) que hay fijo detrás, visibles y pulsables
-// con total normalidad. Sin rótulo rojo todavía. Al soltar dentro de esta fase: si se pasó de
-// la mitad del panel, éste queda abierto (offset = -actionWidth); si no, la fila vuelve a su
-// sitio.
+// Izquierda (offset negativo, hasta -actionWidth): revela el panel de gestión (Más
+// opciones/Recuperar/Ejec. Opc. Compra, Editar…) fijo detrás de la fila. Tope duro en
+// -actionWidth — no hay borrado ni arrastre continuo hacia este lado, la fila simplemente no
+// se mueve más allá de ese punto.
 //
-// Fase 2 (más allá de -actionWidth): arrastre continuo a fondo, superando por completo el
-// bloque de botones. "dragProgress" crece de 0 a 1 según se avanza desde el borde del panel
-// hasta el tope de recorrido (actionWidth + DELETE_ZONE_EXTRA), para que el rótulo rojo de
-// "Borrar" cubra la tarjeta de forma fluida en vez de aparecer de golpe. Soltar en cualquier
-// punto de esta fase dispara onFullSwipe (que siempre debe abrir una confirmación antes de
-// borrar nada) — no hace falta llegar al 100%.
+// Derecha (offset positivo): revela el botón de Borrar en solitario. De 0 a
+// DELETE_BUTTON_WIDTH es la zona de revelado — soltar aquí deja el botón abierto y pulsable.
+// Superando ese punto ("Arrastre continuo a fondo") empieza la Fase 2: "dragProgress" crece de
+// 0 a 1 según se avanza hasta el tope de recorrido (DELETE_BUTTON_WIDTH + DELETE_ZONE_EXTRA),
+// para que el rótulo rojo cubra la tarjeta hacia la derecha de forma fluida. Soltar en
+// cualquier punto de esta fase dispara onDelete directamente (que siempre debe abrir una
+// confirmación antes de borrar nada).
 //
 // Usa un listener nativo de touchmove con { passive: false } porque React registra los
 // onTouchMove sintéticos como pasivos por defecto y no deja llamar a preventDefault() desde la
@@ -27,34 +28,29 @@ const DELETE_ZONE_EXTRA = 80;
 // horizontal). El eje del gesto (horizontal vs vertical) se decide en los primeros píxeles de
 // movimiento y ya no cambia durante ese mismo toque.
 //
-// El efecto se suscribe UNA sola vez (deps []): si "onFullSwipe" (una función definida en
-// línea por el padre) formara parte de las dependencias, el efecto se desmontaría y volvería
-// a montar los listeners nativos en mitad de un arrastre real, cortando el gesto y obligando
-// a soltar y volver a deslizar. Por eso la última versión de onFullSwipe se guarda en un ref
-// que el listener siempre lee "en caliente".
-export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
+// El efecto se suscribe UNA sola vez (deps []): si "onDelete" (una función definida en línea
+// por el padre) formara parte de las dependencias, el efecto se desmontaría y volvería a
+// montar los listeners nativos en mitad de un arrastre real, cortando el gesto y obligando a
+// soltar y volver a deslizar. Por eso la última versión de onDelete se guarda en un ref que el
+// listener siempre lee "en caliente".
+export function useSwipeReveal(onDelete, actionWidth = 128) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [dragProgress, setDragProgress] = useState(0);
   const rowRef = useRef(null);
   const offsetRef = useRef(0);
-  const onFullSwipeRef = useRef(onFullSwipe);
-  onFullSwipeRef.current = onFullSwipe;
+  const onDeleteRef = useRef(onDelete);
+  onDeleteRef.current = onDelete;
   const actionWidthRef = useRef(actionWidth);
   actionWidthRef.current = actionWidth;
 
   useEffect(() => {
     const el = rowRef.current;
     if (!el) return;
-    const drag = { startX: 0, startY: 0, active: false, axis: null, startOffset: 0, threshold: -160, maxDrag: -240 };
+    const drag = { startX: 0, startY: 0, active: false, axis: null, startOffset: 0, deleteThreshold: DELETE_BUTTON_WIDTH, deleteMax: DELETE_BUTTON_WIDTH + DELETE_ZONE_EXTRA };
     const onStart = (e) => {
       const t = e.touches[0];
       drag.startX = t.clientX; drag.startY = t.clientY; drag.active = true; drag.axis = null; drag.startOffset = offsetRef.current;
-      // El límite de la Fase 1 es el ancho real del panel de botones (no un % del ancho de la
-      // fila): así las dos fases quedan siempre alineadas con los botones que de verdad hay
-      // debajo, tanto si son 2 (Academia) como 4 (Operaciones, Cedidos con opción de compra).
-      drag.threshold = -actionWidthRef.current;
-      drag.maxDrag = drag.threshold - DELETE_ZONE_EXTRA;
     };
     const onMove = (e) => {
       if (!drag.active) return;
@@ -68,24 +64,28 @@ export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
       }
       if (drag.axis === 'x') {
         e.preventDefault();
-        const next = Math.max(drag.maxDrag, Math.min(0, drag.startOffset + dx));
+        // Izquierda: tope duro en -actionWidth. Derecha: hasta deleteMax (botón + zona de
+        // borrado continuo).
+        const next = Math.max(-actionWidthRef.current, Math.min(drag.deleteMax, drag.startOffset + dx));
         offsetRef.current = next;
         setOffset(next);
-        // 0 mientras se está dentro del panel de botones (Fase 1), crece de 0 a 1 solo al
-        // superarlo (Fase 2), hasta el tope de recorrido.
-        const growth = next <= drag.threshold ? Math.min(1, (next - drag.threshold) / (drag.maxDrag - drag.threshold)) : 0;
+        // 0 mientras se revela solo el botón de Borrar, crece de 0 a 1 al superarlo.
+        const growth = next > drag.deleteThreshold ? Math.min(1, (next - drag.deleteThreshold) / (drag.deleteMax - drag.deleteThreshold)) : 0;
         setDragProgress(growth);
       }
     };
     const onEnd = () => {
       if (drag.axis === 'x') {
         const final = offsetRef.current;
-        if (final <= drag.threshold) {
-          // Fase 2: se soltó más allá del panel de botones, borrado directo.
+        if (final >= drag.deleteThreshold) {
+          // Se soltó en o más allá del botón de Borrar del todo revelado: borrado directo.
           offsetRef.current = 0; setOffset(0);
-          onFullSwipeRef.current();
+          onDeleteRef.current();
+        } else if (final > DELETE_BUTTON_WIDTH / 2) {
+          // Pasada la mitad del botón: queda revelado y pulsable, sin borrar todavía.
+          offsetRef.current = DELETE_BUTTON_WIDTH; setOffset(DELETE_BUTTON_WIDTH);
         } else if (final < -actionWidthRef.current / 2) {
-          // Fase 1, pasada la mitad del panel: queda abierto revelando los botones.
+          // Pasada la mitad del panel de gestión: queda abierto.
           offsetRef.current = -actionWidthRef.current; setOffset(-actionWidthRef.current);
         } else {
           offsetRef.current = 0; setOffset(0);
@@ -112,5 +112,6 @@ export function useSwipeReveal(onFullSwipe, actionWidth = 128) {
   return { rowRef, offset, dragging, dragProgress, close };
 }
 
-// Ancho del panel de acciones reveladas al deslizar: 3 botones de 64px (w-16) cada uno.
+// Ancho del panel de gestión revelado al deslizar hacia la izquierda: 3 botones de 64px (w-16)
+// cada uno.
 export const ROW_ACTION_WIDTH = 192;

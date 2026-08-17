@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Tag, Plus, ArrowRightLeft, Trash2, Edit2, MoreHorizontal, RotateCcw, DollarSign, ShieldAlert } from 'lucide-react';
+import { Tag, Plus, ArrowRightLeft, Edit2, MoreHorizontal, RotateCcw, DollarSign, ShieldAlert } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { getCardStyle } from '../../utils/cardStyle';
 import { abbreviateValue } from '../../utils/format';
@@ -46,22 +46,23 @@ function OperationRow({ player, chipClassName, chipTextClassName, onClick, onDel
     setShowMore(true);
   };
 
-  // Borrar va el último del array (más pegado al borde, primero en asomar al deslizar) para
-  // que el rótulo rojo de borrado se adelante desde el primer instante del gesto. "shortLabel"
-  // (si existe) sustituye al texto largo del desplegable de escritorio para que quepa sin
-  // desbordar el botón de 64px del panel de swipe (ver "Ejecutar Opción de Compra").
+  // Swipe hacia la izquierda: panel de gestión, sin Borrar (vive en el swipe hacia la
+  // derecha). Las acciones propias de cada lista (Recuperar, Ejec. Opc. Compra, Quitar de
+  // Transferibles/Cedibles) van al final del array, más pegadas al borde y por tanto las
+  // primeras en asomar al deslizar; Editar queda más al fondo. "shortLabel" (si existe)
+  // sustituye al texto largo del desplegable de escritorio para que quepa sin desbordar el
+  // botón de 64px del panel de swipe (ver "Ejecutar Opción de Compra").
   const swipeButtons = [
-    ...moreActions.map(({ key, icon, label, shortLabel, onClick: onAction }) => ({ key, icon, label: shortLabel || label, onClick: onAction })),
     { key: 'edit', icon: Edit2, label: 'Editar', onClick: onEdit },
-    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: onDelete, danger: true },
+    ...moreActions.map(({ key, icon, label, shortLabel, onClick: onAction }) => ({ key, icon, label: shortLabel || label, onClick: onAction })),
   ];
 
   return (
-    <SwipeableRow onFullSwipe={onDelete} buttons={swipeButtons} rounded>
+    <SwipeableRow onDelete={onDelete} buttons={swipeButtons} rounded>
       {({ rowRef, offset, dragging, close }) => (
         <div
           ref={rowRef}
-          onClick={(e) => { if (offset < 0) { close(); return; } onClick?.(e); }}
+          onClick={(e) => { if (offset !== 0) { close(); return; } onClick?.(e); }}
           style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
           className="relative rounded-xl cursor-pointer touch-pan-y group"
         >

@@ -155,20 +155,20 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail
     { key: 'delete', icon: Trash2, label: 'Borrar Jugador', onClick: () => onDelete(p.id) },
   ];
 
-  // Borrar va el último del array (más pegado al borde, primero en asomar al deslizar) para
-  // que el rótulo rojo de borrado se adelante desde el primer instante del gesto.
+  // Swipe hacia la izquierda: panel de gestión, sin Borrar (vive en el swipe hacia la
+  // derecha). Un canterano no tiene más acciones que Editar, así que el panel izquierdo se
+  // reduce a ese único botón.
   const swipeButtons = [
     { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit(p) },
-    { key: 'delete', icon: Trash2, label: 'Borrar', onClick: () => onDelete(p.id), danger: true },
   ];
 
   return (
-    <SwipeableRow onFullSwipe={() => onDelete(p.id)} buttons={swipeButtons}>
+    <SwipeableRow onDelete={() => onDelete(p.id)} buttons={swipeButtons}>
       {({ rowRef, offset, dragging, close }) => (
       <>
       <div
         ref={rowRef}
-        onClick={() => { if (offset < 0) close(); }}
+        onClick={() => { if (offset !== 0) close(); }}
         style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
         className="relative bg-surface p-3 md:p-4 flex flex-col gap-2 touch-pan-y group"
       >
@@ -179,7 +179,7 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail
           <div className="relative flex items-center gap-3 md:gap-4 flex-1 min-w-0 md:transition-transform md:duration-300 md:ease-in-out md:group-hover:translate-x-11">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); if (offset < 0) { close(); return; } onViewDetail?.(p); }}
+              onClick={(e) => { e.stopPropagation(); if (offset !== 0) { close(); return; } onViewDetail?.(p); }}
               className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 touch-manipulation active:scale-95 transition-transform ${getCardStyle(p.rating)}`}
             >
               <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{p.positions?.[0]}</span><span className="text-lg md:text-xl">{p.rating}</span>
