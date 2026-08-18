@@ -181,9 +181,14 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   // skipInitialTransaction en los tres casos: cualquier jugador registrado aquí es estado base
   // previo del club (ya fichado antes de usar la app), nunca una compra real hecha dentro de
   // ella — el historial de transacciones y el presupuesto no deben verse afectados.
+  // "Empieza desde Cero" (isScratch): estos jugadores nunca vinieron de otro club, así que el
+  // campo Club de Procedencia se oculta por completo (hideSourceClub, ver PlayerForm) y se fija
+  // directamente a "En el club desde el inicio" sin pedírselo al usuario. En "Modo Carrera ya
+  // Empezado" el campo se muestra editable con normalidad, para indicar de qué equipo real vino
+  // cada jugador.
   const playerFormPropsFor = (mode) => {
     if (mode === 'academy') return { prefill: { type: 'Cantera' }, lockedType: 'Cantera', skipInitialTransaction: true };
-    if (isScratch) return { prefill: { type: 'Comprado' }, lockedType: 'Comprado', hidePurchasePrice: true, skipInitialTransaction: true };
+    if (isScratch) return { prefill: { type: 'Comprado', sourceClub: 'En el club desde el inicio' }, lockedType: 'Comprado', hidePurchasePrice: true, hideSourceClub: true, skipInitialTransaction: true };
     return { prefill: { type: 'Comprado' }, restrictTypes: ['Comprado', 'Cedido'], skipInitialTransaction: true };
   };
 

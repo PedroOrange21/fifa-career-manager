@@ -160,6 +160,11 @@ function SectionHeader({ emoji, title }) {
 // bloquear la elección (p. ej. plantilla ya existente: solo Comprado/Cedido, sin Cantera);
 // hidePurchasePrice oculta el Precio de Compra para jugadores "base" del club que nunca se
 // compraron por una cifra (siguen teniendo Valor de Mercado, Sueldo, etc.).
+// hideSourceClub: usado por el asistente de bienvenida cuando la partida "Empieza desde Cero"
+// — esos jugadores nunca vinieron de otro club (son la base original del club), así que el
+// campo Club de Procedencia se oculta por completo (Paso 3 y Paso 4) y se guarda tal cual venga
+// en "prefill.sourceClub" (ver OnboardingWizard, que lo fija a "En el club desde el inicio")
+// sin que el usuario pueda tocarlo. Rol Pactado no se ve afectado, sigue visible y editable.
 // skipInitialTransaction: usado por el asistente de configuración inicial del club (Create
 // Your Club) — un "Comprado" registrado ahí es estado base previo, no una compra real, así
 // que no debe descontar presupuesto ni generar un registro en el historial de transacciones.
@@ -167,7 +172,7 @@ function SectionHeader({ emoji, title }) {
 // (p. ej. "wage") y desplaza la vista hasta él — usado por el acceso directo desde el
 // Desglose de Sueldos de Finanzas, para que el usuario pueda cambiar el salario sin tener que
 // buscarlo manualmente entre el resto de la ficha.
-export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onClose, initialStep = 1, initialEditField = null, lockedType = null, restrictTypes = null, hidePurchasePrice = false, skipInitialTransaction = false }) {
+export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onClose, initialStep = 1, initialEditField = null, lockedType = null, restrictTypes = null, hidePurchasePrice = false, hideSourceClub = false, skipInitialTransaction = false }) {
   const { addOrUpdatePlayer, deleteTarget } = useClubData();
   useAutoHideChrome();
 
@@ -680,13 +685,17 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                     </div>
                   )}
                   {/* Club de Procedencia y Rol Pactado: aplican a cualquier incorporación al
-                      primer equipo (Comprado o Cedido), nunca a Cantera. */}
+                      primer equipo (Comprado o Cedido), nunca a Cantera. Club de Procedencia
+                      se oculta por completo si hideSourceClub (partida "Empieza desde Cero"):
+                      Rol Pactado ocupa entonces la fila completa, sin dejar hueco vacío. */}
                   {form.type !== 'Cantera' && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1 relative">
-                        <label className="text-[9px] font-black text-fg-muted ml-1">Club de Procedencia</label>
-                        <input type="text" placeholder="Ej: Sporting Gijón" onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.sourceClub} onChange={(e) => set({ sourceClub: e.target.value })} />
-                      </div>
+                    <div className={hideSourceClub ? '' : 'grid grid-cols-2 gap-3'}>
+                      {!hideSourceClub && (
+                        <div className="space-y-1 relative">
+                          <label className="text-[9px] font-black text-fg-muted ml-1">Club de Procedencia</label>
+                          <input type="text" placeholder="Ej: Sporting Gijón" onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.sourceClub} onChange={(e) => set({ sourceClub: e.target.value })} />
+                        </div>
+                      )}
                       <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">Rol Pactado</label>
                         <Dropdown value={form.agreedRole} options={AGREED_ROLE_OPTIONS} onChange={(v) => set({ agreedRole: v })} placeholder="Seleccionar" labelClassName="text-xs" />
@@ -899,9 +908,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
 
                     {form.type !== 'Cantera' && (
                       <>
-                        <ReviewRow label="Club de Procedencia" active={editField === 'sourceClub'} onOpen={() => setEditField('sourceClub')} display={form.sourceClub || 'Sin definir'}>
-                          <input autoFocus type="text" placeholder="Ej: Sporting Gijón" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.sourceClub} onChange={(e) => set({ sourceClub: e.target.value })} />
-                        </ReviewRow>
+                        {!hideSourceClub && (
+                          <ReviewRow label="Club de Procedencia" active={editField === 'sourceClub'} onOpen={() => setEditField('sourceClub')} display={form.sourceClub || 'Sin definir'}>
+                            <input autoFocus type="text" placeholder="Ej: Sporting Gijón" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.sourceClub} onChange={(e) => set({ sourceClub: e.target.value })} />
+                          </ReviewRow>
+                        )}
                         <ReviewRow label="Rol Pactado" active={editField === 'agreedRole'} onOpen={() => setEditField('agreedRole')} display={form.agreedRole || 'Sin definir'}>
                           <Dropdown value={form.agreedRole} options={AGREED_ROLE_OPTIONS} onChange={(v) => { set({ agreedRole: v }); setEditField(null); }} placeholder="Seleccionar" />
                         </ReviewRow>
