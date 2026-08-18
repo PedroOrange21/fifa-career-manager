@@ -66,8 +66,12 @@ export function ClubsProvider({ children }) {
       transferBudget: budget,
       weeklyWageBudget,
       currentSeasonNumber: 1,
+      // Los clubes creados a partir de aquí ya registran los sueldos de jugadores/objetivos
+      // directamente en semanal (ver ClubDataContext, migración "wageMigrationV1"): se marcan
+      // como ya migrados desde el origen para que ese efecto nunca los reconvierta.
+      wageMigrationV1: true,
     });
-    setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: budget, weeklyWageBudget, currentSeasonNumber: 1 }]));
+    setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: budget, weeklyWageBudget, currentSeasonNumber: 1, wageMigrationV1: true }]));
     // No cierra showClubModal aquí: el asistente de creación (OnboardingWizardModal) sigue
     // abierto tras crear el club para encadenar el registro de jugadores, y es él quien decide
     // cuándo cerrarse (Omitir o Entrar a mi Club).

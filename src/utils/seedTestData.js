@@ -94,6 +94,10 @@ export async function seedTestClub(uid, existingClubs = []) {
     createdAt: Date.now(),
     transferBudget: 50000000,
     currentSeasonNumber: 1,
+    // Los sueldos de TEST_PLAYERS/TEST_TARGETS ya están en semanal: se marca el club como
+    // migrado desde el origen para que ClubDataContext no los reconvierta (ver
+    // "wageMigrationV1" y ClubsContext.createClub).
+    wageMigrationV1: true,
   });
 
   TEST_PLAYERS.forEach((p) => {

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { onSnapshot, setDoc, addDoc, deleteDoc, updateDoc, increment } from 'firebase/firestore';
-import { playersCol, playerDoc, tacticsDoc, transactionsCol, targetsCol, targetDoc, matchesCol, seasonsCol } from '../utils/firestorePaths';
+import { playersCol, playerDoc, tacticsDoc, transactionsCol, targetsCol, targetDoc, matchesCol, seasonsCol, clubDoc } from '../utils/firestorePaths';
 import { FORMATIONS } from '../constants/formations';
 import { isUncalledZone } from '../utils/slots';
 import { useAuth } from './AuthContext';
@@ -36,6 +36,10 @@ export function ClubDataProvider({ children }) {
   const [activeTacticName, setActiveTacticName] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [targets, setTargets] = useState([]);
+  // Igual que playersLoaded: distingue "todavía no llegó el primer snapshot de objetivos" de
+  // "ya llegó y la lista está realmente vacía", necesario para que la migración de sueldos
+  // (ver más abajo) no dé por migrados los objetivos antes de haber recibido sus datos reales.
+  const [targetsLoaded, setTargetsLoaded] = useState(false);
   const [matches, setMatches] = useState([]);
   const [seasons, setSeasons] = useState([]);
 
@@ -56,6 +60,12 @@ export function ClubDataProvider({ children }) {
   const [pendingUndo, setPendingUndo] = useState(null);
   const pendingUndoRef = useRef(null);
   const UNDO_WINDOW_MS = 5500;
+
+  // Guarda de la migración de sueldos a semanal (ver efecto más abajo): evita que se dispare
+  // más de una vez por club dentro de la misma sesión mientras la migración asíncrona está en
+  // curso (los propios updateDoc de la migración hacen que players/targets cambien y el efecto
+  // se reevalúe, pero no debe volver a lanzar el proceso).
+  const wageMigrationClubIdRef = useRef(null);
 
   // "onCancel" (opcional, quinto argumento): a diferencia de eliminar un jugador/objetivo
   // (donde el elemento sigue intacto en Firestore hasta que expira la ventana, así que
@@ -106,13 +116,14 @@ export function ClubDataProvider({ children }) {
       setBench({});
       setTransactions([]);
       setTargets([]);
+      setTargetsLoaded(false);
       setMatches([]);
       setSeasons([]);
       return;
     }
 
     setPlayers([]); setPlayersLoaded(false); setFormation('4-3-3'); setLineup({}); setBench({}); setSavedFormationsBoth([]); setActiveTacticName(null);
-    setTransactions([]); setTargets([]); setMatches([]); setSeasons([]);
+    setTransactions([]); setTargets([]); setTargetsLoaded(false); setMatches([]); setSeasons([]);
 
     const unsubPlayers = onSnapshot(playersCol(user.uid, activeClubId), (snap) => {
       setPlayers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
@@ -138,6 +149,7 @@ export function ClubDataProvider({ children }) {
 
     const unsubTargets = onSnapshot(targetsCol(user.uid, activeClubId), (snap) => {
       setTargets(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setTargetsLoaded(true);
     }, (err) => console.error('Error fetching targets:', err));
 
     const unsubMatches = onSnapshot(matchesCol(user.uid, activeClubId), (snap) => {
@@ -150,6 +162,39 @@ export function ClubDataProvider({ children }) {
 
     return () => { unsubPlayers(); unsubTactics(); unsubTransactions(); unsubTargets(); unsubMatches(); unsubSeasons(); };
   }, [user, activeClubId]);
+
+  // Migración única de sueldos (mensual -> semanal): p.wage/t.wage se guardaban en mensual en
+  // toda la app hasta el cambio que introdujo el sueldo semanal como unidad canónica (ver
+  // utils/format.js). Los clubes creados ANTES de ese cambio se quedaron con importes
+  // mensuales ya guardados en Firestore bajo el mismo campo "wage" — al leerlos ahora como si
+  // ya fueran semanales, la Masa Salarial (Finanzas) y el Planificador de Fichajes (Objetivos)
+  // inflan la cifra real (un sueldo mensual de 3.000.000 € se mostraba como 3.000.000 €/sem en
+  // vez de convertirse a ~692.000 €/sem). Este efecto detecta un club sin la marca
+  // "wageMigrationV1" (los clubes nuevos ya la traen puesta desde ClubsContext.createClub, así
+  // que nunca pasan por aquí) y convierte una única vez cada wage existente multiplicándolo
+  // por 12/52, dejando marcado el club para no repetir la conversión en sesiones futuras.
+  useEffect(() => {
+    if (!user || !activeClubId || !activeClub || activeClub.wageMigrationV1) return;
+    if (!playersLoaded || !targetsLoaded) return;
+    if (wageMigrationClubIdRef.current === activeClubId) return;
+    wageMigrationClubIdRef.current = activeClubId;
+    const uid = user.uid;
+    const clubId = activeClubId;
+    (async () => {
+      try {
+        await Promise.all([
+          ...players.filter((p) => p.wage > 0).map((p) => updateDoc(playerDoc(uid, clubId, p.id), { wage: Math.round(p.wage * 12 / 52) })),
+          ...targets.filter((t) => t.wage > 0).map((t) => updateDoc(targetDoc(uid, clubId, t.id), { wage: Math.round(t.wage * 12 / 52) })),
+        ]);
+        await setDoc(clubDoc(uid, clubId), { wageMigrationV1: true }, { merge: true });
+      } catch (err) {
+        console.error('Error migrando sueldos a semanal:', err);
+        // Permite reintentar en un efecto posterior (p. ej. tras recuperar conexión) en vez de
+        // dejar el club atascado sin la marca para siempre dentro de la misma sesión.
+        if (wageMigrationClubIdRef.current === clubId) wageMigrationClubIdRef.current = null;
+      }
+    })();
+  }, [user, activeClubId, activeClub, playersLoaded, targetsLoaded, players, targets]);
 
   // club: opcional — solo se conoce para las cesiones (destinationClub). Las compras/ventas no
   // registran un club "contrario" en el modelo de datos actual, así que ese campo queda vacío
