@@ -1,76 +1,12 @@
-import { GoogleGenAI, Type } from '@google/genai';
-
-// Clave leída de .env.local (VITE_GEMINI_API_KEY, ver README) — nunca se sube a GitHub, ya
-// cubierta por la regla "*.local" de .gitignore. El cliente se crea de forma perezosa (no en
-// el import) para que la app pueda arrancar igualmente aunque la clave no esté configurada
-// todavía; el error real solo aparece si el usuario intenta escanear una tarjeta.
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-let client = null;
-const getClient = () => {
-  if (!apiKey) throw new Error('Falta configurar VITE_GEMINI_API_KEY en .env.local para poder escanear tarjetas con IA.');
-  if (!client) client = new GoogleGenAI({ apiKey });
-  return client;
-};
-
-const MODEL = 'gemini-2.5-flash';
-
-// Esquema de salida estructurada: obliga a Gemini a responder JSON con exactamente estos
-// campos (o null si el dato no es visible en la imagen), sin texto extra alrededor que haya
-// que parsear a mano.
-const RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    nombre: { type: Type.STRING, nullable: true, description: 'Nombre completo del jugador tal como aparece en la tarjeta.' },
-    media: { type: Type.INTEGER, nullable: true, description: 'Media/valoración general (OVR), número entre 1 y 99.' },
-    posicionPrincipal: { type: Type.STRING, nullable: true, description: 'Abreviatura de la posición principal (ej. DC, MC, LD, POR).' },
-    posicionesSecundarias: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true, description: 'Abreviaturas de posiciones secundarias, si las muestra la tarjeta.' },
-    nacionalidad: { type: Type.STRING, nullable: true },
-    edad: { type: Type.INTEGER, nullable: true },
-    altura: { type: Type.INTEGER, nullable: true, description: 'Altura en centímetros (convierte desde pies/pulgadas si hace falta).' },
-    peso: { type: Type.INTEGER, nullable: true, description: 'Peso en kilogramos (convierte desde libras si hace falta).' },
-    piernaBuena: { type: Type.STRING, enum: ['Diestro', 'Zurdo'], nullable: true },
-    estado: { type: Type.STRING, nullable: true, description: 'Etiqueta de estado/humor del jugador si aparece (ej. Feliz, Descontento, Quiere salir).' },
-    relevancia: { type: Type.STRING, enum: ['Clave', 'Importante', 'Rotación', 'Esporádico', 'Promesa'], nullable: true, description: 'Rol/relevancia en la plantilla si la tarjeta lo indica.' },
-    sueldoSemanal: { type: Type.INTEGER, nullable: true, description: 'Sueldo SEMANAL en euros, solo el número (sin puntos, comas ni símbolo de moneda).' },
-    valorMercado: { type: Type.INTEGER, nullable: true, description: 'Valor de mercado en euros, solo el número.' },
-    duracionContrato: { type: Type.STRING, nullable: true, description: 'Duración de contrato tal como aparece (años restantes o fecha de finalización).' },
-    clausulaRescision: { type: Type.INTEGER, nullable: true, description: 'Cláusula de rescisión en euros, solo el número.' },
-    clausulaReventa: { type: Type.INTEGER, nullable: true, description: 'Porcentaje de cláusula de reventa, solo el número (ej. 20 para 20%).' },
-    primasExtra: { type: Type.INTEGER, nullable: true, description: 'Primas extra/objetivos en euros, solo el número.' },
-    primaFichaje: { type: Type.INTEGER, nullable: true, description: 'Prima de fichaje en euros, solo el número.' },
-  },
-};
-
-const PROMPT = `Eres un asistente experto en leer tarjetas de jugador del videojuego EA Sports FC (Modo Carrera), tal como se muestran en las pantallas de Plantilla o en el detalle económico de Finanzas/Oficina.
-
-Analiza la imagen adjunta y extrae ÚNICAMENTE los datos que aparezcan visibles en la tarjeta, con la máxima precisión posible:
-- nombre completo del jugador
-- media/valoración general (OVR)
-- posición principal (abreviatura, ej. DC, MC, LD, POR)
-- posiciones secundarias (si las hay)
-- nacionalidad
-- edad
-- altura (en centímetros)
-- peso (en kilogramos)
-- pierna buena (Diestro o Zurdo)
-- estado o etiqueta de humor/satisfacción del jugador, si aparece
-- relevancia o rol en la plantilla (Clave, Importante, Rotación, Esporádico o Promesa), si aparece
-- sueldo SEMANAL en euros (el que EA Sports FC llama "Sueldo sem." — si solo ves un sueldo mensual o anual, conviértelo tú mismo a semanal antes de responder)
-- valor de mercado en euros
-- duración de contrato (años restantes o fecha)
-- cláusula de rescisión en euros
-- cláusula de reventa en porcentaje
-- primas extra/objetivos en euros
-- prima de fichaje en euros
-
-Reglas importantes:
-- Todos los importes en euros deben ir como número entero puro, SIN puntos de miles, SIN comas, SIN el símbolo "€" y sin abreviar (ej. escribe 45000000, nunca "45M" ni "45.000.000 €").
-- Si un dato no aparece visible en la imagen o no puedes leerlo con confianza, devuelve null en ese campo — no inventes ni adivines valores.
-- Responde exclusivamente con el JSON que cumpla el esquema indicado, sin texto adicional.`;
+// Cliente del escaneo de tarjetas por IA: la llamada real a Gemini vive exclusivamente en
+// api/scan-player.js (función Serverless de Vercel) — este módulo NUNCA ve la API key ni
+// importa el SDK de Google, solo envía la foto en base64 a ese endpoint propio y traduce la
+// respuesta. Antes esta llamada se hacía directo desde el navegador con la clave incrustada
+// en el bundle público; se movió al backend porque además de exponer la clave, algunos
+// navegadores/redes móviles bloqueaban la petición saliente directa a la API de Google.
 
 // Convierte un File/Blob (foto de cámara o galería) a base64 puro, sin el prefijo
-// "data:image/...;base64," que añade FileReader — Gemini espera el base64 a secas en
-// inlineData.data.
+// "data:image/...;base64," que añade FileReader — el endpoint espera el base64 a secas.
 const fileToBase64 = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
   reader.onload = () => {
@@ -82,55 +18,49 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
-// Analiza la foto de una tarjeta de jugador y devuelve el JSON extraído (con las claves
-// exactas del esquema de arriba). Lanza un Error con mensaje legible en español si algo falla
-// (sin API key configurada, respuesta vacía, JSON inválido, error de red...), para que la UI
-// que llama a esta función pueda mostrarlo directamente al usuario.
+// Analiza la foto de una tarjeta de jugador vía api/scan-player.js y devuelve el JSON
+// extraído (mismas claves que describe ese endpoint). Lanza un Error con mensaje legible en
+// español si algo falla (sin conexión, servidor sin clave configurada, respuesta inválida...),
+// para que la UI que llama a esta función pueda mostrarlo directamente al usuario.
 export async function scanPlayerCard(file) {
   if (!file) throw new Error('No se ha seleccionado ninguna imagen.');
-  const ai = getClient();
-  const base64Data = await fileToBase64(file);
+  const imageBase64 = await fileToBase64(file);
 
   let response;
   try {
-    response = await ai.models.generateContent({
-      model: MODEL,
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: PROMPT },
-            { inlineData: { mimeType: file.type || 'image/jpeg', data: base64Data } },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: RESPONSE_SCHEMA,
-      },
+    response = await fetch('/api/scan-player', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64, mimeType: file.type || 'image/jpeg' }),
     });
   } catch (err) {
-    console.error('Error llamando a Gemini:', err);
-    throw new Error('No se pudo contactar con Gemini. Comprueba tu conexión y la clave de API.');
+    console.error('Error de red llamando a /api/scan-player:', err);
+    throw new Error('No se pudo contactar con el servidor. Comprueba tu conexión e inténtalo de nuevo.');
   }
 
-  const text = response?.text;
-  if (!text) throw new Error('Gemini no devolvió ningún dato legible de la imagen. Prueba con una foto más nítida y bien encuadrada.');
-
+  let payload = null;
   try {
-    return JSON.parse(text);
+    payload = await response.json();
   } catch (err) {
-    console.error('Respuesta de Gemini no es JSON válido:', text, err);
-    throw new Error('La respuesta de Gemini no tuvo el formato esperado. Inténtalo de nuevo.');
+    console.error('Respuesta de /api/scan-player no es JSON válido:', err);
   }
+
+  if (!response.ok) {
+    throw new Error(payload?.error || 'No se pudo analizar la imagen. Inténtalo de nuevo.');
+  }
+  if (!payload?.data) {
+    throw new Error('El servidor no devolvió ningún dato de la imagen.');
+  }
+  return payload.data;
 }
 
-// Traduce el JSON en español devuelto por Gemini al objeto "prefill" que espera PlayerForm.
-// Importante: PlayerForm (toFormState) deriva primaryPosition/secondaryPositions únicamente a
-// partir de un array "positions" (principal primero) — pasarlas como claves sueltas no tendría
-// ningún efecto. "value" (Precio de Compra, lo que el club paga por el traspaso) se deja vacío
-// a propósito: no es un dato de la propia tarjeta del jugador, sino la cifra que el usuario
-// negocia al ficharlo, igual que ya hace "Fichar desde Objetivos" en MarketTab.jsx.
+// Traduce el JSON en español devuelto por el endpoint al objeto "prefill" que espera
+// PlayerForm. Importante: PlayerForm (toFormState) deriva primaryPosition/secondaryPositions
+// únicamente a partir de un array "positions" (principal primero) — pasarlas como claves
+// sueltas no tendría ningún efecto. "value" (Precio de Compra, lo que el club paga por el
+// traspaso) se deja vacío a propósito: no es un dato de la propia tarjeta del jugador, sino la
+// cifra que el usuario negocia al ficharlo, igual que ya hace "Fichar desde Objetivos" en
+// MarketTab.jsx.
 export function mapScanResultToPrefill(extracted) {
   const positions = [extracted.posicionPrincipal, ...(extracted.posicionesSecundarias || [])].filter(Boolean);
   // "duracionContrato" puede venir como "3 años", "3", o una fecha — solo nos interesa un
