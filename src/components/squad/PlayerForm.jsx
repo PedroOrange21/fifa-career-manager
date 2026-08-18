@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ShieldAlert, Camera, RefreshCcw, User, ChevronLeft, ChevronRight, Check, Globe2, Pencil, Shirt, GraduationCap } from 'lucide-react';
+import { X, ShieldAlert, Camera, RefreshCcw, User, ChevronLeft, ChevronRight, Check, Globe2, Pencil } from 'lucide-react';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { flagEmoji, detectCountry } from '../../constants/countries';
 import { formatValueInput, parseValue, formatCurrency, isValidPotentialInput } from '../../utils/format';
@@ -154,11 +154,13 @@ function SectionHeader({ emoji, title }) {
   );
 }
 
-// lockedType / restrictTypes / hidePurchasePrice: variantes usadas por el asistente de
-// bienvenida (OnboardingWizard) para reutilizar este mismo formulario "Fichar Jugador" sin
-// duplicar su lógica — lockedType oculta por completo el selector de Tipo de Adquisición
-// (p. ej. canteranos, siempre 'Cantera'); restrictTypes limita qué botones se muestran sin
-// bloquear la elección (p. ej. plantilla ya existente: solo Comprado/Cedido, sin Cantera);
+// lockedType / restrictTypes / hidePurchasePrice: variantes usadas tanto por PlayerList (una
+// vez decidido el destino Primer Equipo/Academia en el paso previo al propio formulario, ver
+// AddPlayerDestinationModal) como por el asistente de bienvenida (OnboardingWizard), para
+// reutilizar este mismo formulario "Fichar Jugador" sin duplicar su lógica — lockedType oculta
+// por completo el selector de Tipo de Adquisición (p. ej. canteranos, siempre 'Cantera');
+// restrictTypes limita qué botones se muestran sin bloquear la elección (p. ej. Primer Equipo:
+// solo Comprado/Cedido, sin Cantera);
 // hidePurchasePrice oculta el Precio de Compra para jugadores "base" del club que nunca se
 // compraron por una cifra (siguen teniendo Valor de Mercado, Sueldo, etc.).
 // hideSourceClub: usado por el asistente de bienvenida cuando la partida "Empieza desde Cero"
@@ -181,25 +183,6 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
   const initialFormRef = useRef(form);
   const [step, setStep] = useState(initialStep);
 
-  // Paso previo (solo en el alta libre desde "Fichar Jugador" en Plantilla, sin editar y sin
-  // venir precargado de un objetivo de Mercado ni del asistente de bienvenida, que ya fijan su
-  // propio tipo mediante lockedType/restrictTypes): antes de nada, el usuario decide si el
-  // jugador se incorpora al Primer Equipo o a la Academia. Esa elección determina el tipo de
-  // adquisición disponible (Comprado/Cedido vs. Cantera) para el resto del asistente.
-  const needsDestinationStep = !editingPlayer && !prefill && !lockedType && !restrictTypes;
-  const [destination, setDestination] = useState(null);
-  const showDestinationStep = needsDestinationStep && !destination;
-  const effectiveLockedType = lockedType || (destination === 'academy' ? 'Cantera' : null);
-  const effectiveRestrictTypes = restrictTypes || (destination === 'first_team' ? ['Comprado', 'Cedido'] : null);
-
-  // Elegir Academia fija de inmediato el tipo a "Cantera" (sin términos económicos, ver
-  // skipEconomyStep) y precarga una edad orientativa de canterano si aún no se ha escrito
-  // ninguna; elegir Primer Equipo simplemente deja el tipo por defecto ("Comprado") tal cual,
-  // limitado por effectiveRestrictTypes a Comprado/Cedido en el Paso 3.
-  const chooseDestination = (dest) => {
-    setDestination(dest);
-    if (dest === 'academy') set({ type: 'Cantera', marketValue: '', wage: '', releaseClause: '', contractYears: '', age: form.age || '17' });
-  };
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -218,7 +201,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
 
   // Desplaza la vista hasta el campo del sueldo cuando se llega con initialEditField="wage"
   // (acceso directo desde el Desglose de Sueldos): solo una vez, al montar, con el Paso 4 ya
-  // presente en el DOM porque needsDestinationStep es siempre false al editar un jugador.
+  // presente en el DOM.
   useEffect(() => {
     if (initialEditField === 'wage') wageRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -269,7 +252,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
   // el tipo de adquisición a 'Cedido' se limpia cualquier estado de mercado previo (no puede
   // quedar marcado como Transferible/Cedible/CedidoFuera de un club que no es el suyo).
   const selectAcquisitionType = (t) => {
-    if (effectiveLockedType) return;
+    if (lockedType) return;
     const patch = { type: t, contractYears: '' };
     if (t === 'Cedido') { patch.transferStatus = 'Activo'; patch.outboundLoan = null; }
     // La Cantera no maneja términos económicos: se limpian para no arrastrar en silencio un
@@ -397,7 +380,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
   // viene bloqueado en 'Cantera' (asistente de bienvenida) el Paso 3 no tiene ya ningún campo
   // que mostrar — el selector de Tipo también está oculto por lockedType — así que se salta
   // directo del Paso 2 (Atributos) al Paso 4 (Revisión) en vez de dejar una pantalla vacía.
-  const skipEconomyStep = effectiveLockedType === 'Cantera';
+  const skipEconomyStep = lockedType === 'Cantera';
 
   // --- Navegación: exclusivamente por los botones Anterior/Siguiente del pie. ---
   const goNext = () => {
@@ -513,31 +496,6 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
           </div>
 
           <div onScroll={() => setShowFootMenu(false)} className="px-5 pt-4 flex-1 overflow-y-auto overscroll-contain no-scrollbar">
-            {/* Paso previo (ver needsDestinationStep): elegir Primer Equipo o Academia antes de
-                entrar al asistente paso a paso. Sin barra de progreso propia, ya que no cuenta
-                como uno de los TOTAL_STEPS. */}
-            {showDestinationStep ? (
-              <div className="space-y-3 pb-4 animate-in fade-in duration-300">
-                <p className="text-[10px] font-black uppercase tracking-widest text-fg-muted text-center mb-1">¿A qué plantilla se incorpora?</p>
-                <button type="button" onClick={() => chooseDestination('first_team')} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border-subtle bg-well hover:border-blue-500 hover:bg-well-strong transition-all text-left touch-manipulation">
-                  <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0"><Shirt size={22} /></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-black uppercase italic text-sm text-fg">Primer Equipo</div>
-                    <div className="text-[10px] font-bold text-fg-muted mt-0.5">Plantilla principal · Comprado o Cedido</div>
-                  </div>
-                  <ChevronRight size={18} className="text-fg-faint shrink-0" />
-                </button>
-                <button type="button" onClick={() => chooseDestination('academy')} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border-subtle bg-well hover:border-emerald-500 hover:bg-well-strong transition-all text-left touch-manipulation">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0"><GraduationCap size={22} /></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-black uppercase italic text-sm text-fg">Academia / Cantera</div>
-                    <div className="text-[10px] font-bold text-fg-muted mt-0.5">Jugador en desarrollo, sin términos económicos</div>
-                  </div>
-                  <ChevronRight size={18} className="text-fg-faint shrink-0" />
-                </button>
-              </div>
-            ) : (
-            <>
             {/* Barra de progreso y "Paso X de Y": solo tiene sentido en el asistente de alta
                 (Fichar Jugador). Editar un jugador ya existente entra directo a la vista
                 unificada (Paso 4, con todos los campos accesibles) sin rastro del wizard. */}
@@ -672,11 +630,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                       desde "prefill". restrictTypes limita qué botones se muestran sin bloquear
                       la elección (p. ej. solo Comprado/Cedido al registrar una plantilla ya
                       existente, sin la opción Cantera). */}
-                  {!effectiveLockedType && (
+                  {!lockedType && (
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Tipo de Adquisición</label>
                       <div className="flex gap-2">
-                        {(effectiveRestrictTypes || ['Cantera', 'Cedido', 'Comprado']).map((t) => {
+                        {(restrictTypes || ['Cantera', 'Cedido', 'Comprado']).map((t) => {
                           const activeClass = t === 'Cantera' ? 'bg-emerald-600 text-white' : t === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-blue-600 text-white';
                           return (
                             <button key={t} type="button" onClick={() => selectAcquisitionType(t)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === t ? activeClass : 'bg-well text-fg-muted hover:bg-well-strong'}`}>{t}</button>
@@ -896,10 +854,10 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                   <>
                   <SectionHeader emoji="💰" title="Economía" />
                   <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
-                    {!effectiveLockedType && (
+                    {!lockedType && (
                       <ReviewRow label="Adquisición" active={editField === 'type'} onOpen={() => setEditField('type')} display={form.type}>
                         <div className="flex gap-2">
-                          {(effectiveRestrictTypes || ['Cantera', 'Cedido', 'Comprado']).map((t) => (
+                          {(restrictTypes || ['Cantera', 'Cedido', 'Comprado']).map((t) => (
                             <button key={t} type="button" onClick={() => selectAcquisitionType(t)} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${form.type === t ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>{t}</button>
                           ))}
                         </div>
@@ -1003,11 +961,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                 </div>
               )}
             </div>
-            </>
-            )}
           </div>
 
-          {!showDestinationStep && (
           <footer className="shrink-0 bg-surface border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
             {/* "Anterior" solo existe dentro del asistente de alta: editar no debe poder
                 navegar hacia atrás a los pasos 1-3, se queda siempre en la vista unificada. */}
@@ -1027,7 +982,6 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
               </button>
             )}
           </footer>
-          )}
         </div>
       </div>
 

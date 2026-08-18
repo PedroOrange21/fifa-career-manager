@@ -1,15 +1,17 @@
 import { useRef, useState } from 'react';
-import { X, Camera, Image as ImageIcon, RefreshCcw, ShieldAlert, ScanLine } from 'lucide-react';
+import { X, ChevronLeft, Camera, Image as ImageIcon, RefreshCcw, ShieldAlert, ScanLine } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import { scanPlayerCard, mapScanResultToPrefill } from '../../services/geminiPlayerScan';
 import { prepareImageForScan } from '../../utils/imagePrep';
 
-// Asistente de escaneo por IA: instrucciones + dos formas de aportar la imagen (cámara del
-// móvil o galería), indicador de carga mientras Gemini analiza la foto, y manejo de errores
-// con reintento — sin salir nunca de este mismo modal hasta tener un resultado o cancelar.
-// onExtracted recibe el objeto "prefill" ya traducido a los campos de PlayerForm.
-export default function ScanPlayerCardModal({ onClose, onExtracted }) {
+// Tercer paso de "Fichar Jugador" (tras elegir Escanear con IA en AddPlayerChoiceModal):
+// instrucciones + dos formas de aportar la imagen (cámara del móvil o galería), indicador de
+// carga mientras se procesa/analiza la foto, y manejo de errores con reintento — sin salir
+// nunca de este mismo modal hasta tener un resultado o cancelar. onExtracted recibe el objeto
+// "prefill" ya traducido a los campos de PlayerForm. onBack (oculto durante el procesado/
+// análisis, igual que el cierre) vuelve al paso de Método sin perder el flujo de alta.
+export default function ScanPlayerCardModal({ onClose, onExtracted, onBack }) {
   useBodyScrollLock();
   useAutoHideChrome();
 
@@ -57,7 +59,12 @@ export default function ScanPlayerCardModal({ onClose, onExtracted }) {
     <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={status === 'loading' || status === 'processing' ? undefined : onClose}>
       <div className="bg-surface border border-border p-5 rounded-[32px] w-full max-w-sm shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
-          <h3 className="font-black italic text-blue-400 text-sm uppercase flex items-center gap-2"><ScanLine size={16} /> Escanear con IA</h3>
+          <div className="flex items-center gap-2">
+            {onBack && status !== 'loading' && status !== 'processing' && (
+              <button type="button" onClick={onBack} className="p-1 -ml-1 text-fg-faint hover:text-fg transition-colors"><ChevronLeft size={18} /></button>
+            )}
+            <h3 className="font-black italic text-blue-400 text-sm uppercase flex items-center gap-2"><ScanLine size={16} /> Escanear con IA</h3>
+          </div>
           {status !== 'loading' && status !== 'processing' && (
             <button type="button" onClick={onClose} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
           )}

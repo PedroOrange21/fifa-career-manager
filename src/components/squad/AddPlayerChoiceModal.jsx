@@ -1,11 +1,12 @@
-import { X, PenLine, ScanLine, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, PenLine, ScanLine, ChevronRight } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
-// Primer paso de "Fichar Jugador": elegir entre rellenar el asistente a mano o escanear la
-// tarjeta del jugador con IA (Gemini Vision) para prerrellenarlo automáticamente. Se muestra
-// siempre antes de abrir PlayerForm, tanto si luego se sigue el camino manual como el de IA.
-export default function AddPlayerChoiceModal({ onManual, onScan, onClose }) {
+// Segundo paso de "Fichar Jugador" (tras elegir Primer Equipo en AddPlayerDestinationModal):
+// elegir entre rellenar el asistente a mano o escanear la tarjeta del jugador con IA (Gemini
+// Vision) para prerrellenarlo automáticamente. onBack vuelve al paso de Destino sin cerrar
+// del todo el flujo de alta.
+export default function AddPlayerChoiceModal({ onManual, onScan, onClose, onBack }) {
   useBodyScrollLock();
   useAutoHideChrome();
 
@@ -13,7 +14,12 @@ export default function AddPlayerChoiceModal({ onManual, onScan, onClose }) {
     <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
       <div className="bg-surface border border-border p-5 rounded-[32px] w-full max-w-sm shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
-          <h3 className="font-black italic text-green-500 text-sm uppercase">Fichar Jugador</h3>
+          <div className="flex items-center gap-2">
+            {onBack && (
+              <button type="button" onClick={onBack} className="p-1 -ml-1 text-fg-faint hover:text-fg transition-colors"><ChevronLeft size={18} /></button>
+            )}
+            <h3 className="font-black italic text-green-500 text-sm uppercase">Fichar Jugador</h3>
+          </div>
           <button type="button" onClick={onClose} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
         </div>
         <div className="space-y-2.5">

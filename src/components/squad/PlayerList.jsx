@@ -8,6 +8,7 @@ import { abbreviateValue, abbreviateName, formatLoanDuration } from '../../utils
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import SwipeableRow from '../common/SwipeableRow';
 import PlayerForm from './PlayerForm';
+import AddPlayerDestinationModal from './AddPlayerDestinationModal';
 import AddPlayerChoiceModal from './AddPlayerChoiceModal';
 import ScanPlayerCardModal from './ScanPlayerCardModal';
 import ConfirmModal from '../common/ConfirmModal';
@@ -51,6 +52,8 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [formPrefill, setFormPrefill] = useState(null);
   const [formSourceTargetId, setFormSourceTargetId] = useState(null);
   const [formInitialStep, setFormInitialStep] = useState(1);
+  const [formLockedType, setFormLockedType] = useState(null);
+  const [formRestrictTypes, setFormRestrictTypes] = useState(null);
   const [sellingPlayer, setSellingPlayer] = useState(null);
   const [loaningPlayer, setLoaningPlayer] = useState(null);
   const [endingLoanPlayer, setEndingLoanPlayer] = useState(null);
@@ -62,12 +65,16 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [ficharConfirming, setFicharConfirming] = useState(false);
   const ficharRef = useRef(null);
   useOnClickOutside(ficharRef, () => setFicharConfirming(false), ficharConfirming);
-  // "Fichar Jugador" abre primero este selector (Manual / Escanear con IA) en vez de saltar
-  // directo al asistente — Manual sigue el flujo de siempre; Escanear abre ScanPlayerCardModal,
-  // que al terminar entrega un "prefill" ya traducido y abre PlayerForm en el Paso 4 (Revisión)
-  // para que el usuario solo tenga que repasar y confirmar los datos leídos de la tarjeta.
-  const [showAddChoice, setShowAddChoice] = useState(false);
-  const [showScanModal, setShowScanModal] = useState(false);
+  // "Fichar Jugador" abre un asistente de 3 pasos, cada uno pudiendo volver al anterior con
+  // "Atrás" (ver onBack de cada modal) sin cerrar el flujo entero:
+  //   1. Destino (AddPlayerDestinationModal) — Primer Equipo o Academia/Cantera.
+  //   2. Método (AddPlayerChoiceModal, solo si Primer Equipo) — Manual o Escanear con IA.
+  //   3a. Manual -> PlayerForm clásico, con el tipo ya restringido/fijado según el destino.
+  //   3b. Escanear con IA (ScanPlayerCardModal) -> al terminar entrega un "prefill" ya
+  //       traducido y abre PlayerForm en el Paso 4 (Revisión) para repasar y confirmar.
+  // Academia/Cantera no ofrece escaneo por IA (igual que el propio alta directa de
+  // AcademyTab): pasa directa al asistente manual con lockedType="Cantera".
+  const [addStep, setAddStep] = useState(null); // null | 'destination' | 'method' | 'scan'
 
   useEffect(() => {
     if (pendingEditPlayer) {
@@ -75,6 +82,8 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       setFormPrefill(null);
       setFormSourceTargetId(null);
       setFormInitialStep(4);
+      setFormLockedType(null);
+      setFormRestrictTypes(null);
       setShowForm(true);
       onConsumePendingEdit();
     }
@@ -90,6 +99,8 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       setFormPrefill(rest);
       setFormSourceTargetId(__targetId || null);
       setFormInitialStep(1);
+      setFormLockedType(null);
+      setFormRestrictTypes(null);
       setShowForm(true);
       onConsumePendingPrefill();
     }
@@ -142,26 +153,54 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const academyPlayers = filteredPlayers.filter((p) => p.type === 'Cantera');
   const loanedOutPlayers = filteredPlayers.filter((p) => p.transferStatus === 'CedidoFuera');
 
-  const openNewForm = () => { setEditingPlayer(null); setFormPrefill(null); setFormSourceTargetId(null); setFormInitialStep(1); setShowForm(true); };
   // Editar desde la lista (activos o cedidos) abre directamente el Paso 4 con los datos
   // precargados, sin pasar por el asistente paso a paso.
-  const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormSourceTargetId(null); setFormInitialStep(4); setShowForm(true); };
+  const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormSourceTargetId(null); setFormInitialStep(4); setFormLockedType(null); setFormRestrictTypes(null); setShowForm(true); };
 
   const handleFicharClick = () => {
-    if (HAS_HOVER) { setShowAddChoice(true); return; }
-    if (ficharConfirming) { setShowAddChoice(true); setFicharConfirming(false); }
+    if (HAS_HOVER) { setAddStep('destination'); return; }
+    if (ficharConfirming) { setAddStep('destination'); setFicharConfirming(false); }
     else { setFicharConfirming(true); }
+  };
+
+  // Paso 2 (Método) elegido "Manual" tras Paso 1 (Destino) = Primer Equipo: asistente clásico
+  // desde el Paso 1, con el tipo restringido a Comprado/Cedido (sin Cantera).
+  const openFirstTeamManualForm = () => {
+    setAddStep(null);
+    setEditingPlayer(null);
+    setFormPrefill(null);
+    setFormSourceTargetId(null);
+    setFormInitialStep(1);
+    setFormLockedType(null);
+    setFormRestrictTypes(['Comprado', 'Cedido']);
+    setShowForm(true);
+  };
+
+  // Paso 1 (Destino) = Academia/Cantera: sin paso de Método (no hay escaneo por IA para
+  // canteranos), directo al asistente manual con el tipo fijado, igual que el alta propia de
+  // AcademyTab.
+  const openAcademyForm = () => {
+    setAddStep(null);
+    setEditingPlayer(null);
+    setFormPrefill({ type: 'Cantera' });
+    setFormSourceTargetId(null);
+    setFormInitialStep(1);
+    setFormLockedType('Cantera');
+    setFormRestrictTypes(null);
+    setShowForm(true);
   };
 
   // Al terminar el escaneo por IA, se abre PlayerForm directamente en el Paso 4 (Revisión)
   // con todo prerrellenado, igual que hace la edición rápida — así el usuario repasa y
   // confirma en una sola pantalla en vez de recorrer el asistente paso a paso.
   const handleScanExtracted = (prefillData) => {
-    setShowScanModal(false);
+    setAddStep(null);
     setEditingPlayer(null);
     setFormPrefill(prefillData);
     setFormSourceTargetId(null);
     setFormInitialStep(4);
+    setFormLockedType(null);
+    setFormRestrictTypes(['Comprado', 'Cedido']);
     setShowForm(true);
   };
 
@@ -281,16 +320,40 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
         </div>
       )}
 
-      {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} sourceTargetId={formSourceTargetId} initialStep={formInitialStep} onClose={() => setShowForm(false)} />}
-
-      {showAddChoice && (
-        <AddPlayerChoiceModal
-          onClose={() => setShowAddChoice(false)}
-          onManual={() => { setShowAddChoice(false); openNewForm(); }}
-          onScan={() => { setShowAddChoice(false); setShowScanModal(true); }}
+      {showForm && (
+        <PlayerForm
+          editingPlayer={editingPlayer}
+          prefill={formPrefill}
+          sourceTargetId={formSourceTargetId}
+          initialStep={formInitialStep}
+          lockedType={formLockedType}
+          restrictTypes={formRestrictTypes}
+          onClose={() => setShowForm(false)}
         />
       )}
-      {showScanModal && <ScanPlayerCardModal onClose={() => setShowScanModal(false)} onExtracted={handleScanExtracted} />}
+
+      {addStep === 'destination' && (
+        <AddPlayerDestinationModal
+          onClose={() => setAddStep(null)}
+          onSelectFirstTeam={() => setAddStep('method')}
+          onSelectAcademy={openAcademyForm}
+        />
+      )}
+      {addStep === 'method' && (
+        <AddPlayerChoiceModal
+          onClose={() => setAddStep(null)}
+          onBack={() => setAddStep('destination')}
+          onManual={openFirstTeamManualForm}
+          onScan={() => setAddStep('scan')}
+        />
+      )}
+      {addStep === 'scan' && (
+        <ScanPlayerCardModal
+          onClose={() => setAddStep(null)}
+          onBack={() => setAddStep('method')}
+          onExtracted={handleScanExtracted}
+        />
+      )}
       {sellingPlayer && <SellPlayerModal player={sellingPlayer} onClose={() => setSellingPlayer(null)} />}
       {loaningPlayer && <LoanOutModal player={loaningPlayer} onClose={() => setLoaningPlayer(null)} />}
       {promotingPlayer && <PromoteToFirstTeamModal player={promotingPlayer} onClose={() => setPromotingPlayer(null)} />}
