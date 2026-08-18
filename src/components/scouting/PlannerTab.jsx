@@ -79,8 +79,13 @@ function SellRow({ p, selected, onToggle, saleValue, onSaleValueChange }) {
         <span className="block font-bold text-sm text-fg truncate">{p.name}</span>
         <span className="block text-[8px] font-black uppercase tracking-widest text-fg-faint truncate">{p.positions?.join(' · ') || '—'} · {p.transferStatus === 'Cedible' ? 'Cedible' : 'Transferible'}</span>
       </button>
+      {/* Mismo bloque exacto que BuyRow (text-xs font-black text-fg + text-[8px] font-bold
+          text-fg-faint mt-0.5): el importe es un <input> en vez de un <span> de solo lectura,
+          pero sin caja ni subrayado propio para que su tamaño y alineación sean indistinguibles
+          del valor de traspaso de Entradas/Compras — el lápiz diminuto es la única pista de que
+          aquí sí se puede editar. */}
       <span className="text-right shrink-0 leading-tight">
-        <span className="flex items-center justify-end gap-1">
+        <span className="flex items-center justify-end gap-0.5">
           <Pencil size={8} className="text-fg-faint shrink-0" />
           <input
             type="text"
@@ -88,7 +93,7 @@ function SellRow({ p, selected, onToggle, saleValue, onSaleValueChange }) {
             value={inputValue}
             onClick={(e) => e.stopPropagation()}
             onChange={handleChange}
-            className="w-16 bg-transparent text-right text-xs font-black text-fg outline-none border-b border-dashed border-border-subtle focus:border-solid focus:border-green-500"
+            className="w-14 bg-transparent text-right text-xs font-black text-fg outline-none p-0 leading-none focus:text-green-500 transition-colors"
           />
           <span className="text-xs font-black text-fg">€</span>
         </span>
@@ -109,7 +114,7 @@ function BonusRow({ bonus, onLabelChange, onAmountChange, onRemove }) {
         placeholder="Ej: Champions League"
         value={bonus.label}
         onChange={(e) => onLabelChange(bonus.id, e.target.value)}
-        className="flex-1 min-w-0 bg-well p-2.5 rounded-lg outline-none border border-border-subtle focus:border-yellow-500 text-xs font-bold text-fg placeholder:text-fg-faint"
+        className="flex-1 min-w-0 bg-well px-2.5 py-2 rounded-lg outline-none border border-border-subtle focus:border-yellow-500 text-[11px] font-bold text-fg placeholder:text-fg-faint placeholder:text-[10px]"
       />
       <input
         type="text"
@@ -117,7 +122,7 @@ function BonusRow({ bonus, onLabelChange, onAmountChange, onRemove }) {
         placeholder="Importe"
         value={bonus.input}
         onChange={(e) => onAmountChange(bonus.id, e.target.value)}
-        className="w-24 shrink-0 bg-well p-2.5 rounded-lg outline-none border border-border-subtle focus:border-yellow-500 text-right text-xs font-black text-fg placeholder:text-fg-faint"
+        className="w-28 shrink-0 bg-well px-2 py-2 rounded-lg outline-none border border-border-subtle focus:border-yellow-500 text-right text-[11px] font-black text-fg placeholder:text-fg-faint placeholder:text-[10px]"
       />
       <button type="button" onClick={() => onRemove(bonus.id)} title="Eliminar premio" className="shrink-0 p-2 rounded-lg text-fg-faint hover:text-red-400 hover:bg-red-500/10 transition-colors touch-manipulation">
         <Trash2 size={14} />
@@ -190,7 +195,10 @@ export default function PlannerTab() {
   const projectedTransferBudget = (transferBudget + sellIncomeTotal + bonusAmount) - buyTransferTotal;
   const projectedWageMargin = (wageMarginWeekly + sellWageFreedTotal) - buyWageTotal;
 
-  const hasActivity = selectedTargets.length > 0 || selectedSellers.length > 0 || bonusAmount > 0;
+  // El informe de viabilidad exige al menos un jugador marcado (compra u venta/cesión): los
+  // premios por sí solos no lo activan, aunque ya cuenten en el cálculo en cuanto sí hay
+  // alguna casilla marcada — ver condición de render del Balance más abajo.
+  const hasSelection = selectedTargets.length > 0 || selectedSellers.length > 0;
   const transferFails = projectedTransferBudget < 0;
   const wageFails = hasWeeklyWageBudget && projectedWageMargin < 0;
   const isViable = !transferFails && !wageFails;
@@ -350,7 +358,7 @@ export default function PlannerTab() {
               <>
                 <div className="flex items-center gap-2 px-0.5">
                   <span className="flex-1 min-w-0 text-[8px] font-black uppercase text-fg-faint tracking-widest">Concepto / Torneo</span>
-                  <span className="w-24 shrink-0 text-[8px] font-black uppercase text-fg-faint tracking-widest text-right">Importe</span>
+                  <span className="w-28 shrink-0 text-[8px] font-black uppercase text-fg-faint tracking-widest text-right">Importe</span>
                   <span className="w-9 shrink-0" />
                 </div>
                 {bonuses.map((b) => (
@@ -366,8 +374,10 @@ export default function PlannerTab() {
       </div>
 
       {/* Balance final: fondos actuales vs. proyectados tras aplicar toda la simulación, más
-          el informe narrativo detallado del impacto de cada elemento y el veredicto final. */}
-      {hasActivity ? (
+          el informe narrativo detallado del impacto de cada elemento y el veredicto final. Solo
+          se muestra con al menos un jugador marcado (compra o venta/cesión) — los premios,
+          aunque ya sumen al cálculo, no bastan por sí solos para activar el informe. */}
+      {hasSelection ? (
         <div className="bg-surface p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl space-y-4">
           <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2"><Scale size={14} className="shrink-0" /> Balance de la Operación</span>
 
@@ -376,17 +386,17 @@ export default function PlannerTab() {
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10px] font-bold text-fg-muted shrink-0">Presup. Traspasos</span>
               <span className="flex items-center gap-1.5 min-w-0">
-                <span className="text-xs font-black text-fg-faint shrink-0">{formatCurrency(transferBudget)}</span>
-                <ArrowRight size={11} className="text-fg-faint shrink-0" />
-                <span className={`text-xs font-black truncate ${projectedTransferBudget >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(projectedTransferBudget)}</span>
+                <span className="text-[11px] font-black text-fg-faint shrink-0">{formatCurrency(transferBudget)}</span>
+                <ArrowRight size={10} className="text-fg-faint shrink-0" />
+                <span className={`text-[11px] font-black truncate ${projectedTransferBudget >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(projectedTransferBudget)}</span>
               </span>
             </div>
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10px] font-bold text-fg-muted shrink-0">Margen Salarial</span>
               <span className="flex items-center gap-1.5 min-w-0">
-                <span className="text-xs font-black text-fg-faint shrink-0">{hasWeeklyWageBudget ? `${formatCurrency(wageMarginWeekly)}/sem` : 'Sin Límite'}</span>
-                <ArrowRight size={11} className="text-fg-faint shrink-0" />
-                <span className={`text-xs font-black truncate ${!hasWeeklyWageBudget ? 'text-fg-faint' : projectedWageMargin >= 0 ? 'text-green-500' : 'text-red-500'}`}>{hasWeeklyWageBudget ? `${formatCurrency(projectedWageMargin)}/sem` : 'Sin Límite'}</span>
+                <span className="text-[11px] font-black text-fg-faint shrink-0">{hasWeeklyWageBudget ? `${formatCurrency(wageMarginWeekly)}/sem` : 'Sin Límite'}</span>
+                <ArrowRight size={10} className="text-fg-faint shrink-0" />
+                <span className={`text-[11px] font-black truncate ${!hasWeeklyWageBudget ? 'text-fg-faint' : projectedWageMargin >= 0 ? 'text-green-500' : 'text-red-500'}`}>{hasWeeklyWageBudget ? `${formatCurrency(projectedWageMargin)}/sem` : 'Sin Límite'}</span>
               </span>
             </div>
           </div>
@@ -404,7 +414,7 @@ export default function PlannerTab() {
           </div>
         </div>
       ) : (
-        <div className="p-10 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Selecciona objetivos, jugadores o añade premios para calcular el balance</div>
+        <div className="p-10 text-center text-fg-faint font-bold italic text-xs">Selecciona al menos un objetivo o una venta para calcular y evaluar la viabilidad de la operación</div>
       )}
     </div>
   );
