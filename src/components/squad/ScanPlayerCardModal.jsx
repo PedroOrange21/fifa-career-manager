@@ -3,6 +3,7 @@ import { X, Camera, Image as ImageIcon, RefreshCcw, ShieldAlert, ScanLine } from
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import { scanPlayerCard, mapScanResultToPrefill } from '../../services/geminiPlayerScan';
+import { prepareImageForScan } from '../../utils/imagePrep';
 
 // Asistente de escaneo por IA: instrucciones + dos formas de aportar la imagen (cámara del
 // móvil o galería), indicador de carga mientras Gemini analiza la foto, y manejo de errores
@@ -12,7 +13,7 @@ export default function ScanPlayerCardModal({ onClose, onExtracted }) {
   useBodyScrollLock();
   useAutoHideChrome();
 
-  const [status, setStatus] = useState('idle'); // 'idle' | 'loading' | 'error'
+  const [status, setStatus] = useState('idle'); // 'idle' | 'processing' | 'loading' | 'error'
   const [error, setError] = useState('');
   const [preview, setPreview] = useState('');
   const cameraInputRef = useRef(null);
@@ -20,14 +21,27 @@ export default function ScanPlayerCardModal({ onClose, onExtracted }) {
 
   const processFile = async (file) => {
     if (!file) return;
-    setPreview(URL.createObjectURL(file));
-    setStatus('loading');
     setError('');
+    setStatus('processing');
+
+    let preparedFile;
     try {
-      const extracted = await scanPlayerCard(file);
+      preparedFile = await prepareImageForScan(file);
+    } catch (err) {
+      // Fallo típico: HEIC corrupto o navegador sin soporte para el decodificador WASM de
+      // heic2any. Se sigue intentando con el archivo original en vez de bloquear al usuario —
+      // el backend igualmente rechaza tipos MIME desconocidos con un mensaje claro.
+      console.error('Error preparando la imagen (conversión/compresión):', err);
+      preparedFile = file;
+    }
+
+    setPreview(URL.createObjectURL(preparedFile));
+    setStatus('loading');
+    try {
+      const extracted = await scanPlayerCard(preparedFile);
       onExtracted(mapScanResultToPrefill(extracted));
     } catch (err) {
-      console.error(err);
+      console.error('Error de /api/scan-player:', err);
       setError(err.message || 'No se pudo analizar la imagen. Inténtalo de nuevo.');
       setStatus('error');
     }
@@ -40,20 +54,22 @@ export default function ScanPlayerCardModal({ onClose, onExtracted }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={status === 'loading' ? undefined : onClose}>
+    <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={status === 'loading' || status === 'processing' ? undefined : onClose}>
       <div className="bg-surface border border-border p-5 rounded-[32px] w-full max-w-sm shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-black italic text-blue-400 text-sm uppercase flex items-center gap-2"><ScanLine size={16} /> Escanear con IA</h3>
-          {status !== 'loading' && (
+          {status !== 'loading' && status !== 'processing' && (
             <button type="button" onClick={onClose} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
           )}
         </div>
 
-        {status === 'loading' ? (
+        {status === 'processing' || status === 'loading' ? (
           <div className="flex flex-col items-center gap-4 py-8">
             {preview && <img src={preview} alt="Tarjeta escaneada" className="w-32 h-32 rounded-2xl object-cover border border-border-subtle opacity-60" />}
             <RefreshCcw size={28} className="text-blue-400 animate-spin" />
-            <p className="text-[10px] font-black uppercase tracking-widest text-fg-muted text-center">Analizando la tarjeta con IA...</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-fg-muted text-center">
+              {status === 'processing' ? 'Procesando imagen...' : 'Analizando la tarjeta con IA...'}
+            </p>
             <p className="text-[9px] font-bold text-fg-faint text-center">Puede tardar unos segundos.</p>
           </div>
         ) : (
@@ -87,8 +103,8 @@ export default function ScanPlayerCardModal({ onClose, onExtracted }) {
               </button>
             </div>
 
-            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
-            <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+            <input ref={cameraInputRef} type="file" accept="image/*,.heic,.heif" capture="environment" className="hidden" onChange={handleFileChange} />
+            <input ref={galleryInputRef} type="file" accept="image/*,.heic,.heif" className="hidden" onChange={handleFileChange} />
           </div>
         )}
       </div>
