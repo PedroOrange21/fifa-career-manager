@@ -1,4 +1,4 @@
-import { X, Users2 } from 'lucide-react';
+import { X, Users2, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '../../utils/format';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
@@ -6,7 +6,10 @@ import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 // Lista de solo lectura con el sueldo semanal individual de cada jugador que compone la masa
 // salarial (ya ordenada de mayor a menor y con el total al final), para que el usuario pueda
 // verificar exactamente cómo se forma la cifra mostrada en la tarjeta de Finanzas.
-export default function WageBreakdownModal({ players, total, onClose }) {
+// onEditPlayer (opcional): si se recibe, el nombre de cada jugador se convierte en acceso
+// directo a su ficha de edición (Paso 4 de PlayerForm), ya con el foco puesto en el campo del
+// Sueldo Semanal — evita tener que salir de Finanzas y buscar al jugador a mano en Plantilla.
+export default function WageBreakdownModal({ players, total, onClose, onEditPlayer }) {
   useBodyScrollLock();
   useAutoHideChrome();
 
@@ -24,12 +27,29 @@ export default function WageBreakdownModal({ players, total, onClose }) {
           )}
           {players.map((p) => (
             <div key={p.id} className="px-6 py-3 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="font-bold text-sm text-fg truncate">{p.name}</div>
-                {p.transferStatus === 'CedidoFuera' && (
-                  <div className="text-[9px] text-blue-400 font-black uppercase tracking-widest">Cedido · {p.outboundLoan?.wagePercentage ?? 0}% a cargo del club</div>
-                )}
-              </div>
+              {onEditPlayer ? (
+                <button
+                  type="button"
+                  onClick={() => onEditPlayer(p)}
+                  title={`Editar sueldo de ${p.name}`}
+                  className="min-w-0 flex items-center gap-1.5 text-left group touch-manipulation"
+                >
+                  <span className="min-w-0">
+                    <span className="font-bold text-sm text-fg group-hover:text-green-500 group-active:text-green-500 truncate underline decoration-transparent group-hover:decoration-green-500/60 underline-offset-2 transition-colors block">{p.name}</span>
+                    {p.transferStatus === 'CedidoFuera' && (
+                      <span className="block text-[9px] text-blue-400 font-black uppercase tracking-widest">Cedido · {p.outboundLoan?.wagePercentage ?? 0}% a cargo del club</span>
+                    )}
+                  </span>
+                  <ChevronRight size={13} className="text-fg-faint group-hover:text-green-500 shrink-0 transition-colors" />
+                </button>
+              ) : (
+                <div className="min-w-0">
+                  <div className="font-bold text-sm text-fg truncate">{p.name}</div>
+                  {p.transferStatus === 'CedidoFuera' && (
+                    <div className="text-[9px] text-blue-400 font-black uppercase tracking-widest">Cedido · {p.outboundLoan?.wagePercentage ?? 0}% a cargo del club</div>
+                  )}
+                </div>
+              )}
               <div className="text-right shrink-0 leading-tight">
                 <div className="font-black text-sm text-fg">{formatCurrency(p.effectiveWage)}/sem</div>
                 <div className="font-bold text-[9px] text-fg-faint mt-0.5">{formatCurrency(p.effectiveWage * 52)}/año</div>

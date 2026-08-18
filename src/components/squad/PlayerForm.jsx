@@ -163,7 +163,11 @@ function SectionHeader({ emoji, title }) {
 // skipInitialTransaction: usado por el asistente de configuración inicial del club (Create
 // Your Club) — un "Comprado" registrado ahí es estado base previo, no una compra real, así
 // que no debe descontar presupuesto ni generar un registro en el historial de transacciones.
-export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onClose, initialStep = 1, lockedType = null, restrictTypes = null, hidePurchasePrice = false, skipInitialTransaction = false }) {
+// initialEditField: abre directamente en modo edición (Paso 4) el campo del resumen indicado
+// (p. ej. "wage") y desplaza la vista hasta él — usado por el acceso directo desde el
+// Desglose de Sueldos de Finanzas, para que el usuario pueda cambiar el salario sin tener que
+// buscarlo manualmente entre el resto de la ficha.
+export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onClose, initialStep = 1, initialEditField = null, lockedType = null, restrictTypes = null, hidePurchasePrice = false, skipInitialTransaction = false }) {
   const { addOrUpdatePlayer, deleteTarget } = useClubData();
   useAutoHideChrome();
 
@@ -196,18 +200,33 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [showFootMenu, setShowFootMenu] = useState(false);
   const [footMenuRect, setFootMenuRect] = useState(null);
-  const [editField, setEditField] = useState(null);
+  const [editField, setEditField] = useState(initialEditField);
   const fileInputRef = useRef(null);
   const reviewFileInputRef = useRef(null);
   const footMenuRef = useRef(null);
   const footBtnRef = useRef(null);
   const footDropdownRef = useRef(null);
+  const wageRowRef = useRef(null);
   const backdropRef = usePreventBackdropTouch(true);
   const discardBackdropRef = usePreventBackdropTouch(showDiscardConfirm);
 
+  // Desplaza la vista hasta el campo del sueldo cuando se llega con initialEditField="wage"
+  // (acceso directo desde el Desglose de Sueldos): solo una vez, al montar, con el Paso 4 ya
+  // presente en el DOM porque needsDestinationStep es siempre false al editar un jugador.
+  useEffect(() => {
+    if (initialEditField === 'wage') wageRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Evita quedarse "atascado" en modo edición de un campo del resumen si el usuario sale
-  // del Paso 4 y vuelve a entrar más tarde.
-  useEffect(() => { setEditField(null); }, [step]);
+  // del Paso 4 y vuelve a entrar más tarde. skipFirstResetRef evita que este mismo efecto
+  // borre, nada más montar, el initialEditField recién inyectado (useEffect también se
+  // dispara tras el render inicial, no solo en cambios posteriores de "step").
+  const skipFirstResetRef = useRef(true);
+  useEffect(() => {
+    if (skipFirstResetRef.current) { skipFirstResetRef.current = false; return; }
+    setEditField(null);
+  }, [step]);
 
   // El desplegable de Pierna se pinta con un portal (fuera de la tarjeta, que tiene
   // overflow-hidden para mantener cabecera/pie estáticos) para que nunca quede recortado
@@ -904,9 +923,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                             <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.value} onChange={formatMoneyField('value')} />
                           </ReviewRow>
                         )}
-                        <ReviewRow label="Sueldo Semanal (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
-                          <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
-                        </ReviewRow>
+                        <div ref={wageRowRef}>
+                          <ReviewRow label="Sueldo Semanal (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
+                            <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
+                          </ReviewRow>
+                        </div>
                         <ReviewRow label="Años Contrato" active={editField === 'contractYears'} onOpen={() => setEditField('contractYears')} display={form.contractYears ? `${form.contractYears} Años` : 'Sin definir'}>
                           <Dropdown value={form.contractYears} options={contractYearOptions} onChange={(v) => { set({ contractYears: v }); setEditField(null); }} placeholder="Seleccionar" />
                         </ReviewRow>
@@ -924,9 +945,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                         <ReviewRow label="Duración Cesión" active={editField === 'loanDuration'} onOpen={() => setEditField('loanDuration')} display={form.loanDuration}>
                           <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => { set({ loanDuration: v }); setEditField(null); }} />
                         </ReviewRow>
-                        <ReviewRow label="Sueldo Semanal Total (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
-                          <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
-                        </ReviewRow>
+                        <div ref={wageRowRef}>
+                          <ReviewRow label="Sueldo Semanal Total (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
+                            <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
+                          </ReviewRow>
+                        </div>
                         <ReviewRow label="% Salario Pagado" active={editField === 'wagePercentage'} onOpen={() => setEditField('wagePercentage')} display={`${form.wagePercentage || 0}%`}>
                           <div className="flex items-center gap-3">
                             <input type="range" min="0" max="100" step="5" className="flex-1 accent-green-500" value={form.wagePercentage || 0} onChange={(e) => set({ wagePercentage: e.target.value })} />

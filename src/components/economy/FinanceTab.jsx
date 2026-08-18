@@ -52,7 +52,7 @@ const getEffectiveWage = (p) => {
   return p.wage || 0;
 };
 
-export default function FinanceTab() {
+export default function FinanceTab({ onRequestEditPlayer }) {
   const { activeClub, setBudget, setWageBudget } = useClubs();
   const { players, transactions } = useClubData();
 
@@ -259,7 +259,14 @@ export default function FinanceTab() {
         </div>
       </div>
 
-      {showWageBreakdown && <WageBreakdownModal players={wageBreakdown} total={wageBill} onClose={() => setShowWageBreakdown(false)} />}
+      {showWageBreakdown && (
+        <WageBreakdownModal
+          players={wageBreakdown}
+          total={wageBill}
+          onClose={() => setShowWageBreakdown(false)}
+          onEditPlayer={onRequestEditPlayer ? (p) => { setShowWageBreakdown(false); onRequestEditPlayer(p, 'wage'); } : null}
+        />
+      )}
     </div>
   );
 }

@@ -7,7 +7,7 @@ const SUB_TABS = [
   { id: 'stats', label: 'Estadísticas', icon: PieChart },
 ];
 
-export default function OfficeTab({ subTab, setSubTab }) {
+export default function OfficeTab({ subTab, setSubTab, onRequestEditPlayer }) {
   return (
     <div className="space-y-4 animate-in fade-in">
       <div className="sticky top-[71px] md:top-[73px] z-30 flex bg-surface p-1 rounded-2xl border border-border-subtle shadow-lg">
@@ -18,7 +18,7 @@ export default function OfficeTab({ subTab, setSubTab }) {
         ))}
       </div>
 
-      {subTab === 'finance' && <FinanceTab />}
+      {subTab === 'finance' && <FinanceTab onRequestEditPlayer={onRequestEditPlayer} />}
       {subTab === 'stats' && <FinanceStatsTab />}
     </div>
   );
