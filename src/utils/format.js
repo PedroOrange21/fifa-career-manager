@@ -47,6 +47,12 @@ export const formatCurrency = (val) => {
   return num.toLocaleString('es-ES', { useGrouping: true }) + ' €';
 };
 
+// El Presupuesto Salarial del club solo se pide/guarda en semanal ("Presup. sem.", tal cual lo
+// muestra EA Sports FC en Oficina > Economía — ver ClubsContext.setWageBudget). Este es el
+// único punto de conversión a mensual, usado donde haga falta contrastarlo contra la masa
+// salarial mensual real de la plantilla (52 semanas / 12 meses).
+export const weeklyToMonthly = (weeklyAmount) => Math.round((weeklyAmount || 0) * 52 / 12);
+
 export const abbreviateValue = (val) => {
   if (!val) return '0 €';
   const num = parseValue(String(val));

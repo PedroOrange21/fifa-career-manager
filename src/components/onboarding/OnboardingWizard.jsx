@@ -10,24 +10,6 @@ import PlayerForm from '../squad/PlayerForm';
 
 const BUDGET_PRESETS = [1000000, 5000000, 10000000, 50000000, 100000000, 200000000, 500000000, 1000000000];
 
-// El Presupuesto Salarial siempre se guarda en Firestore como cifra MENSUAL (mismo criterio
-// que setWageBudget en ClubsContext y la tarjeta de Finanzas), pero EA Sports FC muestra este
-// dato semanal en la pestaña de Oficina del Modo Carrera — de ahí el selector de unidad, para
-// que el usuario pueda copiar la cifra tal cual la ve en el juego sin hacer la conversión a
-// mano. 52 semanas / 12 meses, redondeado al convertir.
-const WEEKS_PER_MONTH = 52 / 12;
-const WAGE_PERIOD_LABELS = { semana: '€/Semana', mes: '€/Mes', año: '€/Año' };
-const toMonthlyWage = (amount, period) => {
-  if (period === 'semana') return Math.round(amount * WEEKS_PER_MONTH);
-  if (period === 'año') return Math.round(amount / 12);
-  return Math.round(amount);
-};
-const fromMonthlyWage = (monthly, period) => {
-  if (period === 'semana') return Math.round(monthly / WEEKS_PER_MONTH);
-  if (period === 'año') return Math.round(monthly * 12);
-  return Math.round(monthly);
-};
-
 function abbreviateBudget(amount) {
   if (amount >= 1000000) return `${(amount / 1000000).toLocaleString('es-ES', { useGrouping: true })}M €`;
   if (amount >= 1000) return `${amount / 1000}Mil €`;
@@ -90,11 +72,11 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const [customMode, setCustomMode] = useState(false);
   const [customBudget, setCustomBudget] = useState('');
   const [createdClubId, setCreatedClubId] = useState(null);
-  // Presupuesto Salarial: opcional (a diferencia del de Traspasos, no bloquea "Siguiente" si
-  // se deja en blanco) — dejarlo vacío equivale a "sin límite definido todavía", igual que en
-  // Finanzas.
-  const [wageBudgetInput, setWageBudgetInput] = useState('');
-  const [wageBudgetPeriod, setWageBudgetPeriod] = useState('semana');
+  // Presupuesto Salarial: obligatorio igual que el de Traspasos, exclusivamente en semanal
+  // ("Presup. sem.", tal cual lo muestra EA Sports FC en Oficina > Economía) — sin selector de
+  // periodicidad; la conversión a mensual/anual la hace la app internamente donde haga falta
+  // (ver weeklyToMonthly en utils/format.js).
+  const [weeklyWageBudgetInput, setWeeklyWageBudgetInput] = useState('');
 
   // --- Paso Estado de la Partida ---
   const [startType, setStartType] = useState(null); // 'scratch' | 'continue'
@@ -132,24 +114,14 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
     setBudget(parseValue(formatted));
   };
 
-  const onWageBudgetChange = (raw) => setWageBudgetInput(formatValueInput(raw));
-  // Convierte el valor ya tecleado a la nueva unidad al cambiar el selector, para no perder
-  // lo escrito (mismo patrón que el selector Mes/Año de Finanzas).
-  const switchWageBudgetPeriod = (period) => {
-    if (period === wageBudgetPeriod) return;
-    const current = parseValue(wageBudgetInput) || 0;
-    const monthly = toMonthlyWage(current, wageBudgetPeriod);
-    const converted = fromMonthlyWage(monthly, period);
-    setWageBudgetInput(converted > 0 ? formatValueInput(String(converted)) : '');
-    setWageBudgetPeriod(period);
-  };
+  const onWeeklyWageBudgetChange = (raw) => setWeeklyWageBudgetInput(formatValueInput(raw));
 
   const activeRosterPlayers = players.filter((p) => p.type !== 'Cantera');
   const academyRosterPlayers = players.filter((p) => p.type === 'Cantera');
 
   const canGoNext = () => {
     if (currentStepId === 'identity') return name.trim().length > 0;
-    if (currentStepId === 'budget') return !customMode || parseValue(customBudget) > 0;
+    if (currentStepId === 'budget') return (!customMode || parseValue(customBudget) > 0) && parseValue(weeklyWageBudgetInput) > 0;
     if (currentStepId === 'status') return !!startType;
     if (currentStepId === 'academy') return hasAcademy !== null;
     return true;
@@ -159,7 +131,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
     setError('');
     if (!canGoNext()) {
       if (currentStepId === 'identity') setError('El nombre del club es obligatorio.');
-      else if (currentStepId === 'budget') setError('Introduce una cantidad mayor que cero.');
+      else if (currentStepId === 'budget') setError(parseValue(weeklyWageBudgetInput) <= 0 ? 'Introduce tu Presup. Sem. (salarios).' : 'Introduce una cantidad mayor que cero.');
       else if (currentStepId === 'status') setError('Elige cómo quieres empezar.');
       else if (currentStepId === 'academy') setError('Responde si tu club tiene canteranos.');
       return;
@@ -168,9 +140,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
       if (isSaving) return;
       setIsSaving(true);
       try {
-        const wageBudgetRaw = parseValue(wageBudgetInput);
-        const wageBudgetMonthly = wageBudgetRaw > 0 ? toMonthlyWage(wageBudgetRaw, wageBudgetPeriod) : null;
-        const result = await createClub(name, logo, budget, wageBudgetMonthly);
+        const result = await createClub(name, logo, budget, parseValue(weeklyWageBudgetInput));
         setCreatedClubId(result?.clubId || null);
         setIsSaving(false);
         setStep((s) => s + 1);
@@ -308,20 +278,16 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                     </div>
                   )}
 
-                  {/* Presupuesto Salarial: opcional, justo debajo del de Traspasos. Copia
-                      literal de la cifra que EA Sports FC muestra en la pestaña de Oficina del
-                      Modo Carrera (normalmente semanal), de ahí el selector de unidad. */}
+                  {/* Presupuesto Salarial: obligatorio igual que el de Traspasos, justo
+                      debajo. Exclusivamente semanal — copia literal de "Presup. sem." tal
+                      cual lo muestra EA Sports FC en Oficina > Economía, sin selector de
+                      unidad ni conversión manual. */}
                   <div className="pt-2 border-t border-border-subtle space-y-2">
                     <div className="flex items-center gap-2 p-3 rounded-2xl bg-well border border-border-subtle">
                       <Wallet size={16} className="text-green-500 shrink-0" />
-                      <span className="text-xs font-bold text-fg-muted">Presupuesto Salarial (opcional) — cópialo de la Oficina de tu Modo Carrera</span>
+                      <span className="text-xs font-bold text-fg-muted">Presup. Sem. (Salarios) — cópialo de la Oficina de tu Modo Carrera</span>
                     </div>
-                    <div className="flex bg-well p-1 rounded-xl border border-border-subtle w-fit">
-                      {Object.entries(WAGE_PERIOD_LABELS).map(([id, label]) => (
-                        <button key={id} type="button" onClick={() => switchWageBudgetPeriod(id)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${wageBudgetPeriod === id ? 'bg-green-500 text-black' : 'text-fg-faint hover:text-fg-secondary'}`}>{label}</button>
-                      ))}
-                    </div>
-                    <input type="text" inputMode="numeric" placeholder="Sin límite definido" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={wageBudgetInput} onChange={(e) => onWageBudgetChange(e.target.value)} />
+                    <input type="text" inputMode="numeric" placeholder="Ej: 500.000" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={weeklyWageBudgetInput} onChange={(e) => onWeeklyWageBudgetChange(e.target.value)} />
                   </div>
                 </div>
               )}

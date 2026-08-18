@@ -47,25 +47,28 @@ export function ClubsProvider({ children }) {
     return () => unsubClubs();
   }, [user, loadingApp]);
 
-  // "initialWageBudget" (opcional, siempre en cifra MENSUAL — ver setWageBudget más abajo):
-  // se escribe en el mismo setDoc de creación en vez de con una llamada aparte a
-  // setWageBudget justo después, porque esa función depende de "activeClubId" del contexto,
-  // que puede no haberse actualizado todavía al club recién creado en ese mismo instante.
-  const createClub = async (name, logo, initialBudget = 0, initialWageBudget = null) => {
+  // "initialWeeklyWageBudget": cifra SEMANAL tal cual la muestra EA Sports FC ("Presup. sem."
+  // en Oficina > Economía) — la app nunca pide mes/año, solo convierte internamente donde
+  // haga falta contrastar contra la masa salarial mensual (ver weeklyToMonthly en
+  // utils/format.js). Se escribe en el mismo setDoc de creación en vez de con una llamada
+  // aparte a setWageBudget justo después, porque esa función depende de "activeClubId" del
+  // contexto, que puede no haberse actualizado todavía al club recién creado en ese mismo
+  // instante.
+  const createClub = async (name, logo, initialBudget = 0, initialWeeklyWageBudget = null) => {
     if (!user || !name.trim()) return null;
     const isFirstClub = clubs.length === 0;
     const clubId = crypto.randomUUID();
     const budget = Number(initialBudget) || 0;
-    const wageBudget = initialWageBudget != null ? Number(initialWageBudget) : null;
+    const weeklyWageBudget = initialWeeklyWageBudget != null ? Number(initialWeeklyWageBudget) : null;
     await setDoc(clubDoc(user.uid, clubId), {
       name: name.trim(),
       logo: logo || null,
       createdAt: Date.now(),
       transferBudget: budget,
-      wageBudget,
+      weeklyWageBudget,
       currentSeasonNumber: 1,
     });
-    setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: budget, wageBudget, currentSeasonNumber: 1 }]));
+    setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: budget, weeklyWageBudget, currentSeasonNumber: 1 }]));
     // No cierra showClubModal aquí: el asistente de creación (OnboardingWizardModal) sigue
     // abierto tras crear el club para encadenar el registro de jugadores, y es él quien decide
     // cuándo cerrarse (Omitir o Entrar a mi Club).
@@ -115,14 +118,14 @@ export function ClubsProvider({ children }) {
     await updateDoc(clubDoc(user.uid, activeClubId), { transferBudget: amount });
   };
 
-  // Presupuesto de Salarios: siempre se guarda en Firestore como cifra MENSUAL (wageBudget),
-  // aunque el campo de Finanzas deje introducirlo también en anual y lo convierta antes de
-  // guardar. Si el club nunca lo ha configurado, el campo no existe en el documento —
-  // "activeClub.wageBudget == null" es la señal de "sin límite definido todavía", distinta de
-  // haberlo fijado explícitamente a 0.
-  const setWageBudget = async (monthlyAmount) => {
+  // Presupuesto de Salarios: siempre se guarda en Firestore como cifra SEMANAL
+  // (weeklyWageBudget), exactamente la que EA Sports FC muestra en Oficina > Economía como
+  // "Presup. sem." — sin conversión de unidad en la entrada, la app convierte internamente
+  // donde haga falta (ver weeklyToMonthly en utils/format.js). "activeClub.weeklyWageBudget ==
+  // null" es la señal de "sin definir todavía", distinta de haberlo fijado explícitamente a 0.
+  const setWageBudget = async (weeklyAmount) => {
     if (!user || !activeClubId) return;
-    await updateDoc(clubDoc(user.uid, activeClubId), { wageBudget: monthlyAmount });
+    await updateDoc(clubDoc(user.uid, activeClubId), { weeklyWageBudget: weeklyAmount });
   };
 
   const incrementSeasonNumber = async () => {

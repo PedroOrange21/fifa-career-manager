@@ -17,7 +17,7 @@ function DetailLine({ label, value, valueClassName = 'text-fg' }) {
   );
 }
 
-// Popover explicativo del icono "ℹ️" de la tarjeta de Presupuesto Salarial — mismo patrón de
+// Popover explicativo del icono "ℹ️" de la tarjeta de Presupuesto del Club — mismo patrón de
 // bottom-sheet ya usado en Estadísticas (FinanceStatsTab.jsx) para sus propios iconos de
 // información, reutilizado aquí para mantener la misma experiencia en toda la sección de
 // Finanzas.
@@ -55,10 +55,9 @@ export default function FinanceTab() {
 
   const [editingBudget, setEditingBudget] = useState(false);
   const [budgetInput, setBudgetInput] = useState('');
-  const [editingWageBudget, setEditingWageBudget] = useState(false);
-  const [wageBudgetInput, setWageBudgetInput] = useState('');
-  const [wageBudgetPeriod, setWageBudgetPeriod] = useState('mes');
-  const [showWageBudgetInfo, setShowWageBudgetInfo] = useState(false);
+  const [weeklyWageBudgetInput, setWeeklyWageBudgetInput] = useState('');
+  const [budgetError, setBudgetError] = useState('');
+  const [showBudgetInfo, setShowBudgetInfo] = useState(false);
   const [showWageBreakdown, setShowWageBreakdown] = useState(false);
   const [expandedTx, setExpandedTx] = useState(null);
 
@@ -71,45 +70,32 @@ export default function FinanceTab() {
     .sort((a, b) => b.effectiveWage - a.effectiveWage);
   const transferBudget = activeClub?.transferBudget || 0;
 
-  // "wageBudget == null" (el campo nunca se guardó en Firestore) es la señal de "el club
-  // todavía no ha definido un límite salarial" — distinta de haberlo fijado explícitamente a
-  // 0 €. El Planificador de Fichajes de Objetivos lee este mismo campo para no marcar
-  // "excede el margen salarial" cuando no hay ningún límite configurado.
-  const hasWageBudget = activeClub?.wageBudget != null;
-  const wageBudget = activeClub?.wageBudget || 0;
-  const wageMargin = wageBudget - wageBill;
+  // "weeklyWageBudget == null" (el campo nunca se guardó en Firestore, p. ej. clubes creados
+  // antes de esta función) es la señal de "el club todavía no ha definido un Presup. Sem." —
+  // distinta de haberlo fijado explícitamente a 0. El Planificador de Fichajes de Objetivos lee
+  // este mismo campo para no marcar "excede el margen salarial" cuando no hay ninguno
+  // configurado.
+  const hasWeeklyWageBudget = activeClub?.weeklyWageBudget != null;
+  const weeklyWageBudget = activeClub?.weeklyWageBudget || 0;
 
-  const startEditingBudget = () => { setBudgetInput(formatValueInput(String(transferBudget))); setEditingBudget(true); };
+  const startEditingBudget = () => {
+    setBudgetInput(formatValueInput(String(transferBudget)));
+    setWeeklyWageBudgetInput(hasWeeklyWageBudget ? formatValueInput(String(weeklyWageBudget)) : '');
+    setBudgetError('');
+    setEditingBudget(true);
+  };
+  // El Presup. Sem. es obligatorio (igual que en el onboarding): no se guarda nada si se deja
+  // vacío o en 0, para no dejar al club con un "sin definir" silencioso a mitad de edición.
   const confirmBudget = async (e) => {
     e.preventDefault();
+    const weekly = parseValue(weeklyWageBudgetInput);
+    if (!weeklyWageBudgetInput.trim() || weekly <= 0) {
+      setBudgetError('El Presup. Sem. (salarios) es obligatorio.');
+      return;
+    }
     await setBudget(parseValue(budgetInput));
+    await setWageBudget(weekly);
     setEditingBudget(false);
-  };
-
-  // Se guarda siempre como cifra mensual (ver setWageBudget en ClubsContext); el selector
-  // Mes/Año solo cambia cómo se interpreta el número tecleado, convirtiendo el valor ya
-  // introducido al cambiar de unidad para no perder lo escrito.
-  const startEditingWageBudget = () => {
-    setWageBudgetPeriod('mes');
-    setWageBudgetInput(hasWageBudget ? formatValueInput(String(wageBudget)) : '');
-    setEditingWageBudget(true);
-  };
-  const switchWageBudgetPeriod = (period) => {
-    if (period === wageBudgetPeriod) return;
-    const current = parseValue(wageBudgetInput) || 0;
-    const converted = period === 'año' ? current * 12 : Math.round(current / 12);
-    setWageBudgetInput(converted > 0 ? formatValueInput(String(converted)) : '');
-    setWageBudgetPeriod(period);
-  };
-  const confirmWageBudget = async (e) => {
-    e.preventDefault();
-    // Campo vacío = quitar el límite (null), no fijarlo a 0 € — "wageBudget == null" es la
-    // señal de "sin configurar" que lee el Planificador de Fichajes.
-    if (!wageBudgetInput.trim()) { await setWageBudget(null); setEditingWageBudget(false); return; }
-    const raw = parseValue(wageBudgetInput);
-    const monthly = wageBudgetPeriod === 'año' ? Math.round(raw / 12) : raw;
-    await setWageBudget(monthly);
-    setEditingWageBudget(false);
   };
 
   return (
@@ -117,17 +103,39 @@ export default function FinanceTab() {
       <div className="bg-gradient-to-br from-green-500/20 to-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-green-500/30 shadow-2xl relative overflow-hidden">
         <Wallet className="absolute -bottom-4 -right-4 text-green-500/10 w-32 h-32 md:w-40 md:h-40" />
         <div className="flex items-center justify-between mb-2 relative">
-          <span className="text-[10px] font-black uppercase tracking-widest text-green-400 flex items-center gap-2"><Wallet size={14} /> Presupuesto de Traspasos</span>
-          {!editingBudget && (<button onClick={startEditingBudget} className="p-1.5 text-fg-faint hover:text-green-500 transition-colors bg-well rounded-lg"><Edit2 size={12} /></button>)}
+          <span className="text-[10px] font-black uppercase tracking-widest text-green-400 flex items-center gap-2"><Wallet size={14} /> Presupuesto del Club</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button type="button" onClick={() => setShowBudgetInfo(true)} title="¿Qué es esto?" className="p-1.5 text-fg-faint hover:text-fg transition-colors touch-manipulation"><Info size={13} /></button>
+            {!editingBudget && (<button onClick={startEditingBudget} className="p-1.5 text-fg-faint hover:text-green-500 transition-colors bg-well rounded-lg"><Edit2 size={12} /></button>)}
+          </div>
         </div>
+        {showBudgetInfo && (
+          <InfoModal title="Presupuesto del Club" onClose={() => setShowBudgetInfo(false)}>
+            <p>Introduce los valores exactos que aparecen en tu Modo Carrera (Menú Oficina &gt; Economía &gt; Presupuesto): la cifra principal corresponde a "Presupuesto actual" y el importe semanal a "Presup. sem.".</p>
+            <p>La app calculará automáticamente tu margen salarial restante.</p>
+          </InfoModal>
+        )}
         {editingBudget ? (
-          <form onSubmit={confirmBudget} className="flex items-center gap-2 mt-2 relative">
-            <input autoFocus type="text" className="flex-1 bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-center font-black text-lg text-fg" value={budgetInput} onChange={(e) => setBudgetInput(formatValueInput(e.target.value))} />
-            <button type="submit" className="p-3 bg-green-500 text-black rounded-xl"><Check size={16} /></button>
-            <button type="button" onClick={() => setEditingBudget(false)} className="p-3 bg-well text-fg-muted rounded-xl"><X size={16} /></button>
+          <form onSubmit={confirmBudget} className="space-y-3 mt-2 relative">
+            <div className="space-y-1.5">
+              <label className="text-[9px] font-black text-fg-faint uppercase tracking-wider ml-1">Presupuesto Actual</label>
+              <input autoFocus type="text" className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-center font-black text-lg text-fg" value={budgetInput} onChange={(e) => setBudgetInput(formatValueInput(e.target.value))} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[9px] font-black text-fg-faint uppercase tracking-wider ml-1">Presup. Sem. (Salarios)</label>
+              <input type="text" placeholder="Ej: 500.000" className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-center font-black text-lg text-fg" value={weeklyWageBudgetInput} onChange={(e) => { setWeeklyWageBudgetInput(formatValueInput(e.target.value)); setBudgetError(''); }} />
+            </div>
+            {budgetError && <p className="text-[9px] font-black text-red-400 uppercase tracking-wide">{budgetError}</p>}
+            <div className="flex items-center gap-2">
+              <button type="submit" className="flex-1 p-3 bg-green-500 text-black rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-wide"><Check size={16} /> Guardar</button>
+              <button type="button" onClick={() => setEditingBudget(false)} className="p-3 bg-well text-fg-muted rounded-xl"><X size={16} /></button>
+            </div>
           </form>
         ) : (
-          <div className={`text-3xl md:text-4xl font-black italic tracking-tighter relative ${transferBudget < 0 ? 'text-red-500' : 'text-green-500'}`}>{formatCurrency(transferBudget)}</div>
+          <>
+            <div className={`text-3xl md:text-4xl font-black italic tracking-tighter relative ${transferBudget < 0 ? 'text-red-500' : 'text-green-500'}`}>{formatCurrency(transferBudget)}</div>
+            <p className="text-[10px] font-bold text-fg-faint mt-1.5 relative">Presup. Sem.: {hasWeeklyWageBudget ? `${formatCurrency(weeklyWageBudget)}/sem` : 'Sin definir'}</p>
+          </>
         )}
       </div>
 
@@ -140,45 +148,6 @@ export default function FinanceTab() {
         </div>
         <div className="text-xl md:text-2xl font-black italic tracking-tighter text-fg">{formatCurrency(wageBill)}</div>
         <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest mt-1">Suma de salarios de la plantilla activa</p>
-      </div>
-
-      <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted flex items-center gap-2"><Wallet size={14} /> Presupuesto de Salarios</span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button type="button" onClick={() => setShowWageBudgetInfo(true)} title="¿Qué es esto?" className="p-1.5 text-fg-faint hover:text-fg transition-colors touch-manipulation"><Info size={13} /></button>
-            {!editingWageBudget && (<button onClick={startEditingWageBudget} className="p-1.5 text-fg-faint hover:text-green-500 transition-colors bg-well rounded-lg"><Edit2 size={12} /></button>)}
-          </div>
-        </div>
-        {showWageBudgetInfo && (
-          <InfoModal title="Presupuesto de Salarios" onClose={() => setShowWageBudgetInfo(false)}>
-            <p>Introduce aquí el presupuesto para sueldos o sueldo semanal disponible que te indica EA Sports FC / FIFA en la pestaña de Oficina/Finanzas de tu Modo Carrera.</p>
-            <p>La aplicación lo utilizará para calcular tu margen salarial restante y comprobar la viabilidad en el Planificador de Fichajes.</p>
-          </InfoModal>
-        )}
-        {editingWageBudget ? (
-          <form onSubmit={confirmWageBudget} className="space-y-2 mt-2">
-            <div className="flex bg-well p-1 rounded-xl border border-border-subtle w-fit">
-              <button type="button" onClick={() => switchWageBudgetPeriod('mes')} className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${wageBudgetPeriod === 'mes' ? 'bg-surface text-fg shadow-sm' : 'text-fg-faint hover:text-fg-secondary'}`}>€/Mes</button>
-              <button type="button" onClick={() => switchWageBudgetPeriod('año')} className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-all touch-manipulation ${wageBudgetPeriod === 'año' ? 'bg-surface text-fg shadow-sm' : 'text-fg-faint hover:text-fg-secondary'}`}>€/Año</button>
-            </div>
-            <div className="flex items-center gap-2">
-              <input autoFocus type="text" placeholder="Sin límite" className="flex-1 bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-center font-black text-lg text-fg" value={wageBudgetInput} onChange={(e) => setWageBudgetInput(formatValueInput(e.target.value))} />
-              <button type="submit" className="p-3 bg-green-500 text-black rounded-xl"><Check size={16} /></button>
-              <button type="button" onClick={() => setEditingWageBudget(false)} className="p-3 bg-well text-fg-muted rounded-xl"><X size={16} /></button>
-            </div>
-            <p className="text-[9px] text-fg-faint font-bold">Déjalo vacío y confirma para quitar el límite salarial.</p>
-          </form>
-        ) : hasWageBudget ? (
-          <>
-            <div className="text-xl md:text-2xl font-black italic tracking-tighter text-fg">{formatCurrency(wageBudget)}<span className="text-xs text-fg-faint">/mes</span></div>
-            <div className={`inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${wageMargin >= 0 ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
-              Margen Disponible: {formatCurrency(wageMargin)}/mes
-            </div>
-          </>
-        ) : (
-          <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest">Sin límite definido — el Planificador de Fichajes no marcará exceso salarial hasta que fijes uno</p>
-        )}
       </div>
 
       <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden shadow-2xl">
