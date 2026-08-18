@@ -83,7 +83,10 @@ function SellRow({ p, selected, onToggle, saleValue, onSaleValueChange }) {
           text-fg-faint mt-0.5): el importe es un <input> en vez de un <span> de solo lectura,
           pero sin caja ni subrayado propio para que su tamaño y alineación sean indistinguibles
           del valor de traspaso de Entradas/Compras — el lápiz diminuto es la única pista de que
-          aquí sí se puede editar. */}
+          aquí sí se puede editar. "planner-sale-value-input" (ver index.css) es necesaria
+          porque la app fuerza con !important un font-size de 16px/14px en todo <input> para
+          evitar el zoom de Safari en móvil, que sin esa clase ganaba a text-xs y hacía ver esta
+          cifra más grande que la de BuyRow pese a llevar exactamente las mismas clases. */}
       <span className="text-right shrink-0 leading-tight">
         <span className="flex items-center justify-end gap-0.5">
           <Pencil size={8} className="text-fg-faint shrink-0" />
@@ -93,7 +96,7 @@ function SellRow({ p, selected, onToggle, saleValue, onSaleValueChange }) {
             value={inputValue}
             onClick={(e) => e.stopPropagation()}
             onChange={handleChange}
-            className="w-14 bg-transparent text-right text-xs font-black text-fg outline-none p-0 leading-none focus:text-green-500 transition-colors"
+            className="planner-sale-value-input w-14 bg-transparent text-right text-xs font-black text-fg outline-none p-0 leading-none focus:text-green-500 transition-colors"
           />
           <span className="text-xs font-black text-fg">€</span>
         </span>
