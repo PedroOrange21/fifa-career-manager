@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Edit2, UserPlus, ShieldAlert, Target, Search, SlidersHorizontal, X, MapPin, ChevronDown, ChevronUp, Check, Wallet, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Plus, Edit2, Trash2, MoreHorizontal, UserPlus, ShieldAlert, Target, Search, SlidersHorizontal, X, MapPin, ChevronDown, ChevronUp, Check, Wallet, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useClubs } from '../../context/ClubsContext';
 import { ALL_POSITIONS } from '../../constants/positions';
@@ -48,8 +49,40 @@ function TargetRow({ t, onSign, onEdit, onDelete, selected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
   const positions = positionsOf(t);
 
-  // Editar y Borrar ya no viven como botones estáticos en la tarjeta: se accede a ellos
-  // exclusivamente deslizando (izquierda = Editar, derecha = Borrar), mismo gestor
+  // El swipe (móvil) solo responde a gestos táctiles: en escritorio, sin pantalla táctil, ese
+  // gesto nunca se dispara con el ratón. Sin este "..." no habría NINGUNA forma de editar o
+  // borrar un objetivo desde un ordenador — mismo patrón de "..." revelado al pasar el ratón
+  // que ya usan Plantilla/Academia/Operaciones.
+  const [showMore, setShowMore] = useState(false);
+  const [moreRect, setMoreRect] = useState(null);
+  const moreBtnRef = useRef(null);
+  const moreMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!showMore) return;
+    const handler = (e) => {
+      if (moreBtnRef.current?.contains(e.target)) return;
+      if (moreMenuRef.current?.contains(e.target)) return;
+      setShowMore(false);
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [showMore]);
+
+  const toggleMore = (e) => {
+    e.stopPropagation();
+    if (showMore) { setShowMore(false); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMoreRect({ top: rect.bottom + 4, right: window.innerWidth - rect.right, width: 200 });
+    setShowMore(true);
+  };
+
+  // Editar y Borrar ya no viven como botones estáticos en la tarjeta: en móvil se accede a
+  // ellos exclusivamente deslizando (izquierda = Editar, derecha = Borrar), mismo gestor
   // (SwipeableRow) que Plantilla, Academia y Operaciones.
   const swipeButtons = [
     { key: 'edit', icon: Edit2, label: 'Editar', onClick: () => onEdit(t) },
@@ -93,6 +126,12 @@ function TargetRow({ t, onSign, onEdit, onDelete, selected, onToggleSelect }) {
               <div className="font-black uppercase italic text-sm md:text-base truncate tracking-tighter leading-tight text-black dark:text-white">{t.name}</div>
               <div className="text-[8px] md:text-[9px] text-green-500/80 font-black uppercase tracking-widest truncate">{positions.join(' · ') || '—'}</div>
             </div>
+            {/* Escritorio únicamente (el móvil ya tiene el swipe): acceso directo a
+                Editar/Borrar, siempre visible en vez de oculto tras hover, para que quede
+                claro que existe incluso sin haber pasado el ratón todavía por la tarjeta. */}
+            <button ref={moreBtnRef} type="button" onClick={toggleMore} title="Más opciones" className="hidden md:flex mt-1 w-6 h-6 items-center justify-center rounded-lg text-fg-faint hover:text-fg hover:bg-well-strong transition-colors shrink-0 touch-manipulation">
+              <MoreHorizontal size={14} />
+            </button>
             {/* Esquina superior derecha: Estado de seguimiento arriba, Edad justo debajo. */}
             <div className="flex flex-col items-end gap-1 shrink-0">
               <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-wider border ${STATUS_STYLE[t.status] || STATUS_STYLE.Seguimiento}`}>{STATUS_LABELS[t.status] || STATUS_LABELS.Seguimiento}</span>
@@ -126,6 +165,23 @@ function TargetRow({ t, onSign, onEdit, onDelete, selected, onToggleSelect }) {
             {expanded ? 'Menos Detalle' : 'Más Detalle'} <ChevronDown size={14} className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
           </button>
           </div>
+
+          {showMore && moreRect && createPortal(
+            <div
+              ref={moreMenuRef}
+              style={{ position: 'fixed', top: moreRect.top, right: moreRect.right, width: moreRect.width }}
+              className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-[300] animate-in fade-in slide-in-from-top-2 duration-150 p-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button type="button" onClick={() => { onEdit(t); setShowMore(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase whitespace-nowrap transition-all touch-manipulation text-fg-secondary hover:bg-well">
+                <Edit2 size={14} className="shrink-0" /> Editar Objetivo
+              </button>
+              <button type="button" onClick={() => { onDelete(t.id); setShowMore(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase whitespace-nowrap transition-all touch-manipulation text-red-400 hover:bg-well">
+                <Trash2 size={14} className="shrink-0" /> Borrar Objetivo
+              </button>
+            </div>,
+            document.body
+          )}
         </div>
       )}
     </SwipeableRow>
