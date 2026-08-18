@@ -46,7 +46,12 @@ export async function scanPlayerCard(file) {
   }
 
   if (!response.ok) {
-    throw new Error(payload?.error || 'No se pudo analizar la imagen. Inténtalo de nuevo.');
+    // "details" (si el servidor lo envía, ver api/scan-player.js) recoge el motivo real
+    // devuelto por Gemini o el error de parseo — se muestra junto al mensaje genérico para
+    // que el usuario pueda copiarlo directamente en un reporte de fallo.
+    console.error('Error de /api/scan-player:', payload?.error, payload?.details);
+    const base = payload?.error || 'No se pudo analizar la imagen. Inténtalo de nuevo.';
+    throw new Error(payload?.details ? `${base} (${payload.details})` : base);
   }
   if (!payload?.data) {
     throw new Error('El servidor no devolvió ningún dato de la imagen.');

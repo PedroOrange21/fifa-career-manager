@@ -9,7 +9,52 @@ import { GoogleGenAI, Type } from '@google/genai';
 // process.env sin importar el prefijo "VITE_", que solo afecta al bundle del navegador.
 const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
 
-const MODEL = 'gemini-2.5-flash';
+// gemini-2.5-flash es el modelo objetivo; si la cuenta/región no tiene acceso a él o Google lo
+// retira temporalmente, se reintenta una vez con gemini-1.5-flash antes de rendirse — así un
+// problema puntual del modelo no tumba el escaneo por completo.
+const PRIMARY_MODEL = 'gemini-2.5-flash';
+const FALLBACK_MODEL = 'gemini-1.5-flash';
+
+// Tipos MIME que Gemini acepta para imágenes; cualquier otro valor (o ausente) cae a JPEG, que
+// es lo que produce cualquier cámara de móvil.
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+const sanitizeMimeType = (mime) => (ALLOWED_MIME_TYPES.includes(mime) ? mime : 'image/jpeg');
+
+// Por si el frontend llegara a enviar la data URL completa ("data:image/jpeg;base64,...") en
+// vez del base64 puro — defensa adicional, aunque el cliente actual (geminiPlayerScan.js) ya
+// lo recorta antes de enviarlo.
+const sanitizeBase64 = (raw) => {
+  const value = String(raw || '');
+  const commaIdx = value.indexOf(',');
+  return value.startsWith('data:') && commaIdx >= 0 ? value.slice(commaIdx + 1) : value;
+};
+
+// Gemini debería devolver JSON puro gracias a responseSchema/responseMimeType, pero como
+// respaldo se admite también que venga envuelto en una valla de código Markdown
+// (```json ... ``` o ``` ... ```), por si el modelo decide "explicar" la respuesta.
+const parseGeminiJson = (text) => {
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (fenced) {
+      try { return JSON.parse(fenced[1]); } catch (err2) { /* sigue al throw de abajo */ }
+    }
+    throw err;
+  }
+};
+
+// Vuelca el máximo detalle posible de un error del SDK de Gemini (código HTTP, mensaje,
+// causa) en los logs de la función — la API de Google suele meter el motivo real dentro del
+// mensaje o en err.status/err.cause, que console.error(err) por sí solo no siempre expande.
+const logGeminiError = (label, err) => {
+  console.error(label, {
+    message: err?.message,
+    status: err?.status ?? err?.statusCode ?? err?.response?.status,
+    name: err?.name,
+    cause: err?.cause,
+  });
+};
 
 // Esquema de salida estructurada: obliga a Gemini a responder JSON con exactamente estos
 // campos (o null si el dato no es visible en la imagen), sin texto extra alrededor que haya
@@ -79,49 +124,65 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { imageBase64, mimeType } = req.body || {};
-  if (!imageBase64) {
+  const { imageBase64: rawImageBase64, mimeType: rawMimeType } = req.body || {};
+  if (!rawImageBase64) {
     res.status(400).json({ error: 'No se recibió ninguna imagen.' });
     return;
   }
+  const imageBase64 = sanitizeBase64(rawImageBase64);
+  const mimeType = sanitizeMimeType(rawMimeType);
 
-  try {
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: PROMPT },
-            { inlineData: { mimeType: mimeType || 'image/jpeg', data: imageBase64 } },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: RESPONSE_SCHEMA,
+  const ai = new GoogleGenAI({ apiKey });
+  const callModel = (model) => ai.models.generateContent({
+    model,
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          { text: PROMPT },
+          { inlineData: { mimeType, data: imageBase64 } },
+        ],
       },
-    });
+    ],
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: RESPONSE_SCHEMA,
+    },
+  });
 
-    const text = response?.text;
-    if (!text) {
-      res.status(502).json({ error: 'Gemini no devolvió ningún dato legible de la imagen. Prueba con una foto más nítida y bien encuadrada.' });
-      return;
-    }
-
-    let data;
+  let response;
+  let lastError;
+  for (const model of [PRIMARY_MODEL, FALLBACK_MODEL]) {
     try {
-      data = JSON.parse(text);
+      response = await callModel(model);
+      lastError = null;
+      break;
     } catch (err) {
-      console.error('Respuesta de Gemini no es JSON válido:', text, err);
-      res.status(502).json({ error: 'La respuesta de Gemini no tuvo el formato esperado. Inténtalo de nuevo.' });
-      return;
+      lastError = err;
+      logGeminiError(`Error llamando a Gemini (modelo ${model}):`, err);
     }
-
-    res.status(200).json({ data });
-  } catch (err) {
-    console.error('Error llamando a Gemini:', err);
-    res.status(502).json({ error: 'No se pudo contactar con Gemini. Inténtalo de nuevo en unos segundos.' });
   }
+
+  if (lastError) {
+    res.status(502).json({ error: 'No se pudo analizar la imagen. Inténtalo de nuevo.', details: lastError.message || String(lastError) });
+    return;
+  }
+
+  const text = response?.text;
+  if (!text) {
+    console.error('Gemini respondió sin texto utilizable. Respuesta completa:', JSON.stringify(response)?.slice(0, 2000));
+    res.status(502).json({ error: 'Gemini no devolvió ningún dato legible de la imagen. Prueba con una foto más nítida y bien encuadrada.' });
+    return;
+  }
+
+  let data;
+  try {
+    data = parseGeminiJson(text);
+  } catch (err) {
+    console.error('Respuesta de Gemini no es JSON válido:', text.slice(0, 2000), err);
+    res.status(502).json({ error: 'La respuesta de Gemini no tuvo el formato esperado. Inténtalo de nuevo.', details: err.message });
+    return;
+  }
+
+  res.status(200).json({ data });
 }
