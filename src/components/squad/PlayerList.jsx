@@ -40,7 +40,7 @@ const getPositionOrder = (p) => {
   return idx === -1 ? ALL_POSITIONS.length : idx;
 };
 
-export default function PlayerList({ pendingEditPlayer, pendingEditFocusField, onConsumePendingEdit, pendingPrefill, onConsumePendingPrefill }) {
+export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pendingPrefill, onConsumePendingPrefill }) {
   const { players, lineup, bench, playerToDelete, setPlayerToDelete, confirmDeletePlayer, setPlayerTransferStatus, startEndLoan } = useClubData();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('rating-desc');
@@ -49,7 +49,6 @@ export default function PlayerList({ pendingEditPlayer, pendingEditFocusField, o
   const [formPrefill, setFormPrefill] = useState(null);
   const [formSourceTargetId, setFormSourceTargetId] = useState(null);
   const [formInitialStep, setFormInitialStep] = useState(1);
-  const [formInitialEditField, setFormInitialEditField] = useState(null);
   const [sellingPlayer, setSellingPlayer] = useState(null);
   const [loaningPlayer, setLoaningPlayer] = useState(null);
   const [endingLoanPlayer, setEndingLoanPlayer] = useState(null);
@@ -68,11 +67,10 @@ export default function PlayerList({ pendingEditPlayer, pendingEditFocusField, o
       setFormPrefill(null);
       setFormSourceTargetId(null);
       setFormInitialStep(4);
-      setFormInitialEditField(pendingEditFocusField || null);
       setShowForm(true);
       onConsumePendingEdit();
     }
-  }, [pendingEditPlayer, pendingEditFocusField, onConsumePendingEdit]);
+  }, [pendingEditPlayer, onConsumePendingEdit]);
 
   // El modal de contrato de promoción (accesible desde la sección Academia de esta misma
   // vista) oculta la cabecera y la navegación por sí mismo (useAutoHideChrome).
@@ -84,7 +82,6 @@ export default function PlayerList({ pendingEditPlayer, pendingEditFocusField, o
       setFormPrefill(rest);
       setFormSourceTargetId(__targetId || null);
       setFormInitialStep(1);
-      setFormInitialEditField(null);
       setShowForm(true);
       onConsumePendingPrefill();
     }
@@ -137,10 +134,10 @@ export default function PlayerList({ pendingEditPlayer, pendingEditFocusField, o
   const academyPlayers = filteredPlayers.filter((p) => p.type === 'Cantera');
   const loanedOutPlayers = filteredPlayers.filter((p) => p.transferStatus === 'CedidoFuera');
 
-  const openNewForm = () => { setEditingPlayer(null); setFormPrefill(null); setFormSourceTargetId(null); setFormInitialStep(1); setFormInitialEditField(null); setShowForm(true); };
+  const openNewForm = () => { setEditingPlayer(null); setFormPrefill(null); setFormSourceTargetId(null); setFormInitialStep(1); setShowForm(true); };
   // Editar desde la lista (activos o cedidos) abre directamente el Paso 4 con los datos
   // precargados, sin pasar por el asistente paso a paso.
-  const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormSourceTargetId(null); setFormInitialStep(4); setFormInitialEditField(null); setShowForm(true); };
+  const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormSourceTargetId(null); setFormInitialStep(4); setShowForm(true); };
 
   const handleFicharClick = () => {
     if (HAS_HOVER) { openNewForm(); return; }
@@ -264,7 +261,7 @@ export default function PlayerList({ pendingEditPlayer, pendingEditFocusField, o
         </div>
       )}
 
-      {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} sourceTargetId={formSourceTargetId} initialStep={formInitialStep} initialEditField={formInitialEditField} onClose={() => setShowForm(false)} />}
+      {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} sourceTargetId={formSourceTargetId} initialStep={formInitialStep} onClose={() => setShowForm(false)} />}
       {sellingPlayer && <SellPlayerModal player={sellingPlayer} onClose={() => setSellingPlayer(null)} />}
       {loaningPlayer && <LoanOutModal player={loaningPlayer} onClose={() => setLoaningPlayer(null)} />}
       {promotingPlayer && <PromoteToFirstTeamModal player={promotingPlayer} onClose={() => setPromotingPlayer(null)} />}

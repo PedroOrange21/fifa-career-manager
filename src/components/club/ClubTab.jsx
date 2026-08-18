@@ -11,7 +11,7 @@ const SUB_TABS = [
 
 export default function ClubTab({
   subTab, setSubTab, onNavigateToScouting,
-  pendingEditPlayer, pendingEditFocusField, onConsumePendingEdit, pendingPrefill, onConsumePendingPrefill,
+  pendingEditPlayer, onConsumePendingEdit, pendingPrefill, onConsumePendingPrefill,
 }) {
   return (
     <div className="space-y-4 animate-in fade-in">
@@ -25,7 +25,7 @@ export default function ClubTab({
 
       {subTab === 'squad' && (
         <PlayerList
-          pendingEditPlayer={pendingEditPlayer} pendingEditFocusField={pendingEditFocusField} onConsumePendingEdit={onConsumePendingEdit}
+          pendingEditPlayer={pendingEditPlayer} onConsumePendingEdit={onConsumePendingEdit}
           pendingPrefill={pendingPrefill} onConsumePendingPrefill={onConsumePendingPrefill}
         />
       )}

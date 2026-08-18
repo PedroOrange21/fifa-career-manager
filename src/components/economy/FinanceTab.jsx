@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Wallet, TrendingUp, TrendingDown, ArrowRightLeft, ArrowDownToLine, Users2, Edit2, Check, X, List, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
@@ -52,7 +52,7 @@ const getEffectiveWage = (p) => {
   return p.wage || 0;
 };
 
-export default function FinanceTab({ onRequestEditPlayer }) {
+export default function FinanceTab({ onRequestEditPlayerWage, reopenWageBreakdown, onConsumeReopenWageBreakdown }) {
   const { activeClub, setBudget, setWageBudget } = useClubs();
   const { players, transactions } = useClubData();
 
@@ -63,6 +63,16 @@ export default function FinanceTab({ onRequestEditPlayer }) {
   const [showBudgetInfo, setShowBudgetInfo] = useState(false);
   const [showWageBreakdown, setShowWageBreakdown] = useState(false);
   const [expandedTx, setExpandedTx] = useState(null);
+
+  // Al volver de editar un sueldo desde el propio Desglose (ver WageBreakdownModal ->
+  // ClubShell.wageEditPlayer), se reabre el modal con los datos ya actualizados (players ya
+  // refleja el cambio vía el listener de Firestore) en vez de dejar al usuario en la tarjeta
+  // de Finanzas sin más.
+  useEffect(() => {
+    if (!reopenWageBreakdown) return;
+    setShowWageBreakdown(true);
+    onConsumeReopenWageBreakdown?.();
+  }, [reopenWageBreakdown, onConsumeReopenWageBreakdown]);
 
   const wageBill = players.reduce((sum, p) => sum + getEffectiveWage(p), 0);
   // De mayor a menor sueldo individual; se excluyen los que no cargan nada al club (p. ej.
@@ -264,7 +274,7 @@ export default function FinanceTab({ onRequestEditPlayer }) {
           players={wageBreakdown}
           total={wageBill}
           onClose={() => setShowWageBreakdown(false)}
-          onEditPlayer={onRequestEditPlayer ? (p) => { setShowWageBreakdown(false); onRequestEditPlayer(p, 'wage'); } : null}
+          onEditPlayer={onRequestEditPlayerWage ? (p) => { setShowWageBreakdown(false); onRequestEditPlayerWage(p); } : null}
         />
       )}
     </div>

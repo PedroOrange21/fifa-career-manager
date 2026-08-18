@@ -16,6 +16,7 @@ import MarketShell from '../scouting/MarketShell';
 import OfficeTab from '../economy/OfficeTab';
 import SeasonsTab from '../seasons/SeasonsTab';
 import ProfileTab from '../profile/ProfileTab';
+import PlayerForm from '../squad/PlayerForm';
 
 export default function ClubShell() {
   const {
@@ -35,12 +36,19 @@ export default function ClubShell() {
   const [marketSubTab, setMarketSubTab] = useState('scouting');
   const [officeSubTab, setOfficeSubTab] = useState('finance');
   const [pendingEditPlayer, setPendingEditPlayer] = useState(null);
-  // Campo del Paso 4 (Revisión) a enfocar/desplazar automáticamente al abrir la edición — p.
-  // ej. "wage" desde el acceso directo del Desglose de Sueldos en Finanzas. null = comportamiento
-  // habitual (se abre en el resumen sin desplazarse a ningún campo en concreto).
-  const [pendingEditFocusField, setPendingEditFocusField] = useState(null);
   const [pendingPrefill, setPendingPrefill] = useState(null);
   const [chromeHiddenCount, setChromeHiddenCount] = useState(0);
+
+  // Edición de sueldo desde el Desglose de Sueldos de Finanzas: a diferencia de
+  // requestEditPlayer (que navega a la pestaña Plantilla), este flujo NUNCA cambia de pestaña
+  // — PlayerForm se monta aquí mismo, como overlay flotante sobre Finanzas, así que al
+  // cerrarse (Guardar o Cancelar) el usuario sigue exactamente donde estaba. reopenWageBreakdown
+  // es la señal que le indica a FinanceTab que debe volver a abrir su modal de desglose, ya con
+  // los datos frescos tras el guardado.
+  const [wageEditPlayer, setWageEditPlayer] = useState(null);
+  const [reopenWageBreakdown, setReopenWageBreakdown] = useState(false);
+  const requestEditPlayerWage = (player) => setWageEditPlayer(player);
+  const closeWageEditPlayer = () => { setWageEditPlayer(null); setReopenWageBreakdown(true); };
 
   const hasNoClubs = clubs.length === 0 && !loadingClubs;
   const chromeHidden = chromeHiddenCount > 0;
@@ -48,7 +56,7 @@ export default function ClubShell() {
   const showChrome = useCallback(() => setChromeHiddenCount((c) => Math.max(0, c - 1)), []);
   const uiChromeValue = useMemo(() => ({ hide: hideChrome, show: showChrome }), [hideChrome, showChrome]);
 
-  const requestEditPlayer = (player, focusField = null) => { setActiveTab('club'); setClubSubTab('squad'); setPendingEditPlayer(player); setPendingEditFocusField(focusField); };
+  const requestEditPlayer = (player) => { setActiveTab('club'); setClubSubTab('squad'); setPendingEditPlayer(player); };
   const requestSignTarget = (prefillData, targetId) => { setActiveTab('club'); setClubSubTab('squad'); setPendingPrefill({ ...prefillData, __targetId: targetId }); };
   const switchClub = (clubId) => { setActiveClubId(clubId); setActiveTab('club'); setClubSubTab('squad'); };
   const goToScoutingMarket = () => { setActiveTab('market'); setMarketSubTab('scouting'); };
@@ -75,8 +83,7 @@ export default function ClubShell() {
                 <ClubTab
                   subTab={clubSubTab} setSubTab={setClubSubTab}
                   onNavigateToScouting={goToScoutingMarket}
-                  pendingEditPlayer={pendingEditPlayer} pendingEditFocusField={pendingEditFocusField}
-                  onConsumePendingEdit={() => { setPendingEditPlayer(null); setPendingEditFocusField(null); }}
+                  pendingEditPlayer={pendingEditPlayer} onConsumePendingEdit={() => setPendingEditPlayer(null)}
                   pendingPrefill={pendingPrefill} onConsumePendingPrefill={() => setPendingPrefill(null)}
                 />
               )}
@@ -85,7 +92,12 @@ export default function ClubShell() {
                 <MarketShell subTab={marketSubTab} setSubTab={setMarketSubTab} onSignTarget={requestSignTarget} onRequestEditPlayer={requestEditPlayer} />
               )}
               {activeTab === 'office' && activeClubId && (
-                <OfficeTab subTab={officeSubTab} setSubTab={setOfficeSubTab} onRequestEditPlayer={requestEditPlayer} />
+                <OfficeTab
+                  subTab={officeSubTab} setSubTab={setOfficeSubTab}
+                  onRequestEditPlayerWage={requestEditPlayerWage}
+                  reopenWageBreakdown={reopenWageBreakdown}
+                  onConsumeReopenWageBreakdown={() => setReopenWageBreakdown(false)}
+                />
               )}
               {activeTab === 'season' && activeClubId && <SeasonsTab />}
               {activeTab === 'profile' && <ProfileTab onClose={closeProfile} />}
@@ -111,6 +123,14 @@ export default function ClubShell() {
             ClubShell para sobrevivir a la navegación entre pestañas mientras dura la ventana
             de deshacer. */}
         {activeClubId && <UndoToast />}
+
+        {/* Edición de sueldo desde el Desglose de Sueldos (Finanzas): se monta aquí, fuera de
+            cualquier pestaña, para que abrirla/cerrarla nunca navegue a Plantilla — al cerrarse
+            (Guardar o Cancelar), closeWageEditPlayer avisa a FinanceTab para que reabra su
+            propio modal de desglose con los datos ya actualizados. */}
+        {wageEditPlayer && (
+          <PlayerForm editingPlayer={wageEditPlayer} initialStep={4} initialEditField="wage" onClose={closeWageEditPlayer} />
+        )}
 
         {clubToDelete && (
           <ConfirmModal
