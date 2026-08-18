@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Edit2, Trash2, MoreHorizontal, UserPlus, ShieldAlert, Target, Search, SlidersHorizontal, X, MapPin, ChevronDown, ChevronUp, Check, Wallet, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, Trash2, MoreHorizontal, UserPlus, ShieldAlert, Target, Search, SlidersHorizontal, X, MapPin, ChevronDown } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
-import { useClubs } from '../../context/ClubsContext';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { getCardStyle } from '../../utils/cardStyle';
-import { formatValueInput, abbreviateValue, formatCurrency } from '../../utils/format';
+import { formatValueInput, abbreviateValue } from '../../utils/format';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import SwipeableRow from '../common/SwipeableRow';
 import TargetForm, { STATUS_OPTIONS, STATUS_LABELS, STATUS_STYLE } from './TargetForm';
@@ -30,25 +29,13 @@ const emptyFilters = { position: '', status: '', ageMin: '', ageMax: '', ratingM
 
 const positionsOf = (t) => t.positions || (t.primaryPosition ? [t.primaryPosition, ...(t.secondaryPositions || [])] : []);
 
-// Idéntico a FinanceTab.jsx/FinanceStatsTab.jsx (duplicado a propósito, mismo patrón ya usado
-// en el resto de la app): sueldo semanal que realmente carga al club, salvo cedidos fuera,
-// donde solo pesa el % que asumimos.
-const getEffectiveWage = (p) => {
-  if (p.transferStatus === 'CedidoFuera') {
-    const pct = p.outboundLoan?.wagePercentage ?? 0;
-    // Math.round: wage * (pct/100) puede arrastrar imprecisión de coma flotante binaria (p.
-    // ej. 0.15 no es exacto en binario), dando restos como "...4999999997" que, sumados entre
-    // muchos jugadores, desplazaban la masa salarial y el margen disponible en el Planificador.
-    return Math.round((p.wage || 0) * (pct / 100));
-  }
-  return p.wage || 0;
-};
-
 // Misma línea visual que las tarjetas de Plantilla (PlayerRow): badge de Media/Posición,
 // nombre en italic uppercase junto a la bandera de nacionalidad, posición en verde debajo.
 // Vista compacta por defecto (badge, identificación, posiciones, club/edad/estado); la
-// flecha despliega el resto (economía, notas y acciones).
-function TargetRow({ t, onSign, onEdit, onDelete, selected, onToggleSelect }) {
+// flecha despliega el resto (economía, notas y acciones). Sin checkbox de selección: el
+// simulador de fichajes vive ahora en su propia pestaña "Planificador" (PlannerTab.jsx), así
+// que aquí la tarjeta vuelve a ser una ficha de solo lectura + acciones.
+function TargetRow({ t, onSign, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const positions = positionsOf(t);
 
@@ -100,27 +87,13 @@ function TargetRow({ t, onSign, onEdit, onDelete, selected, onToggleSelect }) {
           style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
           className={`relative touch-pan-y border-l-4 transition-colors ${STATUS_BORDER[t.status] || STATUS_BORDER.Seguimiento}`}
         >
-          {/* El tinte de selección (bg-green-500/5) es semitransparente a propósito, pero sin
-              una base opaca detrás los botones de swipe (Editar/Borrar) se transparentaban por
-              debajo de la tarjeta incluso en reposo. Se arregla con una capa base 100% opaca
-              (bg-surface) y el tinte encima, en vez de aplicar el color directamente sobre el
-              contenido — el contenido real también debe ser "relative" (no estático) para que
-              pinte por encima de estas dos capas absolutas en vez de quedar detrás. */}
+          {/* Base opaca (bg-surface) para que los botones de swipe (Editar/Borrar) no se
+              transparenten por debajo de la tarjeta incluso en reposo — el contenido real
+              también debe ser "relative" (no estático) para pintar por encima de esta capa
+              absoluta en vez de quedar detrás. */}
           <div className="absolute inset-0 bg-surface" />
-          {selected && <div className="absolute inset-0 bg-green-500/5" />}
           <div className="relative p-3 md:p-4">
           <div className="flex items-start gap-2 md:gap-2.5">
-            {/* Checkbox pequeño y sutil, como elemento propio de la fila (no superpuesto sobre la
-                insignia) para que ambos convivan sin tocarse; el "gap" del contenedor ya separa
-                limpiamente checkbox y badge. */}
-            <button
-              type="button"
-              onClick={() => onToggleSelect(t.id)}
-              title={selected ? 'Quitar de la selección' : 'Seleccionar para el planificador'}
-              className={`mt-1.5 md:mt-2 w-4 h-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all touch-manipulation ${selected ? 'bg-green-500 border-green-500' : 'border-border-subtle bg-well hover:border-green-500/50'}`}
-            >
-              {selected && <Check size={9} className="text-black" strokeWidth={3.5} />}
-            </button>
             <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(t.rating || 0)}`}>
               <span className="text-[7px] md:text-[8px] opacity-70 font-bold mb-0.5">{t.primaryPosition || positions[0] || '—'}</span>
               <span className="text-lg md:text-xl">{t.rating || '—'}</span>
@@ -191,196 +164,6 @@ function TargetRow({ t, onSign, onEdit, onDelete, selected, onToggleSelect }) {
   );
 }
 
-// Planificador de fichajes: calcula sobre la marcha el impacto económico de fichar a los
-// objetivos marcados con el checkbox de cada tarjeta. Con 0 seleccionados no tiene sentido
-// mostrar un desglose vacío, así que cae automáticamente a la vista "Todos los Objetivos"; en
-// cuanto se marca el primero, salta a "Seleccionados" para que el resultado del cálculo sea
-// inmediato — pero el usuario puede volver a pulsar "Todos" en cualquier momento para consultar
-// el coste total de fichar a toda la lista sin perder su selección.
-function BudgetPlannerCard({ targets, selectedIds }) {
-  const { activeClub } = useClubs();
-  const { players } = useClubData();
-  const [view, setView] = useState('all');
-  const [showBreakdown, setShowBreakdown] = useState(false);
-  const hadSelectionRef = useRef(false);
-  const hasSelection = selectedIds.size > 0;
-
-  useEffect(() => {
-    if (hasSelection && !hadSelectionRef.current) setView('selected');
-    if (!hasSelection) setView('all');
-    hadSelectionRef.current = hasSelection;
-  }, [hasSelection]);
-
-  const switchView = (id) => {
-    if (id === view) return;
-    setShowBreakdown(false);
-    setView(id);
-  };
-
-  const selectedTargets = targets.filter((t) => selectedIds.has(t.id));
-  const activeTargets = view === 'selected' ? selectedTargets : targets;
-  const totalTransfer = activeTargets.reduce((sum, t) => sum + (t.estimatedValue || 0), 0);
-  const totalWageWeekly = activeTargets.reduce((sum, t) => sum + (t.wage || 0), 0);
-
-  // Fondos disponibles del club: presupuesto de traspasos real, y margen salarial disponible
-  // real, comparado íntegramente en SEMANAL — mismo periodo en el que se guarda y se pide el
-  // Presup. Sem. en Finanzas (ver FinanceTab.jsx / ClubsContext.setWageBudget) y en el que
-  // ahora se guardan también p.wage/t.wage en el resto de la app, así que ambos lados de la
-  // comparación ya comparten periodicidad sin necesitar ninguna conversión.
-  // "hasWeeklyWageBudget" distingue "el club nunca ha fijado un Presup. Sem." (== null, p. ej.
-  // clubes creados antes de esta función) de haberlo fijado explícitamente a 0 — solo en el
-  // primer caso se desactiva por completo el chequeo de exceso salarial, para no marcar
-  // "Excede el margen salarial" falsamente cuando no hay ningún límite definido.
-  const transferBudget = activeClub?.transferBudget || 0;
-  const currentWageBillWeekly = players.reduce((sum, p) => sum + getEffectiveWage(p), 0);
-  const hasWeeklyWageBudget = activeClub?.weeklyWageBudget != null;
-  const weeklyWageBudget = activeClub?.weeklyWageBudget || 0;
-  const wageMarginWeekly = weeklyWageBudget - currentWageBillWeekly;
-  const transferExcess = Math.max(0, totalTransfer - transferBudget);
-  const wageExcessWeekly = hasWeeklyWageBudget ? Math.max(0, totalWageWeekly - wageMarginWeekly) : 0;
-  const isViable = transferExcess === 0 && wageExcessWeekly === 0;
-  const hasCost = totalTransfer > 0 || totalWageWeekly > 0;
-
-  return (
-    <div className="w-full min-w-0 bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-1.5 truncate"><Wallet size={12} className="shrink-0" /> Planificador de Fichajes</span>
-        {hasSelection && (
-          <div className="flex bg-well p-0.5 rounded-lg border border-border-subtle shrink-0">
-            <button type="button" onClick={() => switchView('selected')} className={`px-2 py-1 rounded-md text-[8px] font-black uppercase transition-all touch-manipulation ${view === 'selected' ? 'bg-surface text-fg shadow-sm' : 'text-fg-faint hover:text-fg-secondary'}`}>Selec.</button>
-            <button type="button" onClick={() => switchView('all')} className={`px-2 py-1 rounded-md text-[8px] font-black uppercase transition-all touch-manipulation ${view === 'all' ? 'bg-surface text-fg shadow-sm' : 'text-fg-faint hover:text-fg-secondary'}`}>Todos</button>
-          </div>
-        )}
-      </div>
-
-      {/* Fondos disponibles del club: siempre visible, no depende de si hay selección. */}
-      <div className="grid grid-cols-2 gap-2 mb-3 pb-3 border-b border-border-subtle">
-        <div className="min-w-0">
-          <div className="text-xs md:text-sm font-black italic text-green-500 truncate">{formatCurrency(transferBudget)}</div>
-          <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">Presupuesto Traspasos</div>
-        </div>
-        <div className="min-w-0">
-          {hasWeeklyWageBudget ? (
-            <div className={`text-xs md:text-sm font-black italic truncate ${wageMarginWeekly >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(wageMarginWeekly)}/sem</div>
-          ) : (
-            <div className="text-xs md:text-sm font-black italic text-fg-faint truncate">Sin Límite</div>
-          )}
-          <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">Margen Salarial Disp.</div>
-        </div>
-      </div>
-
-      {targets.length === 0 ? (
-        <p className="text-[10px] text-fg-faint font-bold">Sin objetivos todavía.</p>
-      ) : !hasSelection && view === 'all' ? (
-        <>
-          <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest mb-1.5">Selecciona objetivos para calcular el presupuesto necesario</p>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-            <span className="text-xs md:text-sm font-black italic text-fg">{formatCurrency(totalTransfer)}</span>
-            <span className="text-[9px] font-bold text-fg-muted">Traspasos · {targets.length} Objetivos</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5">
-            <span className="text-[10px] font-black text-fg-secondary">{formatCurrency(totalWageWeekly)}/sem</span>
-            <span className="text-[9px] font-bold text-fg-faint">| {formatCurrency(totalWageWeekly * 52)}/año</span>
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest mb-1.5">
-            {view === 'selected' ? `${selectedTargets.length} Objetivo${selectedTargets.length === 1 ? '' : 's'} Seleccionado${selectedTargets.length === 1 ? '' : 's'}` : `Coste Total de la Lista · ${targets.length} Objetivos`}
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="min-w-0">
-              <div className="text-xs md:text-sm font-black italic text-fg truncate">{formatCurrency(totalTransfer)}</div>
-              <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">Traspaso Total</div>
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs md:text-sm font-black italic text-fg truncate">{formatCurrency(totalWageWeekly)}/sem</div>
-              <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">{formatCurrency(totalWageWeekly * 52)}/año</div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Conclusión de viabilidad: compara el coste de la vista activa (seleccionados o
-          todos) contra los fondos disponibles mostrados arriba. */}
-      {hasCost && (
-        <div className={`mt-3 p-2.5 rounded-xl border flex items-start gap-2 ${isViable ? 'bg-green-500/10 border-green-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
-          {isViable ? <CheckCircle2 size={14} className="text-green-500 shrink-0 mt-0.5" /> : <AlertTriangle size={14} className="text-red-400 shrink-0 mt-0.5" />}
-          <div className="min-w-0">
-            <div className={`text-[9px] font-black uppercase tracking-widest ${isViable ? 'text-green-500' : 'text-red-400'}`}>{isViable ? 'Viable' : 'No Viable'}</div>
-            {isViable ? (
-              <p className="text-[9px] font-bold text-fg-muted mt-0.5">Operación asumible con el presupuesto actual.</p>
-            ) : (
-              <div className="text-[9px] font-bold text-fg-muted mt-0.5 space-y-0.5">
-                {transferExcess > 0 && <p>Excede el presupuesto de traspaso en {formatCurrency(transferExcess)}.</p>}
-                {wageExcessWeekly > 0 && <p>Excede el margen salarial en {formatCurrency(wageExcessWeekly)}/sem.</p>}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Flecha desplegable, mismo patrón interactivo que el Historial de Transacciones
-          (FinanceTab.jsx): despliega/repliega un desglose jugador a jugador de los objetivos
-          computados en la vista activa (seleccionados o todos). */}
-      {targets.length > 0 && (
-        <button type="button" onClick={() => setShowBreakdown((v) => !v)} className="w-full flex items-center justify-between mt-3 pt-2.5 border-t border-border-subtle text-[9px] font-black uppercase tracking-widest text-fg-muted hover:text-fg transition-colors touch-manipulation">
-          <span>{activeTargets.length} Jugador{activeTargets.length === 1 ? '' : 'es'} en el Desglose</span>
-          {showBreakdown ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </button>
-      )}
-      {showBreakdown && (
-        <div className="mt-2 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
-          {activeTargets.length === 0 ? (
-            <div className="py-4 text-center text-[9px] font-bold text-fg-faint uppercase tracking-widest">Sin objetivos en esta vista</div>
-          ) : (
-            <>
-              {activeTargets.map((t) => (
-                <div key={t.id} className="p-2.5 bg-well rounded-xl border border-border-subtle">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-black text-fg truncate">{t.name}</span>
-                    <span className="text-[8px] font-black text-fg-faint uppercase tracking-widest shrink-0">{t.primaryPosition || positionsOf(t)[0] || '—'} · {t.rating ?? '—'}</span>
-                  </div>
-                  <div className="mt-1.5 space-y-0.5">
-                    <div className="flex items-center justify-between gap-2 text-[9px]"><span className="font-bold text-fg-muted">Traspaso Estimado</span><span className="font-black text-fg-secondary">{t.estimatedValue > 0 ? formatCurrency(t.estimatedValue) : 'Sin Valor'}</span></div>
-                    {/* Dos filas superpuestas (semana arriba, año abajo) en vez de un único
-                        valor inline, mismo patrón que el resto de la app (p. ej. Ficha Salarial
-                        Pactada en Estadísticas). */}
-                    <div className="flex items-start justify-between gap-2 text-[9px]">
-                      <span className="font-bold text-fg-muted pt-px">Sueldo Estimado</span>
-                      {t.wage > 0 ? (
-                        <span className="text-right leading-tight shrink-0">
-                          <span className="block font-black text-fg-secondary">{formatCurrency(t.wage)}/sem</span>
-                          <span className="block font-bold text-fg-faint text-[8px] mt-0.5">{formatCurrency(t.wage * 52)}/año</span>
-                        </span>
-                      ) : (
-                        <span className="font-black text-fg-secondary">Sin Salario</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {/* Fila resumen: mismos totales que ya muestra la cabecera de la tarjeta, pero
-                  repetidos aquí al cierre del desglose para que quede claro qué representa la
-                  suma de todas las filas anteriores. */}
-              <div className="p-2.5 bg-well-strong rounded-xl border border-border-subtle">
-                <div className="flex items-center justify-between gap-2 text-[9px]"><span className="font-black uppercase tracking-widest text-fg-secondary">Total Traspasos</span><span className="font-black text-fg">{formatCurrency(totalTransfer)}</span></div>
-                <div className="flex items-start justify-between gap-2 text-[9px] mt-1">
-                  <span className="font-black uppercase tracking-widest text-fg-secondary pt-px">Total Masa Salarial</span>
-                  <span className="text-right leading-tight shrink-0">
-                    <span className="block font-black text-fg">{formatCurrency(totalWageWeekly)}/sem</span>
-                    <span className="block font-bold text-fg-faint text-[8px] mt-0.5">{formatCurrency(totalWageWeekly * 52)}/año</span>
-                  </span>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function MarketTab({ onSignTarget }) {
   const { targets, targetToDelete, setTargetToDelete, confirmDeleteTarget } = useClubData();
   const [showForm, setShowForm] = useState(false);
@@ -393,12 +176,6 @@ export default function MarketTab({ onSignTarget }) {
   const [addConfirming, setAddConfirming] = useState(false);
   const addRef = useRef(null);
   useOnClickOutside(addRef, () => setAddConfirming(false), addConfirming);
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const toggleSelect = (id) => setSelectedIds((prev) => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
@@ -509,15 +286,10 @@ export default function MarketTab({ onSignTarget }) {
         <span className="text-[10px] text-fg-muted font-black uppercase tracking-widest flex items-center gap-2"><Target size={14} /> {sorted.length} Objetivos en Seguimiento</span>
       </div>
 
-      {/* "Añadir Objetivo" ya vive en la barra superior (junto a la búsqueda, animado igual
-          que "Fichar Jugador" en Plantilla), así que el planificador ocupa su propia fila
-          completa. */}
-      <BudgetPlannerCard targets={targets} selectedIds={selectedIds} />
-
       <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
         {sorted.length === 0 && (<div className="p-16 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">{targets.length === 0 ? 'Sin Objetivos Todavía' : 'Sin Resultados'}</div>)}
         {sorted.map((t) => (
-          <TargetRow key={t.id} t={t} onSign={signTarget} onEdit={openEditForm} onDelete={setTargetToDelete} selected={selectedIds.has(t.id)} onToggleSelect={toggleSelect} />
+          <TargetRow key={t.id} t={t} onSign={signTarget} onEdit={openEditForm} onDelete={setTargetToDelete} />
         ))}
       </div>
 
