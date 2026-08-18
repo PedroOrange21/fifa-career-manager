@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Edit2, UserPlus, ShieldAlert, Target, Search, SlidersHorizontal, X, MapPin, ChevronDown, ChevronUp, Check, Wallet } from 'lucide-react';
+import { Plus, Edit2, UserPlus, ShieldAlert, Target, Search, SlidersHorizontal, X, MapPin, ChevronDown, ChevronUp, Check, Wallet, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
+import { useClubs } from '../../context/ClubsContext';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { getCardStyle } from '../../utils/cardStyle';
 import { formatValueInput, abbreviateValue, formatCurrency } from '../../utils/format';
@@ -27,6 +28,24 @@ const HAS_HOVER = typeof window !== 'undefined' && window.matchMedia('(hover: ho
 const emptyFilters = { position: '', status: '', ageMin: '', ageMax: '', ratingMin: '', ratingMax: '' };
 
 const positionsOf = (t) => t.positions || (t.primaryPosition ? [t.primaryPosition, ...(t.secondaryPositions || [])] : []);
+
+// Idéntico a FinanceTab.jsx/FinanceStatsTab.jsx (duplicado a propósito, mismo patrón ya usado
+// en el resto de la app): sueldo mensual que realmente carga al club, salvo cedidos fuera,
+// donde solo pesa el % que asumimos.
+const getEffectiveWage = (p) => {
+  if (p.transferStatus === 'CedidoFuera') {
+    const pct = p.outboundLoan?.wagePercentage ?? 0;
+    return (p.wage || 0) * (pct / 100);
+  }
+  return p.wage || 0;
+};
+
+// Sin un tope salarial explícito en el modelo de datos del club (solo existe transferBudget),
+// el "margen salarial disponible" se estima repartiendo el presupuesto de traspasos actual en
+// este número de meses y restando la masa salarial ya comprometida — mismo horizonte temporal
+// (6 meses) ya usado en la "Proyección de Balance" de Estadísticas, para no inventar un
+// criterio nuevo y desconectado del resto de la app.
+const WAGE_MARGIN_REFERENCE_MONTHS = 6;
 
 // Misma línea visual que las tarjetas de Plantilla (PlayerRow): badge de Media/Posición,
 // nombre en italic uppercase junto a la bandera de nacionalidad, posición en verde debajo.
@@ -127,6 +146,8 @@ function TargetRow({ t, onSign, onEdit, onDelete, selected, onToggleSelect }) {
 // inmediato — pero el usuario puede volver a pulsar "Todos" en cualquier momento para consultar
 // el coste total de fichar a toda la lista sin perder su selección.
 function BudgetPlannerCard({ targets, selectedIds }) {
+  const { activeClub } = useClubs();
+  const { players } = useClubData();
   const [view, setView] = useState('all');
   const [showBreakdown, setShowBreakdown] = useState(false);
   const hadSelectionRef = useRef(false);
@@ -149,6 +170,17 @@ function BudgetPlannerCard({ targets, selectedIds }) {
   const totalTransfer = activeTargets.reduce((sum, t) => sum + (t.estimatedValue || 0), 0);
   const totalWageMonthly = activeTargets.reduce((sum, t) => sum + (t.wage || 0), 0);
 
+  // Fondos disponibles del club: presupuesto de traspasos real, y margen salarial estimado
+  // (ver WAGE_MARGIN_REFERENCE_MONTHS más arriba). Comparados contra el coste de la vista
+  // activa (seleccionados o todos) para la conclusión de viabilidad.
+  const transferBudget = activeClub?.transferBudget || 0;
+  const currentWageBill = players.reduce((sum, p) => sum + getEffectiveWage(p), 0);
+  const wageMargin = Math.max(0, transferBudget / WAGE_MARGIN_REFERENCE_MONTHS - currentWageBill);
+  const transferExcess = Math.max(0, totalTransfer - transferBudget);
+  const wageExcess = Math.max(0, totalWageMonthly - wageMargin);
+  const isViable = transferExcess === 0 && wageExcess === 0;
+  const hasCost = totalTransfer > 0 || totalWageMonthly > 0;
+
   return (
     <div className="w-full min-w-0 bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl">
       <div className="flex items-center justify-between gap-2 mb-2">
@@ -159,6 +191,18 @@ function BudgetPlannerCard({ targets, selectedIds }) {
             <button type="button" onClick={() => switchView('all')} className={`px-2 py-1 rounded-md text-[8px] font-black uppercase transition-all touch-manipulation ${view === 'all' ? 'bg-surface text-fg shadow-sm' : 'text-fg-faint hover:text-fg-secondary'}`}>Todos</button>
           </div>
         )}
+      </div>
+
+      {/* Fondos disponibles del club: siempre visible, no depende de si hay selección. */}
+      <div className="grid grid-cols-2 gap-2 mb-3 pb-3 border-b border-border-subtle">
+        <div className="min-w-0">
+          <div className="text-xs md:text-sm font-black italic text-green-500 truncate">{formatCurrency(transferBudget)}</div>
+          <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">Presupuesto Traspasos</div>
+        </div>
+        <div className="min-w-0">
+          <div className="text-xs md:text-sm font-black italic text-green-500 truncate">{formatCurrency(wageMargin)}/mes</div>
+          <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">Margen Salarial Disp.</div>
+        </div>
       </div>
 
       {targets.length === 0 ? (
@@ -191,6 +235,25 @@ function BudgetPlannerCard({ targets, selectedIds }) {
             </div>
           </div>
         </>
+      )}
+
+      {/* Conclusión de viabilidad: compara el coste de la vista activa (seleccionados o
+          todos) contra los fondos disponibles mostrados arriba. */}
+      {hasCost && (
+        <div className={`mt-3 p-2.5 rounded-xl border flex items-start gap-2 ${isViable ? 'bg-green-500/10 border-green-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+          {isViable ? <CheckCircle2 size={14} className="text-green-500 shrink-0 mt-0.5" /> : <AlertTriangle size={14} className="text-red-400 shrink-0 mt-0.5" />}
+          <div className="min-w-0">
+            <div className={`text-[9px] font-black uppercase tracking-widest ${isViable ? 'text-green-500' : 'text-red-400'}`}>{isViable ? 'Viable' : 'No Viable'}</div>
+            {isViable ? (
+              <p className="text-[9px] font-bold text-fg-muted mt-0.5">Operación asumible con el presupuesto actual.</p>
+            ) : (
+              <div className="text-[9px] font-bold text-fg-muted mt-0.5 space-y-0.5">
+                {transferExcess > 0 && <p>Excede el presupuesto de traspaso en {formatCurrency(transferExcess)}.</p>}
+                {wageExcess > 0 && <p>Excede el margen salarial en {formatCurrency(wageExcess)}/mes.</p>}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Flecha desplegable, mismo patrón interactivo que el Historial de Transacciones

@@ -9,7 +9,7 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
 export const STATUS_OPTIONS = ['Seguimiento', 'Negociando', 'Prioritario', 'Descartado'];
-export const STATUS_LABELS = { Seguimiento: 'En Seguimiento', Negociando: 'Negociando', Prioritario: 'Objetivo Prioritario', Descartado: 'Descartado' };
+export const STATUS_LABELS = { Seguimiento: 'En Seguimiento', Negociando: 'Negociando', Prioritario: 'Prioritario', Descartado: 'Descartado' };
 export const STATUS_STYLE = {
   Seguimiento: 'bg-well-strong text-fg-muted border-border',
   Negociando: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20',
