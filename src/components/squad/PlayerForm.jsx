@@ -65,6 +65,11 @@ const AGREED_ROLE_OPTIONS = [
 // móvil para evitar el auto-zoom de Safari/Chrome, algo más compactos en escritorio.
 const FIELD_BASE = 'w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-black text-base md:text-sm text-fg placeholder:text-fg-faint';
 const FIELD_CLASS = `${FIELD_BASE} text-center`;
+// Variante para la Revisión Final tras el escaneo con IA (ver postScanReview): mismo tamaño
+// que FIELD_CLASS a la altura h-11 de esa pantalla, pero con el borde en rojo — se genera
+// aparte en vez de concatenar utilidades border-* contradictorias sobre FIELD_CLASS, que
+// Tailwind no garantiza resolver en un orden concreto.
+const FIELD_CLASS_ERROR = 'w-full h-11 bg-well p-4 rounded-xl outline-none border border-red-500 focus:border-red-500 font-black text-base md:text-sm text-fg placeholder:text-fg-faint text-center';
 
 // Ningún campo de este asistente se envía con Enter: no hay <form>, así que Enter no
 // tendría efecto por defecto, pero lo bloqueamos explícitamente para que nunca dispare
@@ -124,15 +129,22 @@ const playerToFormState = toFormState;
 // control de edición en el sitio, sin salir de la pantalla. Definido fuera de PlayerForm
 // (identidad estable entre renders) para no perder el foco de los inputs internos en cada
 // pulsación de tecla, algo que ocurriría si se declarase dentro del cuerpo del componente.
-function ReviewRow({ label, active, onOpen, display, children }) {
+// missing: exclusivo de la Revisión Final tras un escaneo con IA (postScanReview, ver más
+// abajo) — resalta la fila en rojo con un aviso "Campo requerido" mientras el dato siga
+// vacío; en cuanto el usuario lo rellena, "missing" pasa a false en el siguiente render (se
+// deriva directamente de form, sin estado propio) y la fila vuelve a su estilo normal.
+function ReviewRow({ label, active, onOpen, display, children, missing }) {
   return (
-    <div className="px-4 py-2.5">
+    <div className={`px-4 py-2.5 transition-colors duration-300 ${missing ? 'bg-red-500/10' : ''}`}>
       <div className="flex justify-between items-center gap-2">
-        <span className="text-[9px] font-black uppercase text-fg-muted shrink-0">{label}</span>
+        <span className={`text-[9px] font-black uppercase shrink-0 ${missing ? 'text-red-500' : 'text-fg-muted'}`}>
+          {label}
+          {missing && <span className="ml-1.5 normal-case text-red-500/80">· Campo requerido</span>}
+        </span>
         {!active && (
           <button type="button" onClick={onOpen} className="flex items-center gap-1.5 min-w-0 touch-manipulation">
-            <span className="text-xs font-black text-fg truncate">{display}</span>
-            <Pencil size={10} className="text-fg-faint shrink-0" />
+            <span className={`text-xs font-black truncate ${missing ? 'text-red-500' : 'text-fg'}`}>{display}</span>
+            <Pencil size={10} className={`shrink-0 ${missing ? 'text-red-400' : 'text-fg-faint'}`} />
           </button>
         )}
       </div>
@@ -142,6 +154,7 @@ function ReviewRow({ label, active, onOpen, display, children }) {
 }
 
 const REVIEW_INPUT_CLASS = 'w-full bg-well-strong p-2.5 rounded-lg outline-none border border-border-subtle focus:border-green-500 font-bold text-sm text-fg placeholder:text-fg-faint';
+const REVIEW_INPUT_ERROR_CLASS = 'w-full bg-well-strong p-2.5 rounded-lg outline-none border border-red-500 focus:border-red-500 font-bold text-sm text-fg placeholder:text-fg-faint';
 const REVIEW_DONE_CLASS = 'mt-2 w-full py-2 rounded-lg bg-green-500/10 text-green-500 text-[9px] font-black uppercase touch-manipulation';
 
 // Cabecera de bloque para agrupar visualmente el resumen del Paso 4 en secciones.
@@ -175,7 +188,12 @@ function SectionHeader({ emoji, title }) {
 // (p. ej. "wage") y desplaza la vista hasta él — usado por el acceso directo desde el
 // Desglose de Sueldos de Finanzas, para que el usuario pueda cambiar el salario sin tener que
 // buscarlo manualmente entre el resto de la ficha.
-export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onClose, initialStep = 1, initialEditField = null, lockedType = null, restrictTypes = null, hidePurchasePrice = false, hideSourceClub = false, skipInitialTransaction = false }) {
+// postScanReview: usado exclusivamente por el resultado del escaneo con IA (ver
+// handleScanExtracted en PlayerList) — deja la Revisión Final como pantalla única y directa
+// (sin barra de progreso "Paso 4 de 4" ni botón "Anterior", ya que aquí no hay pasos 1-3
+// recorridos de verdad en esta sesión) y resalta en rojo Club de Procedencia y Precio de
+// Compra si siguen vacíos, porque son datos que la tarjeta escaneada nunca trae.
+export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onClose, initialStep = 1, initialEditField = null, lockedType = null, restrictTypes = null, hidePurchasePrice = false, hideSourceClub = false, skipInitialTransaction = false, postScanReview = false }) {
   const { addOrUpdatePlayer, deleteTarget } = useClubData();
   useAutoHideChrome();
 
@@ -382,6 +400,15 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
   // directo del Paso 2 (Atributos) al Paso 4 (Revisión) en vez de dejar una pantalla vacía.
   const skipEconomyStep = lockedType === 'Cantera';
 
+  // Únicamente tras un escaneo con IA: el club de procedencia y el precio de compra nunca
+  // aparecen en la propia tarjeta del jugador (no son datos visibles en ella, a diferencia de
+  // la media, la posición o el sueldo), así que se marcan como pendientes de rellenar a mano
+  // hasta que el usuario los complete — momento en el que dejan de estar "missing" al instante,
+  // sin necesidad de un estado aparte, porque se derivan directamente de form.
+  const scanSourceClubMissing = postScanReview && form.type !== 'Cantera' && !hideSourceClub && !form.sourceClub.trim();
+  const scanPurchasePriceMissing = postScanReview && form.type === 'Comprado' && !hidePurchasePrice && (!form.value || parseValue(form.value) <= 0);
+  const hasScanMissingFields = scanSourceClubMissing || scanPurchasePriceMissing;
+
   // --- Navegación: exclusivamente por los botones Anterior/Siguiente del pie. ---
   const goNext = () => {
     const err = validateStep(step);
@@ -399,7 +426,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
   };
 
   const handleConfirm = async () => {
-    if (isSubmitting) return;
+    if (isSubmitting || hasScanMissingFields) return;
     for (let s = 1; s <= 3; s++) {
       const err = validateStep(s);
       if (err) {
@@ -499,7 +526,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
             {/* Barra de progreso y "Paso X de Y": solo tiene sentido en el asistente de alta
                 (Fichar Jugador). Editar un jugador ya existente entra directo a la vista
                 unificada (Paso 4, con todos los campos accesibles) sin rastro del wizard. */}
-            {!editingPlayer && (
+            {!editingPlayer && !postScanReview && (
               <div className="mb-4">
                 <div className="flex items-center gap-1.5">
                   {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
@@ -868,8 +895,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                     {form.type !== 'Cantera' && (
                       <>
                         {!hideSourceClub && (
-                          <ReviewRow label="Club de Procedencia" active={editField === 'sourceClub'} onOpen={() => setEditField('sourceClub')} display={form.sourceClub || 'Sin definir'}>
-                            <input autoFocus type="text" placeholder="Ej: Sporting Gijón" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.sourceClub} onChange={(e) => set({ sourceClub: e.target.value })} />
+                          <ReviewRow label="Club de Procedencia" active={editField === 'sourceClub'} onOpen={() => setEditField('sourceClub')} display={form.sourceClub || 'Sin definir'} missing={scanSourceClubMissing}>
+                            <input autoFocus type="text" placeholder="Ej: Sporting Gijón" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={scanSourceClubMissing ? REVIEW_INPUT_ERROR_CLASS : REVIEW_INPUT_CLASS} value={form.sourceClub} onChange={(e) => set({ sourceClub: e.target.value })} />
                           </ReviewRow>
                         )}
                         <ReviewRow label="Relevancia" active={editField === 'agreedRole'} onOpen={() => setEditField('agreedRole')} display={form.agreedRole || 'Sin definir'}>
@@ -889,8 +916,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                     {form.type === 'Comprado' && (
                       <>
                         {!hidePurchasePrice && (
-                          <ReviewRow label="Precio de Compra (€)" active={editField === 'value'} onOpen={() => setEditField('value')} display={`${form.value || '0'} €`}>
-                            <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.value} onChange={formatMoneyField('value')} />
+                          <ReviewRow label="Precio de Compra (€)" active={editField === 'value'} onOpen={() => setEditField('value')} display={form.value ? `${form.value} €` : 'Sin definir'} missing={scanPurchasePriceMissing}>
+                            <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={scanPurchasePriceMissing ? FIELD_CLASS_ERROR : `${FIELD_CLASS} h-11`} value={form.value} onChange={formatMoneyField('value')} />
                           </ReviewRow>
                         )}
                         <div ref={wageRowRef}>
@@ -964,9 +991,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
           </div>
 
           <footer className="shrink-0 bg-surface border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-            {/* "Anterior" solo existe dentro del asistente de alta: editar no debe poder
-                navegar hacia atrás a los pasos 1-3, se queda siempre en la vista unificada. */}
-            {step > 1 && !editingPlayer && (
+            {/* "Anterior" solo existe dentro del asistente de alta manual: editar no debe poder
+                navegar hacia atrás a los pasos 1-3 (se queda siempre en la vista unificada), y
+                tras un escaneo con IA tampoco tiene sentido (nunca se recorrieron esos pasos en
+                esta sesión, ver postScanReview) — la Revisión Final queda como pantalla única. */}
+            {step > 1 && !editingPlayer && !postScanReview && (
               <button type="button" onClick={goPrev} className="flex-1 py-4 rounded-xl bg-well-strong text-fg font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:brightness-125 transition-all touch-manipulation">
                 <ChevronLeft size={16} /> Anterior
               </button>
@@ -977,7 +1006,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
               </button>
             )}
             {step === TOTAL_STEPS && (
-              <button type="button" disabled={isSubmitting} onClick={handleConfirm} className="flex-1 w-full py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-2 text-center hover:bg-green-400 transition-all disabled:opacity-50 touch-manipulation">
+              <button type="button" disabled={isSubmitting || hasScanMissingFields} onClick={handleConfirm} className="flex-1 w-full py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-2 text-center hover:bg-green-400 transition-all disabled:opacity-50 disabled:hover:bg-green-500 touch-manipulation">
                 {isSubmitting ? 'Guardando...' : editingPlayer ? (<><Check size={16} className="shrink-0" /> Guardar Cambios</>) : (<><Check size={16} className="shrink-0" /> <span className="md:hidden">Confirmar</span><span className="hidden md:inline">Confirmar Fichaje</span></>)}
               </button>
             )}

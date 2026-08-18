@@ -54,6 +54,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [formInitialStep, setFormInitialStep] = useState(1);
   const [formLockedType, setFormLockedType] = useState(null);
   const [formRestrictTypes, setFormRestrictTypes] = useState(null);
+  const [formPostScanReview, setFormPostScanReview] = useState(false);
   const [sellingPlayer, setSellingPlayer] = useState(null);
   const [loaningPlayer, setLoaningPlayer] = useState(null);
   const [endingLoanPlayer, setEndingLoanPlayer] = useState(null);
@@ -84,6 +85,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       setFormInitialStep(4);
       setFormLockedType(null);
       setFormRestrictTypes(null);
+      setFormPostScanReview(false);
       setShowForm(true);
       onConsumePendingEdit();
     }
@@ -101,6 +103,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       setFormInitialStep(1);
       setFormLockedType(null);
       setFormRestrictTypes(null);
+      setFormPostScanReview(false);
       setShowForm(true);
       onConsumePendingPrefill();
     }
@@ -155,7 +158,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
 
   // Editar desde la lista (activos o cedidos) abre directamente el Paso 4 con los datos
   // precargados, sin pasar por el asistente paso a paso.
-  const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormSourceTargetId(null); setFormInitialStep(4); setFormLockedType(null); setFormRestrictTypes(null); setShowForm(true); };
+  const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormSourceTargetId(null); setFormInitialStep(4); setFormLockedType(null); setFormRestrictTypes(null); setFormPostScanReview(false); setShowForm(true); };
 
   const handleFicharClick = () => {
     if (HAS_HOVER) { setAddStep('destination'); return; }
@@ -173,6 +176,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
     setFormInitialStep(1);
     setFormLockedType(null);
     setFormRestrictTypes(['Comprado', 'Cedido']);
+    setFormPostScanReview(false);
     setShowForm(true);
   };
 
@@ -187,12 +191,14 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
     setFormInitialStep(1);
     setFormLockedType('Cantera');
     setFormRestrictTypes(null);
+    setFormPostScanReview(false);
     setShowForm(true);
   };
 
-  // Al terminar el escaneo por IA, se abre PlayerForm directamente en el Paso 4 (Revisión)
-  // con todo prerrellenado, igual que hace la edición rápida — así el usuario repasa y
-  // confirma en una sola pantalla en vez de recorrer el asistente paso a paso.
+  // Al terminar el escaneo por IA, se abre PlayerForm directamente en el Paso 4 (Revisión,
+  // única pantalla, ver postScanReview) con todo prerrellenado, igual que hace la edición
+  // rápida — así el usuario solo tiene que repasar y confirmar los datos leídos de la tarjeta,
+  // completando a mano los que la IA nunca puede traer (Club de Procedencia, Precio de Compra).
   const handleScanExtracted = (prefillData) => {
     setAddStep(null);
     setEditingPlayer(null);
@@ -201,6 +207,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
     setFormInitialStep(4);
     setFormLockedType(null);
     setFormRestrictTypes(['Comprado', 'Cedido']);
+    setFormPostScanReview(true);
     setShowForm(true);
   };
 
@@ -328,6 +335,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
           initialStep={formInitialStep}
           lockedType={formLockedType}
           restrictTypes={formRestrictTypes}
+          postScanReview={formPostScanReview}
           onClose={() => setShowForm(false)}
         />
       )}
