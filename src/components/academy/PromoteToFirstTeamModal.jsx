@@ -22,7 +22,7 @@ const formatMoneyLive = (raw) => {
   if (!digits) return '';
   // useGrouping: true explícito: el valor por defecto ("auto") omite el punto de miles en
   // números de exactamente 4 cifras (ej. 5000 -> "5000") en navegadores recientes, verificado
-  // en local — justo el rango típico de un sueldo mensual.
+  // en local — justo el rango típico de un sueldo semanal.
   return Number(digits).toLocaleString('es-ES', { useGrouping: true });
 };
 
@@ -31,7 +31,7 @@ const formatMoneyLive = (raw) => {
 // scroll propio, y confirmación de descarte con su propio backdrop — el mismo patrón que ya
 // funciona sin problemas de desplazamiento ni cierres accidentales en móvil.
 //
-// Firma del primer contrato profesional al promover a un canterano: ficha con Sueldo Mensual,
+// Firma del primer contrato profesional al promover a un canterano: ficha con Sueldo Semanal,
 // Años de Contrato y Cláusula de Rescisión (opcional), igual que un jugador "Comprado" normal.
 // Al confirmar, el jugador se convoca al banquillo (si hay hueco), pasa a tipo "Comprado" (ya
 // no participa de las reglas de Cantera) y pierde su rango de potencial numérico, que deja de
@@ -52,7 +52,7 @@ export default function PromoteToFirstTeamModal({ player, onClose }) {
     e.preventDefault();
     e.stopPropagation();
     if (isSubmitting) return;
-    if (!wage || parseValue(wage) <= 0) { setError('El sueldo mensual es obligatorio.'); return; }
+    if (!wage || parseValue(wage) <= 0) { setError('El sueldo semanal es obligatorio.'); return; }
     if (!contractYears) { setError('Selecciona los años de contrato.'); return; }
     setError('');
     setIsSubmitting(true);
@@ -132,7 +132,7 @@ export default function PromoteToFirstTeamModal({ player, onClose }) {
               )}
 
               <div className="space-y-1 relative">
-                <label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Mensual (€) *</label>
+                <label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Semanal (€) *</label>
                 <input autoFocus type="text" inputMode="numeric" required placeholder="Ej: 500.000" onKeyDown={blockEnterKey} className="w-full h-[52px] bg-well p-4 rounded-xl outline-none border border-border-subtle focus:border-blue-400 font-black text-base md:text-sm text-fg text-center placeholder:text-fg-faint" value={wage} onChange={(e) => setWage(formatMoneyLive(e.target.value))} />
               </div>
               {/* Botones fijos en vez de un desplegable: sin portal ni listeners globales de

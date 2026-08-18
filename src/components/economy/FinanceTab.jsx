@@ -37,7 +37,7 @@ function InfoModal({ title, children, onClose }) {
   );
 }
 
-// Sueldo mensual que realmente carga a nuestro club: el total del jugador, salvo que esté
+// Sueldo semanal que realmente carga a nuestro club: el total del jugador, salvo que esté
 // cedido fuera, caso en el que solo pesa el porcentaje que asumimos nosotros. Se usa tanto
 // para el total de la tarjeta como para cada línea del desglose, así ambos números siempre
 // cuadran entre sí.
@@ -141,13 +141,16 @@ export default function FinanceTab() {
 
       <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted flex items-center gap-2"><Users2 size={14} /> Masa Salarial Mensual</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted flex items-center gap-2"><Users2 size={14} /> Masa Salarial Semanal</span>
           <button type="button" onClick={() => setShowWageBreakdown(true)} title="Ver desglose" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-well text-fg-muted hover:text-fg hover:bg-well-strong transition-colors text-[9px] font-black uppercase tracking-widest">
             <List size={12} /> Ver Desglose
           </button>
         </div>
-        <div className="text-xl md:text-2xl font-black italic tracking-tighter text-fg">{formatCurrency(wageBill)}</div>
-        <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest mt-1">Suma de salarios de la plantilla activa</p>
+        <div className="flex items-baseline gap-1.5">
+          <div className="text-xl md:text-2xl font-black italic tracking-tighter text-fg">{formatCurrency(wageBill)}</div>
+          <span className="text-[10px] font-bold text-fg-faint">/sem</span>
+        </div>
+        <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest mt-1">{formatCurrency(wageBill * 52)}/año · Suma de salarios de la plantilla activa</p>
       </div>
 
       <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden shadow-2xl">
@@ -198,7 +201,15 @@ export default function FinanceTab() {
                           <DetailLine label="Precio Total" value={formatCurrency(t.totalAmount ?? t.amount)} />
                           <DetailLine label="Añadido a Presupuesto" value={formatCurrency(t.amount)} />
                           <DetailLine label="Retención del Club" value={formatCurrency(t.retainedAmount || 0)} />
-                          {t.wageFreed ? <DetailLine label="Salario Liberado" value={`${formatCurrency(t.wageFreed)}/mes`} /> : null}
+                          {t.wageFreed ? (
+                            <div className="flex items-start justify-between gap-2 text-[10px]">
+                              <span className="font-bold text-fg-muted pt-px">Salario Liberado</span>
+                              <span className="text-right leading-tight shrink-0">
+                                <span className="block font-black text-fg">{formatCurrency(t.wageFreed)}/sem</span>
+                                <span className="block font-bold text-fg-faint text-[9px] mt-0.5">{formatCurrency(t.wageFreed * 52)}/año</span>
+                              </span>
+                            </div>
+                          ) : null}
                           {t.netProfit != null ? <DetailLine label="Beneficio / Pérdida" value={`${t.netProfit >= 0 ? '+' : ''}${formatCurrency(t.netProfit)}`} valueClassName={t.netProfit >= 0 ? 'text-green-500' : 'text-red-500'} /> : null}
                         </>
                       )}
@@ -207,7 +218,13 @@ export default function FinanceTab() {
                           <DetailLine label="Club Destino" value={t.club || 'Sin definir'} />
                           <DetailLine label="Duración" value={t.duration || 'Sin definir'} />
                           <DetailLine label="% Pagado por Nosotros" value={`${t.wagePercentage ?? 0}%`} />
-                          <DetailLine label="Ahorro Mensual" value={`${formatCurrency(t.amount)}/mes`} />
+                          <div className="flex items-start justify-between gap-2 text-[10px]">
+                            <span className="font-bold text-fg-muted pt-px">Ahorro Semanal</span>
+                            <span className="text-right leading-tight shrink-0">
+                              <span className="block font-black text-fg">{formatCurrency(t.amount)}/sem</span>
+                              <span className="block font-bold text-fg-faint text-[9px] mt-0.5">{formatCurrency(t.amount * 52)}/año</span>
+                            </span>
+                          </div>
                           {t.buyOption ? <DetailLine label="Opción de Compra" value={formatCurrency(t.buyOption)} /> : null}
                         </>
                       )}
@@ -216,15 +233,15 @@ export default function FinanceTab() {
                           <DetailLine label="Precio de Traspaso Pagado" value={`-${formatCurrency(t.amount)}`} />
                           <DetailLine label={t.type === 'compra' ? 'Club de Procedencia' : 'Club de Origen'} value={(t.type === 'compra' ? t.sourceClub : t.club) || 'Sin definir'} />
                           <DetailLine label="Rol Pactado" value={t.agreedRole || 'Sin definir'} />
-                          {/* Dos filas superpuestas (mes arriba, año abajo en formato más
+                          {/* Dos filas superpuestas (semana arriba, año abajo en formato más
                               sutil) en vez de un único valor inline, mismo patrón que el resto
                               de la app. */}
                           {t.wageMonthly ? (
                             <div className="flex items-start justify-between gap-2 text-[10px]">
                               <span className="font-bold text-fg-muted pt-px">Impacto Salarial</span>
                               <span className="text-right leading-tight shrink-0">
-                                <span className="block font-black text-fg">+{formatCurrency(t.wageMonthly)}/mes</span>
-                                <span className="block font-bold text-fg-faint text-[9px] mt-0.5">+{formatCurrency(t.wageMonthly * 12)}/año</span>
+                                <span className="block font-black text-fg">+{formatCurrency(t.wageMonthly)}/sem</span>
+                                <span className="block font-bold text-fg-faint text-[9px] mt-0.5">+{formatCurrency(t.wageMonthly * 52)}/año</span>
                               </span>
                             </div>
                           ) : null}

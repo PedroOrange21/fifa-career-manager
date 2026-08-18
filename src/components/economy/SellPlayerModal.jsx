@@ -138,7 +138,7 @@ export default function SellPlayerModal({ player, onClose }) {
           <div className="h-px bg-border-subtle" />
           <div className="flex justify-between items-center text-xs">
             <span className="font-bold text-fg-muted">Masa Salarial Liberada</span>
-            <span className="font-black text-blue-400">+{formatCurrency(player.wage || 0)}/mes</span>
+            <span className="font-black text-blue-400 text-right">+{formatCurrency(player.wage || 0)}/sem<br /><span className="text-[9px] font-bold text-fg-faint">+{formatCurrency((player.wage || 0) * 52)}/año</span></span>
           </div>
           <div className="h-px bg-border-subtle" />
           <div className="flex justify-between items-center text-xs">

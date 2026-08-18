@@ -74,8 +74,8 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const [createdClubId, setCreatedClubId] = useState(null);
   // Presupuesto Salarial: obligatorio igual que el de Traspasos, exclusivamente en semanal
   // ("Presup. sem.", tal cual lo muestra EA Sports FC en Oficina > Economía) — sin selector de
-  // periodicidad; la conversión a mensual/anual la hace la app internamente donde haga falta
-  // (ver weeklyToMonthly en utils/format.js).
+  // periodicidad; mismo periodo en el que se guardan los sueldos de jugadores y objetivos en
+  // el resto de la app, así que nunca hace falta convertir entre unidades.
   const [weeklyWageBudgetInput, setWeeklyWageBudgetInput] = useState('');
 
   // --- Paso Estado de la Partida ---

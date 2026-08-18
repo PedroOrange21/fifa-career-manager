@@ -31,12 +31,12 @@ export default function LoanOutModal({ player, onClose }) {
   const handleCloseClick = () => { if (isDirty) setShowDiscardConfirm(true); else onClose(); };
 
   // Desglose salarial en tiempo real: cuánto sigue pagando nuestro club y cuánto asume (o se
-  // ahorra) el club de destino, en mensual y anual, recalculado en cada movimiento de la barra.
+  // ahorra) el club de destino, en semanal y anual, recalculado en cada movimiento de la barra.
   const wage = player.wage || 0;
-  const ourShareMonthly = Math.round(wage * (wagePercentage / 100));
-  const ourShareYearly = ourShareMonthly * 12;
-  const destShareMonthly = wage - ourShareMonthly;
-  const destShareYearly = destShareMonthly * 12;
+  const ourShareWeekly = Math.round(wage * (wagePercentage / 100));
+  const ourShareYearly = ourShareWeekly * 52;
+  const destShareWeekly = wage - ourShareWeekly;
+  const destShareYearly = destShareWeekly * 52;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -78,11 +78,11 @@ export default function LoanOutModal({ player, onClose }) {
             <div className="space-y-0.5 mt-1.5 px-1">
               <div className="flex justify-between items-center gap-2 text-[9px] font-bold text-fg-faint">
                 <span className="shrink-0">Nuestro Club</span>
-                <span className="text-fg-muted text-right">{formatCurrency(ourShareMonthly)}/mes · {formatCurrency(ourShareYearly)}/año</span>
+                <span className="text-fg-muted text-right">{formatCurrency(ourShareWeekly)}/sem · {formatCurrency(ourShareYearly)}/año</span>
               </div>
               <div className="flex justify-between items-center gap-2 text-[9px] font-bold text-fg-faint">
                 <span className="shrink-0">Club Destino</span>
-                <span className="text-fg-muted text-right">{formatCurrency(destShareMonthly)}/mes · {formatCurrency(destShareYearly)}/año</span>
+                <span className="text-fg-muted text-right">{formatCurrency(destShareWeekly)}/sem · {formatCurrency(destShareYearly)}/año</span>
               </div>
             </div>
           </div>

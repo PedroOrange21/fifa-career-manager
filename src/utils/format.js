@@ -47,16 +47,6 @@ export const formatCurrency = (val) => {
   return num.toLocaleString('es-ES', { useGrouping: true }) + ' €';
 };
 
-// El Presupuesto Salarial del club solo se pide/guarda en semanal ("Presup. sem.", tal cual lo
-// muestra EA Sports FC en Oficina > Economía — ver ClubsContext.setWageBudget), mientras que
-// los sueldos de jugadores y objetivos (p.wage / t.wage) se guardan en mensual en todo el
-// resto de la app (Finanzas, Plantilla, Objetivos). Estas dos funciones son los únicos puntos
-// de conversión entre ambas unidades (52 semanas / 12 meses), usados donde haga falta
-// contrastar una contra la otra — p. ej. el Planificador de Fichajes, que compara el margen
-// semanal real contra los sueldos (mensuales) de los objetivos seleccionados.
-export const weeklyToMonthly = (weeklyAmount) => Math.round((weeklyAmount || 0) * 52 / 12);
-export const monthlyToWeekly = (monthlyAmount) => Math.round((monthlyAmount || 0) * 12 / 52);
-
 export const abbreviateValue = (val) => {
   if (!val) return '0 €';
   const num = parseValue(String(val));

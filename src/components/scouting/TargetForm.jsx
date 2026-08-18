@@ -162,7 +162,7 @@ export default function TargetForm({ editingTarget, onClose }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Valor de Mercado (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 20.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.estimatedValue} onChange={(e) => setTarget({ ...target, estimatedValue: formatValueInput(e.target.value) })} /></div>
-            <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Aproximado (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 500.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.wage} onChange={(e) => setTarget({ ...target, wage: formatValueInput(e.target.value) })} /></div>
+            <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Aproximado (€/sem)</label><input type="text" inputMode="numeric" placeholder="Ej: 500.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.wage} onChange={(e) => setTarget({ ...target, wage: formatValueInput(e.target.value) })} /></div>
           </div>
           <div className="space-y-1">
             <label className="text-[9px] font-black text-fg-muted ml-1">Estado de Seguimiento</label>

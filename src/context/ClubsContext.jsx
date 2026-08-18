@@ -48,12 +48,11 @@ export function ClubsProvider({ children }) {
   }, [user, loadingApp]);
 
   // "initialWeeklyWageBudget": cifra SEMANAL tal cual la muestra EA Sports FC ("Presup. sem."
-  // en Oficina > Economía) — la app nunca pide mes/año, solo convierte internamente donde
-  // haga falta contrastar contra la masa salarial mensual (ver weeklyToMonthly en
-  // utils/format.js). Se escribe en el mismo setDoc de creación en vez de con una llamada
-  // aparte a setWageBudget justo después, porque esa función depende de "activeClubId" del
-  // contexto, que puede no haberse actualizado todavía al club recién creado en ese mismo
-  // instante.
+  // en Oficina > Economía) — igual que los sueldos de jugadores y objetivos (p.wage/t.wage),
+  // así que se compara directamente contra la masa salarial sin ninguna conversión de unidad.
+  // Se escribe en el mismo setDoc de creación en vez de con una llamada aparte a setWageBudget
+  // justo después, porque esa función depende de "activeClubId" del contexto, que puede no
+  // haberse actualizado todavía al club recién creado en ese mismo instante.
   const createClub = async (name, logo, initialBudget = 0, initialWeeklyWageBudget = null) => {
     if (!user || !name.trim()) return null;
     const isFirstClub = clubs.length === 0;
@@ -120,9 +119,10 @@ export function ClubsProvider({ children }) {
 
   // Presupuesto de Salarios: siempre se guarda en Firestore como cifra SEMANAL
   // (weeklyWageBudget), exactamente la que EA Sports FC muestra en Oficina > Economía como
-  // "Presup. sem." — sin conversión de unidad en la entrada, la app convierte internamente
-  // donde haga falta (ver weeklyToMonthly en utils/format.js). "activeClub.weeklyWageBudget ==
-  // null" es la señal de "sin definir todavía", distinta de haberlo fijado explícitamente a 0.
+  // "Presup. sem." — mismo periodo en el que se guardan p.wage/t.wage en el resto de la app,
+  // así que no hace falta ninguna conversión de unidad al compararlos. "activeClub.
+  // weeklyWageBudget == null" es la señal de "sin definir todavía", distinta de haberlo
+  // fijado explícitamente a 0.
   const setWageBudget = async (weeklyAmount) => {
     if (!user || !activeClubId) return;
     await updateDoc(clubDoc(user.uid, activeClubId), { weeklyWageBudget: weeklyAmount });

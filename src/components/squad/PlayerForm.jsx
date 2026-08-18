@@ -359,7 +359,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
     }
     if (s === 3) {
       if (form.type !== 'Cantera' && (!form.marketValue || parseValue(form.marketValue) <= 0)) return { message: 'Valor de mercado obligatorio.', field: 'marketValue' };
-      if (form.type !== 'Cantera' && (!form.wage || parseValue(form.wage) <= 0)) return { message: 'El sueldo mensual es obligatorio.', field: 'wage' };
+      if (form.type !== 'Cantera' && (!form.wage || parseValue(form.wage) <= 0)) return { message: 'El sueldo semanal es obligatorio.', field: 'wage' };
       if (form.type === 'Comprado' && !hidePurchasePrice && (!form.value || parseValue(form.value) <= 0)) return { message: 'Precio de compra obligatorio.', field: 'value' };
       if (form.type === 'Comprado' && !form.contractYears) return { message: 'Selecciona los años de contrato.', field: 'contractYears' };
       if (form.type === 'Cedido' && !form.originClub.trim()) return { message: 'Club de origen obligatorio.', field: 'originClub' };
@@ -704,7 +704,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                         <input type="text" inputMode="numeric" required placeholder="Ej: 80.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.marketValue} onChange={formatMoneyField('marketValue')} />
                       </div>
                       <div className="space-y-1 relative">
-                        <label className="text-[9px] font-black text-fg-muted ml-1">{form.type === 'Cedido' ? 'Sueldo Mensual Total (€) *' : 'Sueldo Mensual (€) *'}</label>
+                        <label className="text-[9px] font-black text-fg-muted ml-1">{form.type === 'Cedido' ? 'Sueldo Semanal Total (€) *' : 'Sueldo Semanal (€) *'}</label>
                         <input type="text" inputMode="numeric" required placeholder="Ej: 500.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.wage} onChange={formatMoneyField('wage')} />
                       </div>
                     </div>
@@ -717,7 +717,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                         <input type="range" min="0" max="100" step="5" className="flex-1 accent-green-500" value={form.wagePercentage || 0} onChange={(e) => set({ wagePercentage: e.target.value })} />
                         <span className="w-12 text-center font-black text-fg bg-well-strong rounded-lg py-1.5 text-xs shrink-0">{form.wagePercentage || 0}%</span>
                       </div>
-                      <p className="text-[9px] text-fg-faint font-bold ml-1">Tu club paga: {formatCurrency(parseValue(form.wage) * (Number(form.wagePercentage) || 0) / 100)} / mes ({formatCurrency(parseValue(form.wage) * (Number(form.wagePercentage) || 0) / 100 * 12)} / año)</p>
+                      <p className="text-[9px] text-fg-faint font-bold ml-1">Tu club paga: {formatCurrency(parseValue(form.wage) * (Number(form.wagePercentage) || 0) / 100)} / sem ({formatCurrency(parseValue(form.wage) * (Number(form.wagePercentage) || 0) / 100 * 52)} / año)</p>
                     </div>
                   )}
 
@@ -904,7 +904,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                             <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.value} onChange={formatMoneyField('value')} />
                           </ReviewRow>
                         )}
-                        <ReviewRow label="Sueldo Mensual (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
+                        <ReviewRow label="Sueldo Semanal (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
                           <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
                         </ReviewRow>
                         <ReviewRow label="Años Contrato" active={editField === 'contractYears'} onOpen={() => setEditField('contractYears')} display={form.contractYears ? `${form.contractYears} Años` : 'Sin definir'}>
@@ -924,7 +924,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                         <ReviewRow label="Duración Cesión" active={editField === 'loanDuration'} onOpen={() => setEditField('loanDuration')} display={form.loanDuration}>
                           <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => { set({ loanDuration: v }); setEditField(null); }} />
                         </ReviewRow>
-                        <ReviewRow label="Sueldo Mensual Total (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
+                        <ReviewRow label="Sueldo Semanal Total (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
                           <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
                         </ReviewRow>
                         <ReviewRow label="% Salario Pagado" active={editField === 'wagePercentage'} onOpen={() => setEditField('wagePercentage')} display={`${form.wagePercentage || 0}%`}>

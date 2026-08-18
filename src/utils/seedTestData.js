@@ -31,29 +31,31 @@ const player = (overrides) => ({
   ...overrides,
 });
 
+// wage: sueldo SEMANAL (€/sem), mismo criterio que "Presup. sem." en Oficina > Economía de EA
+// Sports FC — no la cifra mensual equivalente.
 const TEST_PLAYERS = [
   // --- Oro (media >= 75) ---
-  player({ name: 'Iker Muralla', positions: ['POR'], rating: 84, age: 31, marketValue: 14000000, type: 'Comprado', value: 12000000, wage: 3000000 }),
-  player({ name: 'Marco Ferreira', positions: ['DFC'], rating: 80, age: 27, marketValue: 46000000, type: 'Comprado', value: 42000000, wage: 5500000 }),
-  player({ name: 'Lucas Lateral', positions: ['LD'], rating: 76, age: 25, marketValue: 26000000, type: 'Comprado', value: 24000000, wage: 3800000 }),
-  player({ name: 'Bruno Izquierdo', positions: ['LI'], rating: 79, age: 28, marketValue: 30000000, type: 'Cedido', loanDuration: '1 Temporada', originClub: 'Real Madrid', wage: 4500000 }),
-  player({ name: 'Sergio Pivote', positions: ['MCD'], rating: 81, age: 26, marketValue: 39000000, type: 'Comprado', value: 36000000, wage: 4200000 }),
-  player({ name: 'Mediapunta Clase', positions: ['MCO'], rating: 77, age: 29, marketValue: 9000000, type: 'Comprado', value: 8000000, wage: 2200000, transferStatus: 'Cedible' }),
-  player({ name: 'Rayo Extremo', positions: ['ED'], rating: 85, age: 23, marketValue: 62000000, type: 'Comprado', value: 58000000, wage: 6200000 }),
-  player({ name: 'Máximo Killer', positions: ['DC'], rating: 89, age: 27, marketValue: 100000000, type: 'Comprado', value: 95000000, wage: 9000000 }),
+  player({ name: 'Iker Muralla', positions: ['POR'], rating: 84, age: 31, marketValue: 14000000, type: 'Comprado', value: 12000000, wage: 700000 }),
+  player({ name: 'Marco Ferreira', positions: ['DFC'], rating: 80, age: 27, marketValue: 46000000, type: 'Comprado', value: 42000000, wage: 1270000 }),
+  player({ name: 'Lucas Lateral', positions: ['LD'], rating: 76, age: 25, marketValue: 26000000, type: 'Comprado', value: 24000000, wage: 880000 }),
+  player({ name: 'Bruno Izquierdo', positions: ['LI'], rating: 79, age: 28, marketValue: 30000000, type: 'Cedido', loanDuration: '1 Temporada', originClub: 'Real Madrid', wage: 1040000 }),
+  player({ name: 'Sergio Pivote', positions: ['MCD'], rating: 81, age: 26, marketValue: 39000000, type: 'Comprado', value: 36000000, wage: 970000 }),
+  player({ name: 'Mediapunta Clase', positions: ['MCO'], rating: 77, age: 29, marketValue: 9000000, type: 'Comprado', value: 8000000, wage: 510000, transferStatus: 'Cedible' }),
+  player({ name: 'Rayo Extremo', positions: ['ED'], rating: 85, age: 23, marketValue: 62000000, type: 'Comprado', value: 58000000, wage: 1430000 }),
+  player({ name: 'Máximo Killer', positions: ['DC'], rating: 89, age: 27, marketValue: 100000000, type: 'Comprado', value: 95000000, wage: 2080000 }),
 
   // --- Plata (media 65-74) ---
-  player({ name: 'Sub Portero', positions: ['POR'], rating: 66, age: 20, marketValue: 3000000, type: 'Cantera', potential: 78, wage: 500000 }),
-  player({ name: 'Diego Cantera', positions: ['DFC'], rating: 68, age: 19, marketValue: 4000000, type: 'Cantera', potential: 86, wage: 450000 }),
-  player({ name: 'Andrés Motor', positions: ['MC'], rating: 74, age: 24, marketValue: 20000000, type: 'Comprado', value: 19000000, wage: 2900000 }),
-  player({ name: 'Extremo Cedido Fuera', positions: ['EI'], rating: 71, age: 20, marketValue: 9000000, type: 'Cantera', potential: 82, loanDuration: '6 Meses', wage: 700000, transferStatus: 'CedidoFuera' }),
-  player({ name: 'Segundo Punta Cedido', positions: ['SD'], rating: 72, age: 22, marketValue: 11000000, type: 'Cedido', loanDuration: '2 Temporadas', originClub: 'Atlético de Madrid', wage: 1800000 }),
+  player({ name: 'Sub Portero', positions: ['POR'], rating: 66, age: 20, marketValue: 3000000, type: 'Cantera', potential: 78, wage: 115000 }),
+  player({ name: 'Diego Cantera', positions: ['DFC'], rating: 68, age: 19, marketValue: 4000000, type: 'Cantera', potential: 86, wage: 105000 }),
+  player({ name: 'Andrés Motor', positions: ['MC'], rating: 74, age: 24, marketValue: 20000000, type: 'Comprado', value: 19000000, wage: 670000 }),
+  player({ name: 'Extremo Cedido Fuera', positions: ['EI'], rating: 71, age: 20, marketValue: 9000000, type: 'Cantera', potential: 82, loanDuration: '6 Meses', wage: 160000, transferStatus: 'CedidoFuera' }),
+  player({ name: 'Segundo Punta Cedido', positions: ['SD'], rating: 72, age: 22, marketValue: 11000000, type: 'Cedido', loanDuration: '2 Temporadas', originClub: 'Atlético de Madrid', wage: 415000 }),
 
   // --- Bronce (media <= 64) ---
-  player({ name: 'Central Veterano', positions: ['DFC'], rating: 63, age: 35, marketValue: 1800000, type: 'Comprado', value: 1500000, wage: 900000, transferStatus: 'Transferible' }),
-  player({ name: 'Canterano Manu', positions: ['MC'], rating: 60, age: 17, marketValue: 1200000, type: 'Cantera', potential: 85, wage: 200000 }),
-  player({ name: 'Delantero Reserva', positions: ['DC'], rating: 61, age: 32, marketValue: 2200000, type: 'Comprado', value: 2000000, wage: 1100000, transferStatus: 'Transferible' }),
-  player({ name: 'Lateral Promesa', positions: ['LD'], rating: 58, age: 16, marketValue: 900000, type: 'Cantera', potential: 80, wage: 150000 }),
+  player({ name: 'Central Veterano', positions: ['DFC'], rating: 63, age: 35, marketValue: 1800000, type: 'Comprado', value: 1500000, wage: 210000, transferStatus: 'Transferible' }),
+  player({ name: 'Canterano Manu', positions: ['MC'], rating: 60, age: 17, marketValue: 1200000, type: 'Cantera', potential: 85, wage: 46000 }),
+  player({ name: 'Delantero Reserva', positions: ['DC'], rating: 61, age: 32, marketValue: 2200000, type: 'Comprado', value: 2000000, wage: 254000, transferStatus: 'Transferible' }),
+  player({ name: 'Lateral Promesa', positions: ['LD'], rating: 58, age: 16, marketValue: 900000, type: 'Cantera', potential: 80, wage: 35000 }),
 ];
 
 const target = (overrides) => ({
@@ -70,8 +72,8 @@ const target = (overrides) => ({
 });
 
 const TEST_TARGETS = [
-  target({ name: 'Kai Talento', positions: ['ED'], primaryPosition: 'ED', age: 22, rating: 79, originClub: 'Ajax', estimatedValue: 35000000, wage: 400000, status: 'Prioritario' }),
-  target({ name: 'Big Center', positions: ['DFC', 'MCD'], primaryPosition: 'DFC', secondaryPositions: ['MCD'], age: 25, rating: 76, originClub: 'Benfica', estimatedValue: 18000000, wage: 250000, status: 'Negociando' }),
+  target({ name: 'Kai Talento', positions: ['ED'], primaryPosition: 'ED', age: 22, rating: 79, originClub: 'Ajax', estimatedValue: 35000000, wage: 92000, status: 'Prioritario' }),
+  target({ name: 'Big Center', positions: ['DFC', 'MCD'], primaryPosition: 'DFC', secondaryPositions: ['MCD'], age: 25, rating: 76, originClub: 'Benfica', estimatedValue: 18000000, wage: 58000, status: 'Negociando' }),
 ];
 
 /**

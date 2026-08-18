@@ -41,6 +41,22 @@ function DetailRow({ label, value }) {
     </div>
   );
 }
+// Variante de DetailRow para el sueldo: semanal (cifra que realmente se guarda) como dato
+// principal y anual, más sutil, justo debajo — mismo patrón de dos filas superpuestas que el
+// resto de la app (p. ej. Ficha Salarial Pactada en Estadísticas).
+function WageDetailRow({ label, weekly }) {
+  return (
+    <div className="px-4 py-2.5">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-[9px] font-black uppercase text-fg-muted shrink-0 pt-px">{label}</span>
+        <span className="text-right leading-tight shrink-0">
+          <span className="block text-xs font-black text-fg">{formatCurrency(weekly)}/sem</span>
+          <span className="block text-[10px] font-bold text-fg-faint mt-0.5">{formatCurrency((weekly || 0) * 52)}/año</span>
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onReplace, onOpenFullDetail, hideMarketStatus = false, hideTacticsActions = false }) {
   useBodyScrollLock();
@@ -262,7 +278,7 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
                   {current.type === 'Comprado' && (
                     <>
                       <DetailRow label="Precio de Compra (€)" value={formatCurrency(current.value)} />
-                      <DetailRow label="Sueldo Mensual (€)" value={formatCurrency(current.wage)} />
+                      <WageDetailRow label="Sueldo Semanal (€)" weekly={current.wage} />
                       <DetailRow label="Años Contrato" value={current.contractYears ? `${current.contractYears} Años` : 'Sin definir'} />
                       <DetailRow label="Cláusula de Rescisión (€)" value={formatCurrency(current.releaseClause)} />
                     </>
@@ -271,7 +287,7 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
                     <>
                       <DetailRow label="Club de Origen" value={current.originClub || 'Sin definir'} />
                       <DetailRow label="Duración Cesión" value={current.loanDuration || 'Sin definir'} />
-                      <DetailRow label="Sueldo Mensual Total (€)" value={formatCurrency(current.wage)} />
+                      <WageDetailRow label="Sueldo Semanal Total (€)" weekly={current.wage} />
                       <DetailRow label="% Salario Pagado" value={`${current.wagePercentage || 0}%`} />
                       <DetailRow label="¿Opción de Compra?" value={current.buyOption ? `Sí · ${formatCurrency(current.buyOption)}` : 'No'} />
                     </>

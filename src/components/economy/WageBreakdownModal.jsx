@@ -3,7 +3,7 @@ import { formatCurrency } from '../../utils/format';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
-// Lista de solo lectura con el sueldo mensual individual de cada jugador que compone la masa
+// Lista de solo lectura con el sueldo semanal individual de cada jugador que compone la masa
 // salarial (ya ordenada de mayor a menor y con el total al final), para que el usuario pueda
 // verificar exactamente cómo se forma la cifra mostrada en la tarjeta de Finanzas.
 export default function WageBreakdownModal({ players, total, onClose }) {
@@ -30,14 +30,20 @@ export default function WageBreakdownModal({ players, total, onClose }) {
                   <div className="text-[9px] text-blue-400 font-black uppercase tracking-widest">Cedido · {p.outboundLoan?.wagePercentage ?? 0}% a cargo del club</div>
                 )}
               </div>
-              <div className="font-black text-sm text-fg shrink-0">{formatCurrency(p.effectiveWage)}</div>
+              <div className="text-right shrink-0 leading-tight">
+                <div className="font-black text-sm text-fg">{formatCurrency(p.effectiveWage)}/sem</div>
+                <div className="font-bold text-[9px] text-fg-faint mt-0.5">{formatCurrency(p.effectiveWage * 52)}/año</div>
+              </div>
             </div>
           ))}
         </div>
 
         <div className="shrink-0 p-6 pt-4 border-t border-border-subtle flex items-center justify-between">
-          <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted">Total Mensual</span>
-          <span className="text-lg font-black italic text-green-500">{formatCurrency(total)}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted">Total Semanal</span>
+          <div className="text-right leading-tight">
+            <div className="text-lg font-black italic text-green-500">{formatCurrency(total)}/sem</div>
+            <div className="text-[10px] font-bold text-fg-faint mt-0.5">{formatCurrency(total * 52)}/año</div>
+          </div>
         </div>
       </div>
     </div>

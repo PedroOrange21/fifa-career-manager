@@ -5,7 +5,7 @@ import { useClubData } from '../../context/ClubDataContext';
 import { useClubs } from '../../context/ClubsContext';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { getCardStyle } from '../../utils/cardStyle';
-import { formatValueInput, abbreviateValue, formatCurrency, monthlyToWeekly } from '../../utils/format';
+import { formatValueInput, abbreviateValue, formatCurrency } from '../../utils/format';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import SwipeableRow from '../common/SwipeableRow';
 import TargetForm, { STATUS_OPTIONS, STATUS_LABELS, STATUS_STYLE } from './TargetForm';
@@ -31,7 +31,7 @@ const emptyFilters = { position: '', status: '', ageMin: '', ageMax: '', ratingM
 const positionsOf = (t) => t.positions || (t.primaryPosition ? [t.primaryPosition, ...(t.secondaryPositions || [])] : []);
 
 // Idéntico a FinanceTab.jsx/FinanceStatsTab.jsx (duplicado a propósito, mismo patrón ya usado
-// en el resto de la app): sueldo mensual que realmente carga al club, salvo cedidos fuera,
+// en el resto de la app): sueldo semanal que realmente carga al club, salvo cedidos fuera,
 // donde solo pesa el % que asumimos.
 const getEffectiveWage = (p) => {
   if (p.transferStatus === 'CedidoFuera') {
@@ -145,7 +145,7 @@ function TargetRow({ t, onSign, onEdit, onDelete, selected, onToggleSelect }) {
               <span className="flex items-center gap-1 text-[9px] md:text-[10px] font-black text-blue-400 uppercase tracking-wide bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded-lg truncate max-w-[140px]"><MapPin size={11} className="shrink-0" /> {t.originClub}</span>
             )}
             <span className="text-[9px] md:text-[10px] font-black text-fg-muted uppercase tracking-widest bg-well px-2 py-1 rounded-lg">{t.estimatedValue > 0 ? abbreviateValue(t.estimatedValue) : 'Sin Valor'}</span>
-            <span className="text-[9px] md:text-[10px] font-black text-fg-muted uppercase tracking-widest bg-well px-2 py-1 rounded-lg">{t.wage > 0 ? `${abbreviateValue(t.wage)}/mes` : 'Sin Salario'}</span>
+            <span className="text-[9px] md:text-[10px] font-black text-fg-muted uppercase tracking-widest bg-well px-2 py-1 rounded-lg">{t.wage > 0 ? `${abbreviateValue(t.wage)}/sem` : 'Sin Salario'}</span>
           </div>
 
           {/* Nota de seguimiento: solo visible al expandir, justo antes de las acciones. */}
@@ -217,29 +217,26 @@ function BudgetPlannerCard({ targets, selectedIds }) {
   const selectedTargets = targets.filter((t) => selectedIds.has(t.id));
   const activeTargets = view === 'selected' ? selectedTargets : targets;
   const totalTransfer = activeTargets.reduce((sum, t) => sum + (t.estimatedValue || 0), 0);
-  const totalWageMonthly = activeTargets.reduce((sum, t) => sum + (t.wage || 0), 0);
+  const totalWageWeekly = activeTargets.reduce((sum, t) => sum + (t.wage || 0), 0);
 
   // Fondos disponibles del club: presupuesto de traspasos real, y margen salarial disponible
-  // real, comparado íntegramente en SEMANAL (mismo periodo en el que se guarda y se pide el
-  // Presup. Sem. en Finanzas — ver FinanceTab.jsx / ClubsContext.setWageBudget), sin mezclar
-  // con el mensual en el que se guardan p.wage/t.wage en el resto de la app: tanto la masa
-  // salarial actual de la plantilla como la suma de sueldos de los objetivos se convierten a
-  // semanal ANTES de restar/comparar (ver monthlyToWeekly en utils/format.js), para que nunca
-  // haya un desfase de periodicidad entre ambos lados de la comparación.
+  // real, comparado íntegramente en SEMANAL — mismo periodo en el que se guarda y se pide el
+  // Presup. Sem. en Finanzas (ver FinanceTab.jsx / ClubsContext.setWageBudget) y en el que
+  // ahora se guardan también p.wage/t.wage en el resto de la app, así que ambos lados de la
+  // comparación ya comparten periodicidad sin necesitar ninguna conversión.
   // "hasWeeklyWageBudget" distingue "el club nunca ha fijado un Presup. Sem." (== null, p. ej.
   // clubes creados antes de esta función) de haberlo fijado explícitamente a 0 — solo en el
   // primer caso se desactiva por completo el chequeo de exceso salarial, para no marcar
   // "Excede el margen salarial" falsamente cuando no hay ningún límite definido.
   const transferBudget = activeClub?.transferBudget || 0;
-  const currentWageBillWeekly = monthlyToWeekly(players.reduce((sum, p) => sum + getEffectiveWage(p), 0));
-  const totalWageWeekly = monthlyToWeekly(totalWageMonthly);
+  const currentWageBillWeekly = players.reduce((sum, p) => sum + getEffectiveWage(p), 0);
   const hasWeeklyWageBudget = activeClub?.weeklyWageBudget != null;
   const weeklyWageBudget = activeClub?.weeklyWageBudget || 0;
   const wageMarginWeekly = weeklyWageBudget - currentWageBillWeekly;
   const transferExcess = Math.max(0, totalTransfer - transferBudget);
   const wageExcessWeekly = hasWeeklyWageBudget ? Math.max(0, totalWageWeekly - wageMarginWeekly) : 0;
   const isViable = transferExcess === 0 && wageExcessWeekly === 0;
-  const hasCost = totalTransfer > 0 || totalWageMonthly > 0;
+  const hasCost = totalTransfer > 0 || totalWageWeekly > 0;
 
   return (
     <div className="w-full min-w-0 bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl">
@@ -279,8 +276,8 @@ function BudgetPlannerCard({ targets, selectedIds }) {
             <span className="text-[9px] font-bold text-fg-muted">Traspasos · {targets.length} Objetivos</span>
           </div>
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5">
-            <span className="text-[10px] font-black text-fg-secondary">{formatCurrency(totalWageMonthly)}/mes</span>
-            <span className="text-[9px] font-bold text-fg-faint">| {formatCurrency(totalWageMonthly * 12)}/año</span>
+            <span className="text-[10px] font-black text-fg-secondary">{formatCurrency(totalWageWeekly)}/sem</span>
+            <span className="text-[9px] font-bold text-fg-faint">| {formatCurrency(totalWageWeekly * 52)}/año</span>
           </div>
         </>
       ) : (
@@ -294,8 +291,8 @@ function BudgetPlannerCard({ targets, selectedIds }) {
               <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">Traspaso Total</div>
             </div>
             <div className="min-w-0">
-              <div className="text-xs md:text-sm font-black italic text-fg truncate">{formatCurrency(totalWageMonthly)}/mes</div>
-              <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">{formatCurrency(totalWageMonthly * 12)}/año</div>
+              <div className="text-xs md:text-sm font-black italic text-fg truncate">{formatCurrency(totalWageWeekly)}/sem</div>
+              <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">{formatCurrency(totalWageWeekly * 52)}/año</div>
             </div>
           </div>
         </>
@@ -343,15 +340,15 @@ function BudgetPlannerCard({ targets, selectedIds }) {
                   </div>
                   <div className="mt-1.5 space-y-0.5">
                     <div className="flex items-center justify-between gap-2 text-[9px]"><span className="font-bold text-fg-muted">Traspaso Estimado</span><span className="font-black text-fg-secondary">{t.estimatedValue > 0 ? formatCurrency(t.estimatedValue) : 'Sin Valor'}</span></div>
-                    {/* Dos filas superpuestas (mes arriba, año abajo) en vez de un único valor
-                        inline, mismo patrón que el resto de la app (p. ej. Ficha Salarial
+                    {/* Dos filas superpuestas (semana arriba, año abajo) en vez de un único
+                        valor inline, mismo patrón que el resto de la app (p. ej. Ficha Salarial
                         Pactada en Estadísticas). */}
                     <div className="flex items-start justify-between gap-2 text-[9px]">
                       <span className="font-bold text-fg-muted pt-px">Sueldo Estimado</span>
                       {t.wage > 0 ? (
                         <span className="text-right leading-tight shrink-0">
-                          <span className="block font-black text-fg-secondary">{formatCurrency(t.wage)}/mes</span>
-                          <span className="block font-bold text-fg-faint text-[8px] mt-0.5">{formatCurrency(t.wage * 12)}/año</span>
+                          <span className="block font-black text-fg-secondary">{formatCurrency(t.wage)}/sem</span>
+                          <span className="block font-bold text-fg-faint text-[8px] mt-0.5">{formatCurrency(t.wage * 52)}/año</span>
                         </span>
                       ) : (
                         <span className="font-black text-fg-secondary">Sin Salario</span>
@@ -368,8 +365,8 @@ function BudgetPlannerCard({ targets, selectedIds }) {
                 <div className="flex items-start justify-between gap-2 text-[9px] mt-1">
                   <span className="font-black uppercase tracking-widest text-fg-secondary pt-px">Total Masa Salarial</span>
                   <span className="text-right leading-tight shrink-0">
-                    <span className="block font-black text-fg">{formatCurrency(totalWageMonthly)}/mes</span>
-                    <span className="block font-bold text-fg-faint text-[8px] mt-0.5">{formatCurrency(totalWageMonthly * 12)}/año</span>
+                    <span className="block font-black text-fg">{formatCurrency(totalWageWeekly)}/sem</span>
+                    <span className="block font-bold text-fg-faint text-[8px] mt-0.5">{formatCurrency(totalWageWeekly * 52)}/año</span>
                   </span>
                 </div>
               </div>

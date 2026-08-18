@@ -39,7 +39,7 @@ const EMPTY_GROUPS = () => ({
 });
 
 // Idéntico a FinanceTab.jsx (duplicado a propósito, mismo patrón ya usado en el resto de la
-// app): sueldo mensual que realmente carga al club, salvo cedidos fuera, donde solo pesa el
+// app): sueldo semanal que realmente carga al club, salvo cedidos fuera, donde solo pesa el
 // % que asumimos.
 const getEffectiveWage = (p) => {
   if (p.transferStatus === 'CedidoFuera') {
@@ -223,8 +223,10 @@ function ProfitabilityCard({ transactions }) {
 
 // Tarjeta desglosable análoga a ProfitabilityCard, pero para el lado del gasto: cada
 // transacción de tipo "compra" ya guarda el coste del traspaso (amount) y la ficha salarial
-// pactada (wageMonthly, ver logTransaction en ClubDataContext), así que no hace falta cruzar
-// con la plantilla actual — funciona igual aunque el jugador ya no esté en el club.
+// pactada (wageMonthly — nombre de campo heredado en Firestore, pero contiene la cifra
+// semanal desde que p.wage/t.wage pasaron a guardarse en semanal; ver logTransaction en
+// ClubDataContext), así que no hace falta cruzar con la plantilla actual — funciona igual
+// aunque el jugador ya no esté en el club.
 function SigningSpendCard({ transactions }) {
   const [showList, setShowList] = useState(false);
   const compras = [...transactions.filter((t) => t.type === 'compra')].sort((a, b) => b.date - a.date);
@@ -252,15 +254,15 @@ function SigningSpendCard({ transactions }) {
               </div>
               <div className="mt-1.5 space-y-0.5">
                 <div className="flex items-center justify-between gap-2 text-[9px]"><span className="font-bold text-fg-muted">Coste del Traspaso</span><span className="font-black text-red-500">-{formatCurrency(t.amount)}</span></div>
-                {/* Dos filas superpuestas (mes arriba, año abajo) en vez de un único valor
-                    inline, para que quede claro que la ficha salarial pactada es mensual y a
+                {/* Dos filas superpuestas (semana arriba, año abajo) en vez de un único valor
+                    inline, para que quede claro que la ficha salarial pactada es semanal y a
                     la vez se vea su equivalente anual sin tener que calcularlo a mano. */}
                 <div className="flex items-start justify-between gap-2 text-[9px]">
                   <span className="font-bold text-fg-muted pt-px">Ficha Salarial Pactada</span>
                   {t.wageMonthly ? (
                     <span className="text-right leading-tight shrink-0">
-                      <span className="block font-black text-fg-secondary">{formatCurrency(t.wageMonthly)}/mes</span>
-                      <span className="block font-bold text-fg-faint text-[8px] mt-0.5">{formatCurrency(t.wageMonthly * 12)}/año</span>
+                      <span className="block font-black text-fg-secondary">{formatCurrency(t.wageMonthly)}/sem</span>
+                      <span className="block font-bold text-fg-faint text-[8px] mt-0.5">{formatCurrency(t.wageMonthly * 52)}/año</span>
                     </span>
                   ) : (
                     <span className="font-black text-fg-secondary">Sin definir</span>
@@ -340,12 +342,12 @@ export default function FinanceStatsTab() {
 
   // Proyección de balance: Presupuesto actual + Ingresos proyectados (media histórica de lo
   // ingresado por temporada, 0 si todavía no hay ninguna venta registrada) - Compromiso
-  // salarial restante (masa salarial mensual sostenida 6 meses, estimación simple e
-  // ilustrativa de "lo que queda de temporada", no una previsión financiera real).
+  // salarial restante (masa salarial semanal sostenida 26 semanas ≈ 6 meses, estimación
+  // simple e ilustrativa de "lo que queda de temporada", no una previsión financiera real).
   const transferBudget = activeClub?.transferBudget || 0;
   const projectedIncome = seasonly.length > 0 ? Math.round(seasonly.reduce((sum, s) => sum + s.earned, 0) / seasonly.length) : 0;
-  const MONTHS_REMAINING_ESTIMATE = 6;
-  const wageCommitment = totalWage * MONTHS_REMAINING_ESTIMATE;
+  const WEEKS_REMAINING_ESTIMATE = 26;
+  const wageCommitment = totalWage * WEEKS_REMAINING_ESTIMATE;
   const finalBalance = transferBudget + projectedIncome - wageCommitment;
 
   const breakdownViews = {
@@ -427,7 +429,7 @@ export default function FinanceStatsTab() {
             <p className="p-2.5 bg-well rounded-xl border border-border-subtle text-fg font-black text-center leading-relaxed">Presupuesto Actual<br />+ Ingresos Previstos<br />− Masa Salarial Restante<br />= Balance Final Estimado</p>
             <p><span className="text-fg font-black">Presupuesto Actual:</span> el saldo de traspasos disponible hoy mismo.</p>
             <p><span className="text-fg font-black">Ingresos Previstos:</span> la media histórica de lo ingresado por temporada en ventas.</p>
-            <p><span className="text-fg font-black">Masa Salarial Restante:</span> la masa salarial mensual actual acumulada hasta final de temporada (estimada en {MONTHS_REMAINING_ESTIMATE} meses).</p>
+            <p><span className="text-fg font-black">Masa Salarial Restante:</span> la masa salarial semanal actual acumulada hasta final de temporada (estimada en {WEEKS_REMAINING_ESTIMATE} semanas).</p>
           </InfoModal>
         )}
         <div className={`text-lg sm:text-xl md:text-3xl font-black italic tracking-tighter truncate ${finalBalance >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(finalBalance)}</div>
