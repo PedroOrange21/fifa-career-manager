@@ -67,22 +67,17 @@ const RESPONSE_SCHEMA = {
   properties: {
     nombre: { type: Type.STRING, nullable: true, description: 'Nombre completo del jugador tal como aparece en la tarjeta.' },
     media: { type: Type.INTEGER, nullable: true, description: 'Media/valoración general (OVR), número entre 1 y 99.' },
+    potencial: { type: Type.INTEGER, nullable: true, description: 'Potencial (PLT/POT), número entre 1 y 99, si la tarjeta lo muestra.' },
     posicionPrincipal: { type: Type.STRING, nullable: true, description: 'Abreviatura de la posición principal (ej. DC, MC, LD, POR).' },
     posicionesSecundarias: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true, description: 'Abreviaturas de posiciones secundarias, si las muestra la tarjeta.' },
     nacionalidad: { type: Type.STRING, nullable: true },
     edad: { type: Type.INTEGER, nullable: true },
-    altura: { type: Type.INTEGER, nullable: true, description: 'Altura en centímetros (convierte desde pies/pulgadas si hace falta).' },
-    peso: { type: Type.INTEGER, nullable: true, description: 'Peso en kilogramos (convierte desde libras si hace falta).' },
     piernaBuena: { type: Type.STRING, enum: ['Diestro', 'Zurdo'], nullable: true },
-    estado: { type: Type.STRING, nullable: true, description: 'Etiqueta de estado/humor del jugador si aparece (ej. Feliz, Descontento, Quiere salir).' },
     relevancia: { type: Type.STRING, enum: ['Clave', 'Importante', 'Rotación', 'Esporádico', 'Promesa'], nullable: true, description: 'Rol/relevancia en la plantilla si la tarjeta lo indica.' },
     sueldoSemanal: { type: Type.INTEGER, nullable: true, description: 'Sueldo SEMANAL en euros, solo el número (sin puntos, comas ni símbolo de moneda).' },
     valorMercado: { type: Type.INTEGER, nullable: true, description: 'Valor de mercado en euros, solo el número.' },
     duracionContrato: { type: Type.STRING, nullable: true, description: 'Duración de contrato tal como aparece (años restantes o fecha de finalización).' },
     clausulaRescision: { type: Type.INTEGER, nullable: true, description: 'Cláusula de rescisión en euros, solo el número.' },
-    clausulaReventa: { type: Type.INTEGER, nullable: true, description: 'Porcentaje de cláusula de reventa, solo el número (ej. 20 para 20%).' },
-    primasExtra: { type: Type.INTEGER, nullable: true, description: 'Primas extra/objetivos en euros, solo el número.' },
-    primaFichaje: { type: Type.INTEGER, nullable: true, description: 'Prima de fichaje en euros, solo el número.' },
   },
 };
 
@@ -91,22 +86,17 @@ const PROMPT = `Eres un asistente experto en leer tarjetas de jugador del videoj
 Analiza la imagen adjunta y extrae ÚNICAMENTE los datos que aparezcan visibles en la tarjeta, con la máxima precisión posible:
 - nombre completo del jugador
 - media/valoración general (OVR)
+- potencial (PLT/POT), si la tarjeta lo muestra
 - posición principal (abreviatura, ej. DC, MC, LD, POR)
 - posiciones secundarias (si las hay)
 - nacionalidad
 - edad
-- altura (en centímetros)
-- peso (en kilogramos)
 - pierna buena (Diestro o Zurdo)
-- estado o etiqueta de humor/satisfacción del jugador, si aparece
 - relevancia o rol en la plantilla (Clave, Importante, Rotación, Esporádico o Promesa), si aparece
 - sueldo SEMANAL en euros (el que EA Sports FC llama "Sueldo sem." — si solo ves un sueldo mensual o anual, conviértelo tú mismo a semanal antes de responder)
 - valor de mercado en euros
 - duración de contrato (años restantes o fecha)
 - cláusula de rescisión en euros
-- cláusula de reventa en porcentaje
-- primas extra/objetivos en euros
-- prima de fichaje en euros
 
 Reglas importantes:
 - Todos los importes en euros deben ir como número entero puro, SIN puntos de miles, SIN comas, SIN el símbolo "€" y sin abreviar (ej. escribe 45000000, nunca "45M" ni "45.000.000 €").
