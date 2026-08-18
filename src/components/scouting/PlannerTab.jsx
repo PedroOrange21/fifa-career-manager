@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Wallet, TrendingDown, TrendingUp, Scale, CheckCircle2, AlertTriangle, Check, Gift, ChevronDown, ChevronUp, ArrowRight, Pencil } from 'lucide-react';
+import { Wallet, TrendingDown, TrendingUp, Scale, CheckCircle2, AlertTriangle, Check, Gift, ChevronDown, ChevronUp, ArrowRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useClubs } from '../../context/ClubsContext';
 import { getCardStyle } from '../../utils/cardStyle';
@@ -98,6 +98,34 @@ function SellRow({ p, selected, onToggle, saleValue, onSaleValueChange }) {
   );
 }
 
+// Fila de un premio/bonificación individual dentro de la lista dinámica: concepto libre +
+// importe estimado + botón de eliminar, mismo lenguaje visual (bg-well, border-border-subtle,
+// acento amarillo) que el resto del bloque de Premios.
+function BonusRow({ bonus, onLabelChange, onAmountChange, onRemove }) {
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="text"
+        placeholder="Ej: Champions League"
+        value={bonus.label}
+        onChange={(e) => onLabelChange(bonus.id, e.target.value)}
+        className="flex-1 min-w-0 bg-well p-2.5 rounded-lg outline-none border border-border-subtle focus:border-yellow-500 text-xs font-bold text-fg placeholder:text-fg-faint"
+      />
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="Importe"
+        value={bonus.input}
+        onChange={(e) => onAmountChange(bonus.id, e.target.value)}
+        className="w-24 shrink-0 bg-well p-2.5 rounded-lg outline-none border border-border-subtle focus:border-yellow-500 text-right text-xs font-black text-fg placeholder:text-fg-faint"
+      />
+      <button type="button" onClick={() => onRemove(bonus.id)} title="Eliminar premio" className="shrink-0 p-2 rounded-lg text-fg-faint hover:text-red-400 hover:bg-red-500/10 transition-colors touch-manipulation">
+        <Trash2 size={14} />
+      </button>
+    </div>
+  );
+}
+
 // Planificador de Fichajes: simulador de balance de mercado independiente de Objetivos, que
 // combina en un único cálculo las incorporaciones previstas (objetivos en seguimiento
 // marcados), las salidas previstas (jugadores en Transferibles/Cedibles marcados) y los
@@ -111,8 +139,9 @@ export default function PlannerTab() {
   const [selectedPlayerIds, setSelectedPlayerIds] = useState(new Set());
   const [saleValues, setSaleValues] = useState({});
   const [showBonus, setShowBonus] = useState(false);
-  const [bonusLabel, setBonusLabel] = useState('');
-  const [bonusInput, setBonusInput] = useState('');
+  // Lista dinámica de premios/bonificaciones: cada entrada tiene su propio concepto libre e
+  // importe estimado, sumados todos para el "Total de ingresos por premios" del balance.
+  const [bonuses, setBonuses] = useState([]);
 
   const toggleTarget = (id) => setSelectedTargetIds((prev) => {
     const next = new Set(prev);
@@ -125,7 +154,12 @@ export default function PlannerTab() {
     return next;
   });
   const setSaleValue = (id, val) => setSaleValues((prev) => ({ ...prev, [id]: val }));
-  const bonusAmount = parseValue(bonusInput);
+
+  const addBonus = () => setBonuses((prev) => [...prev, { id: crypto.randomUUID(), label: '', input: '' }]);
+  const removeBonus = (id) => setBonuses((prev) => prev.filter((b) => b.id !== id));
+  const updateBonusLabel = (id, label) => setBonuses((prev) => prev.map((b) => (b.id === id ? { ...b, label } : b)));
+  const updateBonusAmount = (id, raw) => setBonuses((prev) => prev.map((b) => (b.id === id ? { ...b, input: formatValueInput(raw) } : b)));
+  const bonusAmount = bonuses.reduce((sum, b) => sum + parseValue(b.input), 0);
 
   // Transferibles y Cedibles se combinan en un único bloque de "salida" (simulador, no la
   // operación real): ambos liberan la masa salarial completa del jugador y ambos admiten un
@@ -168,8 +202,6 @@ export default function PlannerTab() {
   const wageComfortable = !hasWeeklyWageBudget || (weeklyWageBudget > 0 ? projectedWageMargin >= weeklyWageBudget * 0.15 : projectedWageMargin >= 0);
   const isComfortable = isViable && transferComfortable && wageComfortable;
 
-  const handleBonusChange = (e) => setBonusInput(formatValueInput(e.target.value));
-
   // Informe narrativo: un párrafo por bloque con actividad (fichajes, salidas, premios) que
   // menciona a cada jugador implicado por su nombre y su impacto concreto, cerrado siempre por
   // el veredicto financiero (sostenible / ajustada / en déficit, con las cifras exactas).
@@ -201,9 +233,16 @@ export default function PlannerTab() {
       paragraphs.push(`En el otro lado de la operación, ${joinNatural(phrases)}.`);
     }
 
-    if (bonusAmount > 0) {
+    const activeBonuses = bonuses.filter((b) => parseValue(b.input) > 0);
+    if (activeBonuses.length === 1) {
+      const b = activeBonuses[0];
       paragraphs.push(
-        `A esto se suman los +${formatCurrency(bonusAmount)} previstos${bonusLabel.trim() ? ` por ${bonusLabel.trim()}` : ' en premios y bonificaciones'}, que se incorporan directamente al presupuesto de traspasos.`
+        `A esto se suman los +${formatCurrency(parseValue(b.input))} previstos${b.label.trim() ? ` por ${b.label.trim()}` : ' en premios y bonificaciones'}, que se incorporan directamente al presupuesto de traspasos.`
+      );
+    } else if (activeBonuses.length > 1) {
+      const phrases = activeBonuses.map((b, i) => `${b.label.trim() || `Premio ${i + 1}`} (+${formatCurrency(parseValue(b.input))})`);
+      paragraphs.push(
+        `A esto se suman los ingresos estimados por ${joinNatural(phrases)}, que se incorporan directamente al presupuesto de traspasos.`
       );
     }
 
@@ -304,28 +343,24 @@ export default function PlannerTab() {
           </div>
         </button>
         {showBonus && (
-          <div className="px-4 pb-4 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150">
-            <div className="space-y-1">
-              <label className="text-[9px] font-black text-fg-muted ml-1">Concepto (opcional)</label>
-              <input
-                type="text"
-                placeholder="Ej: Premio por ganar Liga, Copa, Torneo de pretemporada..."
-                value={bonusLabel}
-                onChange={(e) => setBonusLabel(e.target.value)}
-                className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-yellow-500 text-sm font-bold text-fg placeholder:text-fg-faint"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[9px] font-black text-fg-muted ml-1">Importe Estimado (€)</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="Ej: 5.000.000"
-                value={bonusInput}
-                onChange={handleBonusChange}
-                className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-yellow-500 text-center font-black text-lg text-fg placeholder:text-fg-faint"
-              />
-            </div>
+          <div className="px-4 pb-4 space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
+            {bonuses.length === 0 ? (
+              <p className="text-[9px] text-fg-faint font-bold uppercase tracking-widest">Sin premios añadidos todavía.</p>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 px-0.5">
+                  <span className="flex-1 min-w-0 text-[8px] font-black uppercase text-fg-faint tracking-widest">Concepto / Torneo</span>
+                  <span className="w-24 shrink-0 text-[8px] font-black uppercase text-fg-faint tracking-widest text-right">Importe</span>
+                  <span className="w-9 shrink-0" />
+                </div>
+                {bonuses.map((b) => (
+                  <BonusRow key={b.id} bonus={b} onLabelChange={updateBonusLabel} onAmountChange={updateBonusAmount} onRemove={removeBonus} />
+                ))}
+              </>
+            )}
+            <button type="button" onClick={addBonus} className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-border-subtle text-fg-muted hover:text-yellow-500 hover:border-yellow-500/50 transition-colors text-[10px] font-black uppercase tracking-widest touch-manipulation">
+              <Plus size={13} /> Añadir Premio
+            </button>
           </div>
         )}
       </div>
