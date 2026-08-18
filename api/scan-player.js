@@ -1,19 +1,30 @@
 import { GoogleGenAI, Type } from '@google/genai';
 
 // Función Serverless de Vercel (Node.js runtime, ver package.json "type": "module"): la única
-// pieza de la app que conoce la clave de Gemini. El frontend nunca ve GEMINI_API_KEY/
-// VITE_GEMINI_API_KEY — solo llama a este endpoint con la imagen ya en base64 (ver
-// src/services/geminiPlayerScan.js). "VITE_GEMINI_API_KEY" se acepta como alias porque el
-// proyecto ya tenía esa variable configurada en Vercel desde la integración anterior
-// (client-side); las funciones Serverless leen cualquier variable del proyecto vía
-// process.env sin importar el prefijo "VITE_", que solo afecta al bundle del navegador.
-const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+// pieza de la app que conoce las credenciales de Gemini. El frontend nunca las ve — solo
+// llama a este endpoint con la imagen ya en base64 (ver src/services/geminiPlayerScan.js).
+//
+// Autenticación vía Vertex AI + cuenta de servicio (no API key "de AI Studio"): las claves
+// sueltas probadas antes fallaban de raíz contra la API — esta ruta usa la cuenta de servicio
+// de Firebase Admin del propio proyecto (FIREBASE_SERVICE_ACCOUNT_KEY, el JSON completo de
+// Firebase Console > Configuración del proyecto > Cuentas de servicio, guardado como variable
+// de entorno de un solo string en Vercel) para pedir un token de acceso real, verificado en
+// local antes de desplegar. Requiere que "Vertex AI API" (aiplatform.googleapis.com) esté
+// habilitada en el proyecto de Google Cloud.
+let serviceAccount = null;
+let serviceAccountError = null;
+try {
+  serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY) : null;
+} catch (err) {
+  serviceAccountError = err;
+}
 
 // gemini-2.5-flash es el modelo objetivo; si la cuenta/región no tiene acceso a él o Google lo
 // retira temporalmente, se reintenta una vez con gemini-1.5-flash antes de rendirse — así un
 // problema puntual del modelo no tumba el escaneo por completo.
 const PRIMARY_MODEL = 'gemini-2.5-flash';
 const FALLBACK_MODEL = 'gemini-1.5-flash';
+const VERTEX_LOCATION = 'us-central1';
 
 // Tipos MIME que Gemini acepta para imágenes; cualquier otro valor (o ausente) cae a JPEG, que
 // es lo que produce cualquier cámara de móvil.
@@ -118,9 +129,14 @@ export default async function handler(req, res) {
     res.status(405).json({ error: 'Método no permitido.' });
     return;
   }
-  if (!apiKey) {
-    console.error('Falta GEMINI_API_KEY/VITE_GEMINI_API_KEY en las variables de entorno del proyecto.');
-    res.status(500).json({ error: 'El servidor no tiene configurada la clave de Gemini. Contacta con el administrador.' });
+  if (serviceAccountError) {
+    console.error('FIREBASE_SERVICE_ACCOUNT_KEY no contiene JSON válido:', serviceAccountError.message);
+    res.status(500).json({ error: 'La credencial del servidor está mal configurada. Contacta con el administrador.' });
+    return;
+  }
+  if (!serviceAccount) {
+    console.error('Falta FIREBASE_SERVICE_ACCOUNT_KEY en las variables de entorno del proyecto.');
+    res.status(500).json({ error: 'El servidor no tiene configurada la credencial de Gemini. Contacta con el administrador.' });
     return;
   }
 
@@ -132,7 +148,15 @@ export default async function handler(req, res) {
   const imageBase64 = sanitizeBase64(rawImageBase64);
   const mimeType = sanitizeMimeType(rawMimeType);
 
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({
+    vertexai: true,
+    project: serviceAccount.project_id,
+    location: VERTEX_LOCATION,
+    googleAuthOptions: {
+      credentials: serviceAccount,
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+    },
+  });
   const callModel = (model) => ai.models.generateContent({
     model,
     contents: [
