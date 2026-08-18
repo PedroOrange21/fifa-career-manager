@@ -4,7 +4,7 @@ import { useClubData } from '../../context/ClubDataContext';
 import { useClubs } from '../../context/ClubsContext';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { getCardStyle } from '../../utils/cardStyle';
-import { formatValueInput, abbreviateValue, formatCurrency, weeklyToMonthly } from '../../utils/format';
+import { formatValueInput, abbreviateValue, formatCurrency, monthlyToWeekly } from '../../utils/format';
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import SwipeableRow from '../common/SwipeableRow';
 import TargetForm, { STATUS_OPTIONS, STATUS_LABELS, STATUS_STYLE } from './TargetForm';
@@ -164,20 +164,25 @@ function BudgetPlannerCard({ targets, selectedIds }) {
   const totalWageMonthly = activeTargets.reduce((sum, t) => sum + (t.wage || 0), 0);
 
   // Fondos disponibles del club: presupuesto de traspasos real, y margen salarial disponible
-  // real (Presup. Sem. convertido a mensual − Masa Salarial Actual), configurados en Finanzas
-  // (ver FinanceTab.jsx, que guarda "weeklyWageBudget" siempre en semanal — ver weeklyToMonthly
-  // en utils/format.js para la conversión). "hasWeeklyWageBudget" distingue "el club nunca ha
-  // fijado un Presup. Sem." (weeklyWageBudget == null, p. ej. clubes creados antes de esta
-  // función) de haberlo fijado explícitamente a 0 — solo en el primer caso se desactiva por
-  // completo el chequeo de exceso salarial, para no marcar "Excede el margen salarial"
-  // falsamente cuando no hay ningún límite definido.
+  // real, comparado íntegramente en SEMANAL (mismo periodo en el que se guarda y se pide el
+  // Presup. Sem. en Finanzas — ver FinanceTab.jsx / ClubsContext.setWageBudget), sin mezclar
+  // con el mensual en el que se guardan p.wage/t.wage en el resto de la app: tanto la masa
+  // salarial actual de la plantilla como la suma de sueldos de los objetivos se convierten a
+  // semanal ANTES de restar/comparar (ver monthlyToWeekly en utils/format.js), para que nunca
+  // haya un desfase de periodicidad entre ambos lados de la comparación.
+  // "hasWeeklyWageBudget" distingue "el club nunca ha fijado un Presup. Sem." (== null, p. ej.
+  // clubes creados antes de esta función) de haberlo fijado explícitamente a 0 — solo en el
+  // primer caso se desactiva por completo el chequeo de exceso salarial, para no marcar
+  // "Excede el margen salarial" falsamente cuando no hay ningún límite definido.
   const transferBudget = activeClub?.transferBudget || 0;
-  const currentWageBill = players.reduce((sum, p) => sum + getEffectiveWage(p), 0);
+  const currentWageBillWeekly = monthlyToWeekly(players.reduce((sum, p) => sum + getEffectiveWage(p), 0));
+  const totalWageWeekly = monthlyToWeekly(totalWageMonthly);
   const hasWeeklyWageBudget = activeClub?.weeklyWageBudget != null;
-  const wageMargin = weeklyToMonthly(activeClub?.weeklyWageBudget || 0) - currentWageBill;
+  const weeklyWageBudget = activeClub?.weeklyWageBudget || 0;
+  const wageMarginWeekly = weeklyWageBudget - currentWageBillWeekly;
   const transferExcess = Math.max(0, totalTransfer - transferBudget);
-  const wageExcess = hasWeeklyWageBudget ? Math.max(0, totalWageMonthly - wageMargin) : 0;
-  const isViable = transferExcess === 0 && wageExcess === 0;
+  const wageExcessWeekly = hasWeeklyWageBudget ? Math.max(0, totalWageWeekly - wageMarginWeekly) : 0;
+  const isViable = transferExcess === 0 && wageExcessWeekly === 0;
   const hasCost = totalTransfer > 0 || totalWageMonthly > 0;
 
   return (
@@ -200,7 +205,7 @@ function BudgetPlannerCard({ targets, selectedIds }) {
         </div>
         <div className="min-w-0">
           {hasWeeklyWageBudget ? (
-            <div className={`text-xs md:text-sm font-black italic truncate ${wageMargin >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(wageMargin)}/mes</div>
+            <div className={`text-xs md:text-sm font-black italic truncate ${wageMarginWeekly >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(wageMarginWeekly)}/sem</div>
           ) : (
             <div className="text-xs md:text-sm font-black italic text-fg-faint truncate">Sin Límite</div>
           )}
@@ -252,7 +257,7 @@ function BudgetPlannerCard({ targets, selectedIds }) {
             ) : (
               <div className="text-[9px] font-bold text-fg-muted mt-0.5 space-y-0.5">
                 {transferExcess > 0 && <p>Excede el presupuesto de traspaso en {formatCurrency(transferExcess)}.</p>}
-                {wageExcess > 0 && <p>Excede el margen salarial en {formatCurrency(wageExcess)}/mes.</p>}
+                {wageExcessWeekly > 0 && <p>Excede el margen salarial en {formatCurrency(wageExcessWeekly)}/sem.</p>}
               </div>
             )}
           </div>
