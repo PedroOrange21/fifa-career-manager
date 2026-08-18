@@ -54,7 +54,7 @@ const LOAN_DURATION_OPTIONS = [
 // traer cedido al jugador (no aplica a Cantera, que todavía no tiene un rol competitivo
 // definido).
 const AGREED_ROLE_OPTIONS = [
-  { value: 'Crucial', label: 'Crucial' },
+  { value: 'Clave', label: 'Clave' },
   { value: 'Importante', label: 'Importante' },
   { value: 'Rotación', label: 'Rotación' },
   { value: 'Esporádico', label: 'Esporádico' },
