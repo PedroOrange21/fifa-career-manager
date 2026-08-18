@@ -40,13 +40,6 @@ const getEffectiveWage = (p) => {
   return p.wage || 0;
 };
 
-// Sin un tope salarial explícito en el modelo de datos del club (solo existe transferBudget),
-// el "margen salarial disponible" se estima repartiendo el presupuesto de traspasos actual en
-// este número de meses y restando la masa salarial ya comprometida — mismo horizonte temporal
-// (6 meses) ya usado en la "Proyección de Balance" de Estadísticas, para no inventar un
-// criterio nuevo y desconectado del resto de la app.
-const WAGE_MARGIN_REFERENCE_MONTHS = 6;
-
 // Misma línea visual que las tarjetas de Plantilla (PlayerRow): badge de Media/Posición,
 // nombre en italic uppercase junto a la bandera de nacionalidad, posición en verde debajo.
 // Vista compacta por defecto (badge, identificación, posiciones, club/edad/estado); la
@@ -170,14 +163,18 @@ function BudgetPlannerCard({ targets, selectedIds }) {
   const totalTransfer = activeTargets.reduce((sum, t) => sum + (t.estimatedValue || 0), 0);
   const totalWageMonthly = activeTargets.reduce((sum, t) => sum + (t.wage || 0), 0);
 
-  // Fondos disponibles del club: presupuesto de traspasos real, y margen salarial estimado
-  // (ver WAGE_MARGIN_REFERENCE_MONTHS más arriba). Comparados contra el coste de la vista
-  // activa (seleccionados o todos) para la conclusión de viabilidad.
+  // Fondos disponibles del club: presupuesto de traspasos real, y margen salarial disponible
+  // real (Presupuesto de Salarios − Masa Salarial Actual), ambos configurados/calculados en
+  // Finanzas (ver FinanceTab.jsx). "hasWageBudget" distingue "el club nunca ha fijado un
+  // límite salarial" (wageBudget == null) de haberlo fijado explícitamente a 0 — solo en el
+  // primer caso se desactiva por completo el chequeo de exceso salarial, para no marcar
+  // "Excede el margen salarial" falsamente cuando no hay ningún límite estricto definido.
   const transferBudget = activeClub?.transferBudget || 0;
   const currentWageBill = players.reduce((sum, p) => sum + getEffectiveWage(p), 0);
-  const wageMargin = Math.max(0, transferBudget / WAGE_MARGIN_REFERENCE_MONTHS - currentWageBill);
+  const hasWageBudget = activeClub?.wageBudget != null;
+  const wageMargin = (activeClub?.wageBudget || 0) - currentWageBill;
   const transferExcess = Math.max(0, totalTransfer - transferBudget);
-  const wageExcess = Math.max(0, totalWageMonthly - wageMargin);
+  const wageExcess = hasWageBudget ? Math.max(0, totalWageMonthly - wageMargin) : 0;
   const isViable = transferExcess === 0 && wageExcess === 0;
   const hasCost = totalTransfer > 0 || totalWageMonthly > 0;
 
@@ -200,7 +197,11 @@ function BudgetPlannerCard({ targets, selectedIds }) {
           <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">Presupuesto Traspasos</div>
         </div>
         <div className="min-w-0">
-          <div className="text-xs md:text-sm font-black italic text-green-500 truncate">{formatCurrency(wageMargin)}/mes</div>
+          {hasWageBudget ? (
+            <div className={`text-xs md:text-sm font-black italic truncate ${wageMargin >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(wageMargin)}/mes</div>
+          ) : (
+            <div className="text-xs md:text-sm font-black italic text-fg-faint truncate">Sin Límite</div>
+          )}
           <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">Margen Salarial Disp.</div>
         </div>
       </div>

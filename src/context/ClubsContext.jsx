@@ -109,6 +109,16 @@ export function ClubsProvider({ children }) {
     await updateDoc(clubDoc(user.uid, activeClubId), { transferBudget: amount });
   };
 
+  // Presupuesto de Salarios: siempre se guarda en Firestore como cifra MENSUAL (wageBudget),
+  // aunque el campo de Finanzas deje introducirlo también en anual y lo convierta antes de
+  // guardar. Si el club nunca lo ha configurado, el campo no existe en el documento —
+  // "activeClub.wageBudget == null" es la señal de "sin límite definido todavía", distinta de
+  // haberlo fijado explícitamente a 0.
+  const setWageBudget = async (monthlyAmount) => {
+    if (!user || !activeClubId) return;
+    await updateDoc(clubDoc(user.uid, activeClubId), { wageBudget: monthlyAmount });
+  };
+
   const incrementSeasonNumber = async () => {
     if (!user || !activeClubId) return;
     await updateDoc(clubDoc(user.uid, activeClubId), { currentSeasonNumber: increment(1) });
@@ -128,7 +138,7 @@ export function ClubsProvider({ children }) {
     clubToDelete, setClubToDelete,
     editingClub, setEditingClub,
     createClub, updateClub, confirmDeleteClub,
-    adjustBudget, setBudget, incrementSeasonNumber, completeOnboarding,
+    adjustBudget, setBudget, setWageBudget, incrementSeasonNumber, completeOnboarding,
   };
 
   return <ClubsContext.Provider value={value}>{children}</ClubsContext.Provider>;
