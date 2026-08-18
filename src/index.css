@@ -138,15 +138,17 @@ textarea::placeholder {
   opacity: 1;
 }
 
-/* Excepción puntual a la regla de font-size unificado de arriba: el importe de venta editable
-   del Planificador de Fichajes (Mercado > Salidas/Ventas Previstas) debe verse EXACTAMENTE
-   igual que la cifra de traspaso de los objetivos de compra (un simple texto en text-xs, 12px
-   de Tailwind), no con el tamaño de 16px/14px que se fuerza al resto de inputs de la app para
-   evitar el zoom automático de Safari — un selector de clase (0,1,0) gana en especificidad al
-   selector de elemento "input" (0,0,1) de las reglas anteriores, así que esta sí prevalece en
-   cualquier ancho de pantalla pese a que ambas usan !important. */
-.planner-sale-value-input {
-  font-size: 0.75rem !important;
+/* Misma excepción de especificidad que la de arriba (un selector de clase (0,1,0) gana al
+   selector de elemento "input" (0,0,1), así que prevalece en cualquier ancho de pantalla pese
+   a que ambas reglas usan !important), aplicada aquí a los dos campos de cada premio del
+   Planificador de Fichajes (Mercado > Premios y Bonificaciones): sin esta clase, la regla de
+   font-size unificado de más arriba (16px/14px !important) se comía cualquier text-[Npx] de
+   Tailwind y los campos se veían igual de grandes que cualquier otro input de la app. */
+.planner-bonus-input {
+  font-size: 0.625rem !important;
+}
+.planner-bonus-input::placeholder {
+  font-size: 0.5625rem;
 }
 
 .pb-safe {

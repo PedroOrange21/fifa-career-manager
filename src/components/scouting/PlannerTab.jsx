@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Wallet, TrendingDown, TrendingUp, Scale, CheckCircle2, AlertTriangle, Check, Gift, ChevronDown, ChevronUp, ArrowRight, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Wallet, TrendingDown, TrendingUp, Scale, CheckCircle2, AlertTriangle, Check, Gift, ChevronDown, ChevronUp, ArrowRight, Plus, Trash2 } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useClubs } from '../../context/ClubsContext';
 import { getCardStyle } from '../../utils/cardStyle';
@@ -53,56 +53,31 @@ function BuyRow({ t, selected, onToggle }) {
   );
 }
 
-// Fila del bloque "Salidas / Ventas": mismo bloque de importe (tipografía, alineación y color)
-// que BuyRow — solo que aquí la cifra de venta es editable (precargada con el valor de mercado
-// del jugador) sin salir de la fila, así que el checkbox y el nombre son un botón independiente
-// del campo de importe, para que escribir en él no dispare también la selección de la fila.
-function SellRow({ p, selected, onToggle, saleValue, onSaleValueChange }) {
+// Fila del bloque "Salidas / Ventas": misma estructura exacta que BuyRow (fila entera como un
+// único botón, mismas clases en badge/nombre/importe) — el valor mostrado es el valor de
+// mercado actual del jugador, en modo solo lectura, igual que el traspaso estimado en Compras.
+function SellRow({ p, selected, onToggle }) {
   const wage = getEffectiveWage(p);
-  const [inputValue, setInputValue] = useState(formatValueInput(String(saleValue || '')));
-
-  const handleChange = (e) => {
-    const formatted = formatValueInput(e.target.value);
-    setInputValue(formatted);
-    onSaleValueChange(p.id, parseValue(formatted));
-  };
-
+  const value = p.marketValue || p.value || 0;
   return (
-    <div className={`flex items-center gap-2.5 px-3 py-2.5 transition-colors ${selected ? 'bg-green-500/5' : ''}`}>
-      <button type="button" onClick={() => onToggle(p.id)} className="shrink-0 touch-manipulation" title={selected ? 'Quitar de la venta prevista' : 'Marcar para vender/ceder'}>
-        <span className={`w-4 h-4 rounded-md border-2 flex items-center justify-center transition-all ${selected ? 'bg-green-500 border-green-500' : 'border-border-subtle bg-well'}`}>
-          {selected && <Check size={9} className="text-black" strokeWidth={3.5} />}
-        </span>
-      </button>
-      <button type="button" onClick={() => onToggle(p.id)} className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center font-black text-[10px] leading-none shrink-0 touch-manipulation ${getCardStyle(p.rating || 0)}`}>{p.rating || '—'}</button>
-      <button type="button" onClick={() => onToggle(p.id)} className="flex-1 min-w-0 text-left touch-manipulation">
+    <button
+      type="button"
+      onClick={() => onToggle(p.id)}
+      className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors touch-manipulation ${selected ? 'bg-green-500/5' : 'hover:bg-well/60'}`}
+    >
+      <span className={`w-4 h-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${selected ? 'bg-green-500 border-green-500' : 'border-border-subtle bg-well'}`}>
+        {selected && <Check size={9} className="text-black" strokeWidth={3.5} />}
+      </span>
+      <span className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center font-black text-[10px] leading-none shrink-0 ${getCardStyle(p.rating || 0)}`}>{p.rating || '—'}</span>
+      <span className="flex-1 min-w-0">
         <span className="block font-bold text-sm text-fg truncate">{p.name}</span>
         <span className="block text-[8px] font-black uppercase tracking-widest text-fg-faint truncate">{p.positions?.join(' · ') || '—'} · {p.transferStatus === 'Cedible' ? 'Cedible' : 'Transferible'}</span>
-      </button>
-      {/* Mismo bloque exacto que BuyRow (text-xs font-black text-fg + text-[8px] font-bold
-          text-fg-faint mt-0.5): el importe es un <input> en vez de un <span> de solo lectura,
-          pero sin caja ni subrayado propio para que su tamaño y alineación sean indistinguibles
-          del valor de traspaso de Entradas/Compras — el lápiz diminuto es la única pista de que
-          aquí sí se puede editar. "planner-sale-value-input" (ver index.css) es necesaria
-          porque la app fuerza con !important un font-size de 16px/14px en todo <input> para
-          evitar el zoom de Safari en móvil, que sin esa clase ganaba a text-xs y hacía ver esta
-          cifra más grande que la de BuyRow pese a llevar exactamente las mismas clases. */}
-      <span className="text-right shrink-0 leading-tight">
-        <span className="flex items-center justify-end gap-0.5">
-          <Pencil size={8} className="text-fg-faint shrink-0" />
-          <input
-            type="text"
-            inputMode="numeric"
-            value={inputValue}
-            onClick={(e) => e.stopPropagation()}
-            onChange={handleChange}
-            className="planner-sale-value-input w-14 bg-transparent text-right text-xs font-black text-fg outline-none p-0 leading-none focus:text-green-500 transition-colors"
-          />
-          <span className="text-xs font-black text-fg">€</span>
-        </span>
-        <span className="block text-[8px] font-bold text-fg-faint mt-0.5">{wage > 0 ? `-${formatCurrency(wage)}/sem` : 'Sin salario liberado'}</span>
       </span>
-    </div>
+      <span className="text-right shrink-0 leading-tight">
+        <span className="block text-xs font-black text-fg">{value > 0 ? formatCurrency(value) : 'Sin valor'}</span>
+        <span className="block text-[8px] font-bold text-fg-faint mt-0.5">{wage > 0 ? `${formatCurrency(wage)}/sem` : 'Sin salario'}</span>
+      </span>
+    </button>
   );
 }
 
@@ -117,7 +92,7 @@ function BonusRow({ bonus, onLabelChange, onAmountChange, onRemove }) {
         placeholder="Ej: Champions League"
         value={bonus.label}
         onChange={(e) => onLabelChange(bonus.id, e.target.value)}
-        className="flex-1 min-w-0 bg-well px-2.5 py-2 rounded-lg outline-none border border-border-subtle focus:border-yellow-500 text-[11px] font-bold text-fg placeholder:text-fg-faint placeholder:text-[10px]"
+        className="planner-bonus-input flex-1 min-w-0 bg-well px-2 py-1.5 rounded-lg outline-none border border-border-subtle focus:border-yellow-500 text-[10px] font-bold text-fg placeholder:text-fg-faint"
       />
       <input
         type="text"
@@ -125,7 +100,7 @@ function BonusRow({ bonus, onLabelChange, onAmountChange, onRemove }) {
         placeholder="Importe"
         value={bonus.input}
         onChange={(e) => onAmountChange(bonus.id, e.target.value)}
-        className="w-28 shrink-0 bg-well px-2 py-2 rounded-lg outline-none border border-border-subtle focus:border-yellow-500 text-right text-[11px] font-black text-fg placeholder:text-fg-faint placeholder:text-[10px]"
+        className="planner-bonus-input w-24 shrink-0 bg-well px-2 py-1.5 rounded-lg outline-none border border-border-subtle focus:border-yellow-500 text-right text-[10px] font-black text-fg placeholder:text-fg-faint"
       />
       <button type="button" onClick={() => onRemove(bonus.id)} title="Eliminar premio" className="shrink-0 p-2 rounded-lg text-fg-faint hover:text-red-400 hover:bg-red-500/10 transition-colors touch-manipulation">
         <Trash2 size={14} />
@@ -145,7 +120,6 @@ export default function PlannerTab() {
   const { targets, players } = useClubData();
   const [selectedTargetIds, setSelectedTargetIds] = useState(new Set());
   const [selectedPlayerIds, setSelectedPlayerIds] = useState(new Set());
-  const [saleValues, setSaleValues] = useState({});
   const [showBonus, setShowBonus] = useState(false);
   // Lista dinámica de premios/bonificaciones: cada entrada tiene su propio concepto libre e
   // importe estimado, sumados todos para el "Total de ingresos por premios" del balance.
@@ -161,8 +135,6 @@ export default function PlannerTab() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const setSaleValue = (id, val) => setSaleValues((prev) => ({ ...prev, [id]: val }));
-
   const addBonus = () => setBonuses((prev) => [...prev, { id: crypto.randomUUID(), label: '', input: '' }]);
   const removeBonus = (id) => setBonuses((prev) => prev.filter((b) => b.id !== id));
   const updateBonusLabel = (id, label) => setBonuses((prev) => prev.map((b) => (b.id === id ? { ...b, label } : b)));
@@ -170,10 +142,10 @@ export default function PlannerTab() {
   const bonusAmount = bonuses.reduce((sum, b) => sum + parseValue(b.input), 0);
 
   // Transferibles y Cedibles se combinan en un único bloque de "salida" (simulador, no la
-  // operación real): ambos liberan la masa salarial completa del jugador y ambos admiten un
-  // importe de venta editable, precargado con el valor de mercado si aún no se ha tocado.
+  // operación real): ambos liberan la masa salarial completa del jugador y ambos cuentan con
+  // su valor de mercado actual (de solo lectura, igual que el traspaso estimado en Compras).
   const saleCandidates = players.filter((p) => (p.transferStatus === 'Transferible' || p.transferStatus === 'Cedible') && p.type !== 'Cedido');
-  const saleValueFor = (p) => (saleValues[p.id] != null ? saleValues[p.id] : (p.marketValue || p.value || 0));
+  const saleValueFor = (p) => p.marketValue || p.value || 0;
 
   const selectedTargets = targets.filter((t) => selectedTargetIds.has(t.id));
   const selectedSellers = saleCandidates.filter((p) => selectedPlayerIds.has(p.id));
@@ -332,7 +304,7 @@ export default function PlannerTab() {
           {saleCandidates.length === 0 ? (
             <div className="p-8 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Sin jugadores en Transferibles/Cedibles</div>
           ) : saleCandidates.map((p) => (
-            <SellRow key={p.id} p={p} selected={selectedPlayerIds.has(p.id)} onToggle={togglePlayer} saleValue={saleValueFor(p)} onSaleValueChange={setSaleValue} />
+            <SellRow key={p.id} p={p} selected={selectedPlayerIds.has(p.id)} onToggle={togglePlayer} />
           ))}
         </div>
         {selectedSellers.length > 0 && (
@@ -365,7 +337,7 @@ export default function PlannerTab() {
               <>
                 <div className="flex items-center gap-2 px-0.5">
                   <span className="flex-1 min-w-0 text-[8px] font-black uppercase text-fg-faint tracking-widest">Concepto / Torneo</span>
-                  <span className="w-28 shrink-0 text-[8px] font-black uppercase text-fg-faint tracking-widest text-right">Importe</span>
+                  <span className="w-24 shrink-0 text-[8px] font-black uppercase text-fg-faint tracking-widest text-right">Importe</span>
                   <span className="w-9 shrink-0" />
                 </div>
                 {bonuses.map((b) => (
