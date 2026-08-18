@@ -42,17 +42,25 @@ export const formatMoneyLiveWithCursor = (input, onFormatted) => {
   });
 };
 
+// "val" normalmente es un número ya calculado (suma de sueldos, presupuesto, importe*% ...),
+// no una cadena formateada con puntos de miles — por eso NO debe pasar por parseValue()
+// (pensada para leer cadenas "1.234.567" de un <input>, donde el punto es separador de miles).
+// Convertirlo primero a String() y luego quitarle los puntos con parseValue trataba el punto
+// DECIMAL de un float (p. ej. 9230.769230769231, típico de un cálculo de % de sueldo sin
+// redondear) como si fuera separador de miles, concatenando toda la parte decimal al entero y
+// disparando importes absurdos (9230.769230769231 -> "9230769230769231"). Math.round() antes
+// de formatear evita ese caso por completo, venga el valor ya limpio o no.
 export const formatCurrency = (val) => {
-  const num = parseValue(String(val ?? 0));
+  const num = Math.round(typeof val === 'number' ? val : parseValue(String(val ?? 0)));
   return num.toLocaleString('es-ES', { useGrouping: true }) + ' €';
 };
 
 export const abbreviateValue = (val) => {
   if (!val) return '0 €';
-  const num = parseValue(String(val));
+  const num = Math.round(typeof val === 'number' ? val : parseValue(String(val)));
   if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + ' Mill €';
   if (num >= 1000) return (num / 1000).toFixed(0) + ' Mil €';
-  return val + ' €';
+  return num + ' €';
 };
 
 export const abbreviateName = (name) => {

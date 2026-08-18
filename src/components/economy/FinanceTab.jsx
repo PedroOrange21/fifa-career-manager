@@ -44,7 +44,10 @@ function InfoModal({ title, children, onClose }) {
 const getEffectiveWage = (p) => {
   if (p.transferStatus === 'CedidoFuera') {
     const pct = p.outboundLoan?.wagePercentage ?? 0;
-    return (p.wage || 0) * (pct / 100);
+    // Math.round: wage * (pct/100) puede arrastrar imprecisión de coma flotante binaria (p.
+    // ej. 0.15 no es exacto en binario), dando restos como "...4999999997" que, sumados entre
+    // muchos jugadores, desplazaban la masa salarial y el margen disponible en el Planificador.
+    return Math.round((p.wage || 0) * (pct / 100));
   }
   return p.wage || 0;
 };
