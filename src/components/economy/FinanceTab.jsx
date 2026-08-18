@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Wallet, TrendingUp, TrendingDown, ArrowRightLeft, ArrowDownToLine, Users2, Edit2, Check, X, List, ChevronDown, ChevronUp } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, ArrowRightLeft, ArrowDownToLine, Users2, Edit2, Check, X, List, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency, formatValueInput, parseValue } from '../../utils/format';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import WageBreakdownModal from './WageBreakdownModal';
 
 // Línea de desglose reutilizada dentro del panel expandible de cada transacción.
@@ -11,6 +13,26 @@ function DetailLine({ label, value, valueClassName = 'text-fg' }) {
     <div className="flex justify-between items-center gap-2 text-[10px]">
       <span className="font-bold text-fg-muted">{label}</span>
       <span className={`font-black text-right ${valueClassName}`}>{value}</span>
+    </div>
+  );
+}
+
+// Popover explicativo del icono "ℹ️" de la tarjeta de Presupuesto Salarial — mismo patrón de
+// bottom-sheet ya usado en Estadísticas (FinanceStatsTab.jsx) para sus propios iconos de
+// información, reutilizado aquí para mantener la misma experiencia en toda la sección de
+// Finanzas.
+function InfoModal({ title, children, onClose }) {
+  useBodyScrollLock();
+  useAutoHideChrome();
+  return (
+    <div className="fixed inset-0 bg-black/80 z-[300] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-surface border border-border w-full sm:max-w-sm rounded-t-[28px] sm:rounded-[28px] p-5 md:p-6 max-h-[85dvh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-black italic uppercase text-fg flex items-center gap-2 text-sm"><Info size={16} className="text-emerald-500" /> {title}</h3>
+          <button type="button" onClick={onClose} className="p-1.5 -mr-1.5 text-fg-faint hover:text-fg transition-colors touch-manipulation"><X size={18} /></button>
+        </div>
+        <div className="text-[11px] text-fg-muted font-bold leading-relaxed space-y-2.5">{children}</div>
+      </div>
     </div>
   );
 }
@@ -36,6 +58,7 @@ export default function FinanceTab() {
   const [editingWageBudget, setEditingWageBudget] = useState(false);
   const [wageBudgetInput, setWageBudgetInput] = useState('');
   const [wageBudgetPeriod, setWageBudgetPeriod] = useState('mes');
+  const [showWageBudgetInfo, setShowWageBudgetInfo] = useState(false);
   const [showWageBreakdown, setShowWageBreakdown] = useState(false);
   const [expandedTx, setExpandedTx] = useState(null);
 
@@ -122,8 +145,17 @@ export default function FinanceTab() {
       <div className="bg-surface p-5 md:p-6 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted flex items-center gap-2"><Wallet size={14} /> Presupuesto de Salarios</span>
-          {!editingWageBudget && (<button onClick={startEditingWageBudget} className="p-1.5 text-fg-faint hover:text-green-500 transition-colors bg-well rounded-lg"><Edit2 size={12} /></button>)}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button type="button" onClick={() => setShowWageBudgetInfo(true)} title="¿Qué es esto?" className="p-1.5 text-fg-faint hover:text-fg transition-colors touch-manipulation"><Info size={13} /></button>
+            {!editingWageBudget && (<button onClick={startEditingWageBudget} className="p-1.5 text-fg-faint hover:text-green-500 transition-colors bg-well rounded-lg"><Edit2 size={12} /></button>)}
+          </div>
         </div>
+        {showWageBudgetInfo && (
+          <InfoModal title="Presupuesto de Salarios" onClose={() => setShowWageBudgetInfo(false)}>
+            <p>Introduce aquí el presupuesto para sueldos o sueldo semanal disponible que te indica EA Sports FC / FIFA en la pestaña de Oficina/Finanzas de tu Modo Carrera.</p>
+            <p>La aplicación lo utilizará para calcular tu margen salarial restante y comprobar la viabilidad en el Planificador de Fichajes.</p>
+          </InfoModal>
+        )}
         {editingWageBudget ? (
           <form onSubmit={confirmWageBudget} className="space-y-2 mt-2">
             <div className="flex bg-well p-1 rounded-xl border border-border-subtle w-fit">

@@ -47,19 +47,25 @@ export function ClubsProvider({ children }) {
     return () => unsubClubs();
   }, [user, loadingApp]);
 
-  const createClub = async (name, logo, initialBudget = 0) => {
+  // "initialWageBudget" (opcional, siempre en cifra MENSUAL — ver setWageBudget más abajo):
+  // se escribe en el mismo setDoc de creación en vez de con una llamada aparte a
+  // setWageBudget justo después, porque esa función depende de "activeClubId" del contexto,
+  // que puede no haberse actualizado todavía al club recién creado en ese mismo instante.
+  const createClub = async (name, logo, initialBudget = 0, initialWageBudget = null) => {
     if (!user || !name.trim()) return null;
     const isFirstClub = clubs.length === 0;
     const clubId = crypto.randomUUID();
     const budget = Number(initialBudget) || 0;
+    const wageBudget = initialWageBudget != null ? Number(initialWageBudget) : null;
     await setDoc(clubDoc(user.uid, clubId), {
       name: name.trim(),
       logo: logo || null,
       createdAt: Date.now(),
       transferBudget: budget,
+      wageBudget,
       currentSeasonNumber: 1,
     });
-    setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: budget, currentSeasonNumber: 1 }]));
+    setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: budget, wageBudget, currentSeasonNumber: 1 }]));
     // No cierra showClubModal aquí: el asistente de creación (OnboardingWizardModal) sigue
     // abierto tras crear el club para encadenar el registro de jugadores, y es él quien decide
     // cuándo cerrarse (Omitir o Entrar a mi Club).
