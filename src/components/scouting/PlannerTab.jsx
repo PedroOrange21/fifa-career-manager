@@ -3,7 +3,7 @@ import { Wallet, TrendingDown, TrendingUp, Scale, CheckCircle2, AlertTriangle, C
 import { useClubData } from '../../context/ClubDataContext';
 import { useClubs } from '../../context/ClubsContext';
 import { getCardStyle } from '../../utils/cardStyle';
-import { formatCurrency, formatValueInput, parseValue } from '../../utils/format';
+import { formatCurrency, formatValueInput, parseValue, weeklyWageBudgetFromTransfer } from '../../utils/format';
 
 // Idéntico a FinanceTab.jsx/FinanceStatsTab.jsx/MarketTab.jsx (duplicado a propósito, mismo
 // patrón ya usado en el resto de la app): sueldo semanal que realmente carga al club, salvo
@@ -183,34 +183,42 @@ export default function PlannerTab() {
   const sellIncomeTotal = selectedSellers.reduce((sum, p) => sum + saleValueFor(p), 0);
   const sellWageFreedTotal = selectedSellers.reduce((sum, p) => sum + getEffectiveWage(p), 0);
 
-  // Fondos reales del club, mismo criterio que el Planificador original: Presupuesto de
-  // Traspasos y Margen Salarial Semanal (Presup. Sem. de Finanzas - masa salarial semanal
-  // actual de toda la plantilla), ambos en semanal, sin ninguna conversión de unidad.
+  // Fondos reales del club: Presupuesto de Traspasos (dato real de Firestore) y Margen
+  // Salarial Semanal, que ya NO es un campo aparte — se deriva siempre del propio presupuesto
+  // de traspasos dividido entre 52 semanas (weeklyWageBudgetFromTransfer, ver utils/format.js),
+  // fórmula verificada empíricamente contra el propio EA Sports FC. Como el margen salarial
+  // depende del presupuesto de traspasos, cualquier cambio en uno repercute proporcionalmente
+  // en el otro — por eso el margen PROYECTADO no es un simple ajuste aparte, sino que se
+  // recalcula sobre el presupuesto de traspasos ya proyectado (ver más abajo).
   const transferBudget = activeClub?.transferBudget || 0;
-  const hasWeeklyWageBudget = activeClub?.weeklyWageBudget != null;
-  const weeklyWageBudget = activeClub?.weeklyWageBudget || 0;
+  const weeklyWageBudget = weeklyWageBudgetFromTransfer(transferBudget);
   const currentWageBillWeekly = players.reduce((sum, p) => sum + getEffectiveWage(p), 0);
   const wageMarginWeekly = weeklyWageBudget - currentWageBillWeekly;
 
   // Fondos proyectados: el resultado final de aplicar toda la simulación (compras + ventas +
   // premios) sobre los fondos actuales — no un simple delta, sino la cifra absoluta con la que
-  // quedaría el club si se ejecutara tal cual está marcada.
+  // quedaría el club si se ejecutara tal cual está marcada. El presupuesto semanal proyectado
+  // se recalcula desde el presupuesto de traspasos YA proyectado (incluye premios/52), y el
+  // margen proyectado lo compara contra la masa salarial ya proyectada (con las altas/bajas
+  // aplicadas) — así un premio, por ejemplo, también sube ligeramente el margen semanal.
   const projectedTransferBudget = (transferBudget + sellIncomeTotal + bonusAmount) - buyTransferTotal;
-  const projectedWageMargin = (wageMarginWeekly + sellWageFreedTotal) - buyWageTotal;
+  const projectedWeeklyBudget = weeklyWageBudgetFromTransfer(projectedTransferBudget);
+  const projectedWageBillWeekly = (currentWageBillWeekly - sellWageFreedTotal) + buyWageTotal;
+  const projectedWageMargin = projectedWeeklyBudget - projectedWageBillWeekly;
 
   // El informe de viabilidad exige al menos un jugador marcado (compra u venta/cesión): los
   // premios por sí solos no lo activan, aunque ya cuenten en el cálculo en cuanto sí hay
   // alguna casilla marcada — ver condición de render del Balance más abajo.
   const hasSelection = selectedTargets.length > 0 || selectedSellers.length > 0;
   const transferFails = projectedTransferBudget < 0;
-  const wageFails = hasWeeklyWageBudget && projectedWageMargin < 0;
+  const wageFails = projectedWageMargin < 0;
   const isViable = !transferFails && !wageFails;
 
   // "Totalmente sostenible" exige no solo no caer en déficit, sino conservar un colchón
   // razonable (15% de los fondos originales) en ambos frentes — si no, aunque siga siendo
   // viable, se describe como "ajustada" en el informe narrativo de más abajo.
   const transferComfortable = transferBudget > 0 ? projectedTransferBudget >= transferBudget * 0.15 : projectedTransferBudget >= 0;
-  const wageComfortable = !hasWeeklyWageBudget || (weeklyWageBudget > 0 ? projectedWageMargin >= weeklyWageBudget * 0.15 : projectedWageMargin >= 0);
+  const wageComfortable = weeklyWageBudget > 0 ? projectedWageMargin >= weeklyWageBudget * 0.15 : projectedWageMargin >= 0;
   const isComfortable = isViable && transferComfortable && wageComfortable;
 
   // Informe narrativo: un párrafo por bloque con actividad (fichajes, salidas, premios) que
@@ -259,11 +267,11 @@ export default function PlannerTab() {
 
     if (isComfortable) {
       paragraphs.push(
-        `Con todo esto, la operación es totalmente sostenible: el club cerraría con ${formatCurrency(projectedTransferBudget)} de presupuesto de traspasos${hasWeeklyWageBudget ? ` y ${formatCurrency(projectedWageMargin)}/sem de margen salarial` : ''} libres para seguir operando en el mercado.`
+        `Con todo esto, la operación es totalmente sostenible: el club cerraría con ${formatCurrency(projectedTransferBudget)} de presupuesto de traspasos y ${formatCurrency(projectedWageMargin)}/sem de margen salarial libres para seguir operando en el mercado.`
       );
     } else if (isViable) {
       paragraphs.push(
-        `Con todo esto, la operación es viable pero queda muy ajustada: solo restarían ${formatCurrency(projectedTransferBudget)} de presupuesto de traspasos${hasWeeklyWageBudget ? ` y ${formatCurrency(projectedWageMargin)}/sem de margen salarial` : ''}, sin apenas colchón para imprevistos.`
+        `Con todo esto, la operación es viable pero queda muy ajustada: solo restarían ${formatCurrency(projectedTransferBudget)} de presupuesto de traspasos y ${formatCurrency(projectedWageMargin)}/sem de margen salarial, sin apenas colchón para imprevistos.`
       );
     } else {
       const deficits = [];
@@ -286,11 +294,7 @@ export default function PlannerTab() {
             <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">Presupuesto Traspasos</div>
           </div>
           <div className="min-w-0">
-            {hasWeeklyWageBudget ? (
-              <div className={`text-xs md:text-sm font-black italic truncate ${wageMarginWeekly >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(wageMarginWeekly)}/sem</div>
-            ) : (
-              <div className="text-xs md:text-sm font-black italic text-fg-faint truncate">Sin Límite</div>
-            )}
+            <div className={`text-xs md:text-sm font-black italic truncate ${wageMarginWeekly >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(wageMarginWeekly)}/sem</div>
             <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">Margen Salarial Disp.</div>
           </div>
         </div>
@@ -397,9 +401,9 @@ export default function PlannerTab() {
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10px] font-bold text-fg-muted shrink-0">Margen Salarial</span>
               <span className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[11px] font-black text-fg-faint shrink-0">{hasWeeklyWageBudget ? `${formatCurrency(wageMarginWeekly)}/sem` : 'Sin Límite'}</span>
+                <span className="text-[11px] font-black text-fg-faint shrink-0">{formatCurrency(wageMarginWeekly)}/sem</span>
                 <ArrowRight size={10} className="text-fg-faint shrink-0" />
-                <span className={`text-[11px] font-black truncate ${!hasWeeklyWageBudget ? 'text-fg-faint' : projectedWageMargin >= 0 ? 'text-green-500' : 'text-red-500'}`}>{hasWeeklyWageBudget ? `${formatCurrency(projectedWageMargin)}/sem` : 'Sin Límite'}</span>
+                <span className={`text-[11px] font-black truncate ${projectedWageMargin >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(projectedWageMargin)}/sem</span>
               </span>
             </div>
           </div>

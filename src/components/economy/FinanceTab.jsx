@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Wallet, TrendingUp, TrendingDown, ArrowRightLeft, ArrowDownToLine, Users2, Edit2, Check, X, List, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
-import { formatCurrency, formatValueInput, parseValue } from '../../utils/format';
+import { formatCurrency, formatValueInput, parseValue, weeklyWageBudgetFromTransfer } from '../../utils/format';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import WageBreakdownModal from './WageBreakdownModal';
@@ -53,13 +53,11 @@ const getEffectiveWage = (p) => {
 };
 
 export default function FinanceTab({ onRequestEditPlayerWage, reopenWageBreakdown, onConsumeReopenWageBreakdown }) {
-  const { activeClub, setBudget, setWageBudget } = useClubs();
+  const { activeClub, setBudget } = useClubs();
   const { players, transactions } = useClubData();
 
   const [editingBudget, setEditingBudget] = useState(false);
   const [budgetInput, setBudgetInput] = useState('');
-  const [weeklyWageBudgetInput, setWeeklyWageBudgetInput] = useState('');
-  const [budgetError, setBudgetError] = useState('');
   const [showBudgetInfo, setShowBudgetInfo] = useState(false);
   const [showWageBreakdown, setShowWageBreakdown] = useState(false);
   const [expandedTx, setExpandedTx] = useState(null);
@@ -83,31 +81,18 @@ export default function FinanceTab({ onRequestEditPlayerWage, reopenWageBreakdow
     .sort((a, b) => b.effectiveWage - a.effectiveWage);
   const transferBudget = activeClub?.transferBudget || 0;
 
-  // "weeklyWageBudget == null" (el campo nunca se guardó en Firestore, p. ej. clubes creados
-  // antes de esta función) es la señal de "el club todavía no ha definido un Presup. Sem." —
-  // distinta de haberlo fijado explícitamente a 0. El Planificador de Fichajes de Objetivos lee
-  // este mismo campo para no marcar "excede el margen salarial" cuando no hay ninguno
-  // configurado.
-  const hasWeeklyWageBudget = activeClub?.weeklyWageBudget != null;
-  const weeklyWageBudget = activeClub?.weeklyWageBudget || 0;
+  // El Presup. Sem. ya no se guarda ni se pide a mano: se deriva siempre de transferBudget / 52
+  // (ver weeklyWageBudgetFromTransfer en utils/format.js), así que nunca hay un estado "sin
+  // definir" — cualquier club, nuevo o antiguo, tiene siempre un margen salarial calculable.
+  const weeklyWageBudget = weeklyWageBudgetFromTransfer(transferBudget);
 
   const startEditingBudget = () => {
     setBudgetInput(formatValueInput(String(transferBudget)));
-    setWeeklyWageBudgetInput(hasWeeklyWageBudget ? formatValueInput(String(weeklyWageBudget)) : '');
-    setBudgetError('');
     setEditingBudget(true);
   };
-  // El Presup. Sem. es obligatorio (igual que en el onboarding): no se guarda nada si se deja
-  // vacío o en 0, para no dejar al club con un "sin definir" silencioso a mitad de edición.
   const confirmBudget = async (e) => {
     e.preventDefault();
-    const weekly = parseValue(weeklyWageBudgetInput);
-    if (!weeklyWageBudgetInput.trim() || weekly <= 0) {
-      setBudgetError('El Presup. Sem. (salarios) es obligatorio.');
-      return;
-    }
     await setBudget(parseValue(budgetInput));
-    await setWageBudget(weekly);
     setEditingBudget(false);
   };
 
@@ -124,8 +109,8 @@ export default function FinanceTab({ onRequestEditPlayerWage, reopenWageBreakdow
         </div>
         {showBudgetInfo && (
           <InfoModal title="Presupuesto del Club" onClose={() => setShowBudgetInfo(false)}>
-            <p>Introduce los valores exactos que aparecen en tu Modo Carrera (Menú Oficina &gt; Economía &gt; Presupuesto): la cifra principal corresponde a "Presupuesto actual" y el importe semanal a "Presup. sem.".</p>
-            <p>La app calculará automáticamente tu margen salarial restante.</p>
+            <p>Introduce el valor exacto que aparece en tu Modo Carrera (Menú Oficina &gt; Economía &gt; Presupuesto) como "Presupuesto actual".</p>
+            <p>El Presup. Sem. (margen salarial semanal) ya no se pide: la app lo calcula solo, dividiendo ese presupuesto entre las 52 semanas del año — la misma fórmula exacta que usa EA Sports FC para mostrar su propio "Presup. sem." en Oficina &gt; Economía.</p>
           </InfoModal>
         )}
         {editingBudget ? (
@@ -134,11 +119,12 @@ export default function FinanceTab({ onRequestEditPlayerWage, reopenWageBreakdow
               <label className="text-[9px] font-black text-fg-faint uppercase tracking-wider ml-1">Presupuesto Actual</label>
               <input autoFocus type="text" className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-center font-black text-lg text-fg" value={budgetInput} onChange={(e) => setBudgetInput(formatValueInput(e.target.value))} />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[9px] font-black text-fg-faint uppercase tracking-wider ml-1">Presup. Sem. (Salarios)</label>
-              <input type="text" placeholder="Ej: 500.000" className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-center font-black text-lg text-fg" value={weeklyWageBudgetInput} onChange={(e) => { setWeeklyWageBudgetInput(formatValueInput(e.target.value)); setBudgetError(''); }} />
+            {/* Presup. Sem. ya no se pide: se muestra en modo lectura, recalculado en vivo
+                mientras se escribe el presupuesto de arriba. */}
+            <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-well border border-border-subtle">
+              <span className="text-[9px] font-black text-fg-faint uppercase tracking-wider">Presup. Sem. (Salarios)</span>
+              <span className="text-sm font-black text-green-500">{formatCurrency(weeklyWageBudgetFromTransfer(parseValue(budgetInput)))}/sem</span>
             </div>
-            {budgetError && <p className="text-[9px] font-black text-red-400 uppercase tracking-wide">{budgetError}</p>}
             <div className="flex items-center gap-2">
               <button type="submit" className="flex-1 p-3 bg-green-500 text-black rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-wide"><Check size={16} /> Guardar</button>
               <button type="button" onClick={() => setEditingBudget(false)} className="p-3 bg-well text-fg-muted rounded-xl"><X size={16} /></button>
@@ -147,7 +133,7 @@ export default function FinanceTab({ onRequestEditPlayerWage, reopenWageBreakdow
         ) : (
           <>
             <div className={`text-3xl md:text-4xl font-black italic tracking-tighter relative ${transferBudget < 0 ? 'text-red-500' : 'text-green-500'}`}>{formatCurrency(transferBudget)}</div>
-            <p className="text-[10px] font-bold text-fg-faint mt-1.5 relative">Presup. Sem.: {hasWeeklyWageBudget ? `${formatCurrency(weeklyWageBudget)}/sem` : 'Sin definir'}</p>
+            <p className="text-[10px] font-bold text-fg-faint mt-1.5 relative">Presup. Sem.: {formatCurrency(weeklyWageBudget)}/sem</p>
           </>
         )}
       </div>

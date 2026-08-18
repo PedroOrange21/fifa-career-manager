@@ -47,31 +47,27 @@ export function ClubsProvider({ children }) {
     return () => unsubClubs();
   }, [user, loadingApp]);
 
-  // "initialWeeklyWageBudget": cifra SEMANAL tal cual la muestra EA Sports FC ("Presup. sem."
-  // en Oficina > Economía) — igual que los sueldos de jugadores y objetivos (p.wage/t.wage),
-  // así que se compara directamente contra la masa salarial sin ninguna conversión de unidad.
-  // Se escribe en el mismo setDoc de creación en vez de con una llamada aparte a setWageBudget
-  // justo después, porque esa función depende de "activeClubId" del contexto, que puede no
-  // haberse actualizado todavía al club recién creado en ese mismo instante.
-  const createClub = async (name, logo, initialBudget = 0, initialWeeklyWageBudget = null) => {
+  // El Presupuesto Semanal (salarios) ya no se pide ni se guarda: se calcula siempre al vuelo
+  // como Presupuesto de Traspasos / 52 (ver weeklyWageBudgetFromTransfer en utils/format.js),
+  // fórmula verificada empíricamente contra el propio EA Sports FC (1.000.000.000 € de
+  // presupuesto -> 19.230.769 €/sem exactos en el juego real).
+  const createClub = async (name, logo, initialBudget = 0) => {
     if (!user || !name.trim()) return null;
     const isFirstClub = clubs.length === 0;
     const clubId = crypto.randomUUID();
     const budget = Number(initialBudget) || 0;
-    const weeklyWageBudget = initialWeeklyWageBudget != null ? Number(initialWeeklyWageBudget) : null;
     await setDoc(clubDoc(user.uid, clubId), {
       name: name.trim(),
       logo: logo || null,
       createdAt: Date.now(),
       transferBudget: budget,
-      weeklyWageBudget,
       currentSeasonNumber: 1,
       // Los clubes creados a partir de aquí ya registran los sueldos de jugadores/objetivos
       // directamente en semanal (ver ClubDataContext, migración "wageMigrationV1"): se marcan
       // como ya migrados desde el origen para que ese efecto nunca los reconvierta.
       wageMigrationV1: true,
     });
-    setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: budget, weeklyWageBudget, currentSeasonNumber: 1, wageMigrationV1: true }]));
+    setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: budget, currentSeasonNumber: 1, wageMigrationV1: true }]));
     // No cierra showClubModal aquí: el asistente de creación (OnboardingWizardModal) sigue
     // abierto tras crear el club para encadenar el registro de jugadores, y es él quien decide
     // cuándo cerrarse (Omitir o Entrar a mi Club).
@@ -121,17 +117,6 @@ export function ClubsProvider({ children }) {
     await updateDoc(clubDoc(user.uid, activeClubId), { transferBudget: amount });
   };
 
-  // Presupuesto de Salarios: siempre se guarda en Firestore como cifra SEMANAL
-  // (weeklyWageBudget), exactamente la que EA Sports FC muestra en Oficina > Economía como
-  // "Presup. sem." — mismo periodo en el que se guardan p.wage/t.wage en el resto de la app,
-  // así que no hace falta ninguna conversión de unidad al compararlos. "activeClub.
-  // weeklyWageBudget == null" es la señal de "sin definir todavía", distinta de haberlo
-  // fijado explícitamente a 0.
-  const setWageBudget = async (weeklyAmount) => {
-    if (!user || !activeClubId) return;
-    await updateDoc(clubDoc(user.uid, activeClubId), { weeklyWageBudget: weeklyAmount });
-  };
-
   const incrementSeasonNumber = async () => {
     if (!user || !activeClubId) return;
     await updateDoc(clubDoc(user.uid, activeClubId), { currentSeasonNumber: increment(1) });
@@ -151,7 +136,7 @@ export function ClubsProvider({ children }) {
     clubToDelete, setClubToDelete,
     editingClub, setEditingClub,
     createClub, updateClub, confirmDeleteClub,
-    adjustBudget, setBudget, setWageBudget, incrementSeasonNumber, completeOnboarding,
+    adjustBudget, setBudget, incrementSeasonNumber, completeOnboarding,
   };
 
   return <ClubsContext.Provider value={value}>{children}</ClubsContext.Provider>;

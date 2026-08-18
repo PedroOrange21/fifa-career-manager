@@ -42,6 +42,14 @@ export const formatMoneyLiveWithCursor = (input, onFormatted) => {
   });
 };
 
+// El Presupuesto Semanal (margen salarial semanal) ya no se pide ni se guarda a mano en
+// ningún formulario: se deriva siempre del Presupuesto de Traspasos del club dividido entre
+// las 52 semanas del año — fórmula verificada empíricamente contra el propio EA Sports FC
+// (1.000.000.000 € de presupuesto -> 19.230.769 €/sem exactos en una partida real). Único
+// punto de cálculo, usado en Finanzas, Onboarding y el Planificador de Fichajes (incluida la
+// proyección tras aplicar compras/ventas/premios) para no duplicar la fórmula.
+export const weeklyWageBudgetFromTransfer = (transferBudget) => Math.round((transferBudget || 0) / 52);
+
 // "val" normalmente es un número ya calculado (suma de sueldos, presupuesto, importe*% ...),
 // no una cadena formateada con puntos de miles — por eso NO debe pasar por parseValue()
 // (pensada para leer cadenas "1.234.567" de un <input>, donde el punto es separador de miles).
