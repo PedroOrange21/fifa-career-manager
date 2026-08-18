@@ -1,31 +1,76 @@
-import { useRef, useState } from 'react';
-import { X, ChevronLeft, Camera, Image as ImageIcon, RefreshCcw, ShieldAlert, ScanLine } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { X, ChevronLeft, Camera, Image as ImageIcon, ShieldAlert, ScanLine } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import { scanPlayerCard, mapScanResultToPrefill } from '../../services/geminiPlayerScan';
 import { prepareImageForScan } from '../../utils/imagePrep';
 
+// Fases visibles del escaneo, mapeadas a los dos pasos asíncronos reales del proceso
+// (prepareImageForScan y scanPlayerCard): como ninguno de los dos reporta progreso real,
+// cada fase "repta" hacia su techo sin llegar a tocarlo mientras se espera de verdad, y salta
+// al techo exacto en cuanto el paso correspondiente termina — así la barra siempre refleja
+// trabajo en curso, nunca se queda parada ni se adelanta a lo que realmente ha terminado.
+const PHASES = [
+  { ceiling: 25, label: 'Preparando y optimizando imagen...' },
+  { ceiling: 50, label: 'Procesando compatibilidad (HEIC/JPEG)...' },
+  { ceiling: 85, label: 'Analizando datos con Gemini IA...' },
+  { ceiling: 100, label: 'Extrayendo estadísticas y rellenando formulario...' },
+];
+const getPhaseLabel = (progress) => (PHASES.find((p) => progress < p.ceiling) || PHASES[PHASES.length - 1]).label;
+
 // Tercer paso de "Fichar Jugador" (tras elegir Escanear con IA en AddPlayerChoiceModal):
-// instrucciones + dos formas de aportar la imagen (cámara del móvil o galería), indicador de
-// carga mientras se procesa/analiza la foto, y manejo de errores con reintento — sin salir
+// instrucciones + dos formas de aportar la imagen (cámara del móvil o galería), barra de
+// progreso mientras se procesa/analiza la foto, y manejo de errores con reintento — sin salir
 // nunca de este mismo modal hasta tener un resultado o cancelar. onExtracted recibe el objeto
-// "prefill" ya traducido a los campos de PlayerForm. onBack (oculto durante el procesado/
-// análisis, igual que el cierre) vuelve al paso de Método sin perder el flujo de alta.
+// "prefill" ya traducido a los campos de PlayerForm. onBack (oculto durante el escaneo, igual
+// que el cierre) vuelve al paso de Método sin perder el flujo de alta.
 export default function ScanPlayerCardModal({ onClose, onExtracted, onBack }) {
   useBodyScrollLock();
   useAutoHideChrome();
 
-  const [status, setStatus] = useState('idle'); // 'idle' | 'processing' | 'loading' | 'error'
+  const [status, setStatus] = useState('idle'); // 'idle' | 'scanning' | 'error'
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState('');
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
+  const progressTimerRef = useRef(null);
+
+  const stopProgressTimer = () => {
+    if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
+  };
+  useEffect(() => stopProgressTimer, []);
+
+  // Sube el progreso acercándose cada vez más despacio a "ceiling" sin llegar nunca a tocarlo,
+  // dando sensación de trabajo real en curso mientras dura una promesa de duración desconocida.
+  const creepProgressTo = (ceiling) => {
+    stopProgressTimer();
+    progressTimerRef.current = setInterval(() => {
+      setProgress((p) => (p >= ceiling - 0.5 ? p : Math.min(ceiling - 0.5, p + Math.max(0.4, (ceiling - p) * 0.08))));
+    }, 150);
+  };
+
+  // Última fase ("Extrayendo estadísticas..."): a diferencia de las anteriores no espera a
+  // ninguna promesa externa, así que se anima con un tramo corto y fijo en vez de "reptar"
+  // indefinidamente, para que el 100% sea visible un instante antes de abrir el formulario.
+  const animateToComplete = () => new Promise((resolve) => {
+    stopProgressTimer();
+    progressTimerRef.current = setInterval(() => {
+      setProgress((p) => {
+        const next = p + 4;
+        if (next >= 100) { stopProgressTimer(); setTimeout(resolve, 200); return 100; }
+        return next;
+      });
+    }, 40);
+  });
 
   const processFile = async (file) => {
     if (!file) return;
     setError('');
-    setStatus('processing');
+    setStatus('scanning');
+    setProgress(0);
 
+    creepProgressTo(50); // Fases 1-2: preparar/optimizar y compatibilidad HEIC/JPEG.
     let preparedFile;
     try {
       preparedFile = await prepareImageForScan(file);
@@ -36,13 +81,19 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBack }) {
       console.error('Error preparando la imagen (conversión/compresión):', err);
       preparedFile = file;
     }
-
+    stopProgressTimer();
+    setProgress(50);
     setPreview(URL.createObjectURL(preparedFile));
-    setStatus('loading');
+
+    creepProgressTo(85); // Fase 3: análisis con Gemini.
     try {
       const extracted = await scanPlayerCard(preparedFile);
+      stopProgressTimer();
+      setProgress(85);
+      await animateToComplete(); // Fase 4: extrayendo estadísticas.
       onExtracted(mapScanResultToPrefill(extracted));
     } catch (err) {
+      stopProgressTimer();
       console.error('Error de /api/scan-player:', err);
       setError(err.message || 'No se pudo analizar la imagen. Inténtalo de nuevo.');
       setStatus('error');
@@ -56,28 +107,32 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBack }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={status === 'loading' || status === 'processing' ? undefined : onClose}>
+    <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={status === 'scanning' ? undefined : onClose}>
       <div className="bg-surface border border-border p-5 rounded-[32px] w-full max-w-sm shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2">
-            {onBack && status !== 'loading' && status !== 'processing' && (
+            {onBack && status !== 'scanning' && (
               <button type="button" onClick={onBack} className="p-1 -ml-1 text-fg-faint hover:text-fg transition-colors"><ChevronLeft size={18} /></button>
             )}
             <h3 className="font-black italic text-blue-400 text-sm uppercase flex items-center gap-2"><ScanLine size={16} /> Escanear con IA</h3>
           </div>
-          {status !== 'loading' && status !== 'processing' && (
+          {status !== 'scanning' && (
             <button type="button" onClick={onClose} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
           )}
         </div>
 
-        {status === 'processing' || status === 'loading' ? (
+        {status === 'scanning' ? (
           <div className="flex flex-col items-center gap-4 py-8">
             {preview && <img src={preview} alt="Tarjeta escaneada" className="w-32 h-32 rounded-2xl object-cover border border-border-subtle opacity-60" />}
-            <RefreshCcw size={28} className="text-blue-400 animate-spin" />
-            <p className="text-[10px] font-black uppercase tracking-widest text-fg-muted text-center">
-              {status === 'processing' ? 'Procesando imagen...' : 'Analizando la tarjeta con IA...'}
-            </p>
-            <p className="text-[9px] font-bold text-fg-faint text-center">Puede tardar unos segundos.</p>
+            <div className="w-full space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-fg-muted">{getPhaseLabel(progress)}</p>
+                <span className="text-xs font-black text-blue-400 tabular-nums shrink-0">{Math.round(progress)}%</span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-well-strong overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full transition-[width] duration-300 ease-out" style={{ width: `${progress}%` }} />
+              </div>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
