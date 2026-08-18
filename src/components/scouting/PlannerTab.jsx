@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Wallet, TrendingDown, TrendingUp, Scale, CheckCircle2, AlertTriangle, Check } from 'lucide-react';
+import { Wallet, TrendingDown, TrendingUp, Scale, CheckCircle2, AlertTriangle, Check, Gift, ChevronDown, ChevronUp, ArrowRight, Pencil } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useClubs } from '../../context/ClubsContext';
 import { getCardStyle } from '../../utils/cardStyle';
@@ -17,6 +17,14 @@ const getEffectiveWage = (p) => {
 };
 
 const positionsOf = (t) => t.positions || (t.primaryPosition ? [t.primaryPosition, ...(t.secondaryPositions || [])] : []);
+
+// Une una lista en prosa natural en español ("A", "A y B", "A, B y C"), usada por el informe
+// narrativo de viabilidad para mencionar jugadores por su nombre sin dejar comas sueltas.
+const joinNatural = (items) => {
+  if (items.length === 0) return '';
+  if (items.length === 1) return items[0];
+  return `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`;
+};
 
 // Fila compacta y seleccionable del bloque "Entradas / Compras": toda la fila es un único
 // botón (checkbox + badge + nombre + traspaso/sueldo estimados), sin acciones propias — fichar
@@ -45,10 +53,10 @@ function BuyRow({ t, selected, onToggle }) {
   );
 }
 
-// Fila del bloque "Salidas / Ventas": a diferencia de BuyRow, el importe de venta es editable
-// (precargado con el valor de mercado del jugador) sin salir de la fila, así que el checkbox y
-// el nombre son un botón independiente del campo de importe — evita que escribir en el input
-// dispare también la selección/deselección de la fila.
+// Fila del bloque "Salidas / Ventas": mismo bloque de importe (tipografía, alineación y color)
+// que BuyRow — solo que aquí la cifra de venta es editable (precargada con el valor de mercado
+// del jugador) sin salir de la fila, así que el checkbox y el nombre son un botón independiente
+// del campo de importe, para que escribir en él no dispare también la selección de la fila.
 function SellRow({ p, selected, onToggle, saleValue, onSaleValueChange }) {
   const wage = getEffectiveWage(p);
   const [inputValue, setInputValue] = useState(formatValueInput(String(saleValue || '')));
@@ -71,31 +79,40 @@ function SellRow({ p, selected, onToggle, saleValue, onSaleValueChange }) {
         <span className="block font-bold text-sm text-fg truncate">{p.name}</span>
         <span className="block text-[8px] font-black uppercase tracking-widest text-fg-faint truncate">{p.positions?.join(' · ') || '—'} · {p.transferStatus === 'Cedible' ? 'Cedible' : 'Transferible'}</span>
       </button>
-      <div className="text-right shrink-0 leading-tight">
-        <input
-          type="text"
-          inputMode="numeric"
-          value={inputValue}
-          onClick={(e) => e.stopPropagation()}
-          onChange={handleChange}
-          className="w-24 bg-well-strong rounded-lg text-right text-xs font-black text-fg px-2 py-1 outline-none border border-transparent focus:border-green-500"
-        />
-        <div className="text-[8px] font-bold text-fg-faint mt-1">{wage > 0 ? `-${formatCurrency(wage)}/sem` : 'Sin salario'}</div>
-      </div>
+      <span className="text-right shrink-0 leading-tight">
+        <span className="flex items-center justify-end gap-1">
+          <Pencil size={8} className="text-fg-faint shrink-0" />
+          <input
+            type="text"
+            inputMode="numeric"
+            value={inputValue}
+            onClick={(e) => e.stopPropagation()}
+            onChange={handleChange}
+            className="w-16 bg-transparent text-right text-xs font-black text-fg outline-none border-b border-dashed border-border-subtle focus:border-solid focus:border-green-500"
+          />
+          <span className="text-xs font-black text-fg">€</span>
+        </span>
+        <span className="block text-[8px] font-bold text-fg-faint mt-0.5">{wage > 0 ? `-${formatCurrency(wage)}/sem` : 'Sin salario liberado'}</span>
+      </span>
     </div>
   );
 }
 
 // Planificador de Fichajes: simulador de balance de mercado independiente de Objetivos, que
 // combina en un único cálculo las incorporaciones previstas (objetivos en seguimiento
-// marcados) y las salidas previstas (jugadores en Transferibles/Cedibles marcados), frente a
-// los fondos reales del club (Presupuesto de Traspasos y Margen Salarial Semanal de Finanzas).
+// marcados), las salidas previstas (jugadores en Transferibles/Cedibles marcados) y los
+// premios/bonificaciones estimados, frente a los fondos reales del club (Presupuesto de
+// Traspasos y Margen Salarial Semanal de Finanzas), cerrando con un informe narrativo que
+// explica el impacto de cada elemento seleccionado y el veredicto final de viabilidad.
 export default function PlannerTab() {
   const { activeClub } = useClubs();
   const { targets, players } = useClubData();
   const [selectedTargetIds, setSelectedTargetIds] = useState(new Set());
   const [selectedPlayerIds, setSelectedPlayerIds] = useState(new Set());
   const [saleValues, setSaleValues] = useState({});
+  const [showBonus, setShowBonus] = useState(false);
+  const [bonusLabel, setBonusLabel] = useState('');
+  const [bonusInput, setBonusInput] = useState('');
 
   const toggleTarget = (id) => setSelectedTargetIds((prev) => {
     const next = new Set(prev);
@@ -108,6 +125,7 @@ export default function PlannerTab() {
     return next;
   });
   const setSaleValue = (id, val) => setSaleValues((prev) => ({ ...prev, [id]: val }));
+  const bonusAmount = parseValue(bonusInput);
 
   // Transferibles y Cedibles se combinan en un único bloque de "salida" (simulador, no la
   // operación real): ambos liberan la masa salarial completa del jugador y ambos admiten un
@@ -132,13 +150,80 @@ export default function PlannerTab() {
   const currentWageBillWeekly = players.reduce((sum, p) => sum + getEffectiveWage(p), 0);
   const wageMarginWeekly = weeklyWageBudget - currentWageBillWeekly;
 
-  const netTransferBalance = (transferBudget + sellIncomeTotal) - buyTransferTotal;
-  const netWageBalance = (wageMarginWeekly + sellWageFreedTotal) - buyWageTotal;
+  // Fondos proyectados: el resultado final de aplicar toda la simulación (compras + ventas +
+  // premios) sobre los fondos actuales — no un simple delta, sino la cifra absoluta con la que
+  // quedaría el club si se ejecutara tal cual está marcada.
+  const projectedTransferBudget = (transferBudget + sellIncomeTotal + bonusAmount) - buyTransferTotal;
+  const projectedWageMargin = (wageMarginWeekly + sellWageFreedTotal) - buyWageTotal;
 
-  const hasActivity = selectedTargets.length > 0 || selectedSellers.length > 0;
-  const transferFails = netTransferBalance < 0;
-  const wageFails = hasWeeklyWageBudget && netWageBalance < 0;
+  const hasActivity = selectedTargets.length > 0 || selectedSellers.length > 0 || bonusAmount > 0;
+  const transferFails = projectedTransferBudget < 0;
+  const wageFails = hasWeeklyWageBudget && projectedWageMargin < 0;
   const isViable = !transferFails && !wageFails;
+
+  // "Totalmente sostenible" exige no solo no caer en déficit, sino conservar un colchón
+  // razonable (15% de los fondos originales) en ambos frentes — si no, aunque siga siendo
+  // viable, se describe como "ajustada" en el informe narrativo de más abajo.
+  const transferComfortable = transferBudget > 0 ? projectedTransferBudget >= transferBudget * 0.15 : projectedTransferBudget >= 0;
+  const wageComfortable = !hasWeeklyWageBudget || (weeklyWageBudget > 0 ? projectedWageMargin >= weeklyWageBudget * 0.15 : projectedWageMargin >= 0);
+  const isComfortable = isViable && transferComfortable && wageComfortable;
+
+  const handleBonusChange = (e) => setBonusInput(formatValueInput(e.target.value));
+
+  // Informe narrativo: un párrafo por bloque con actividad (fichajes, salidas, premios) que
+  // menciona a cada jugador implicado por su nombre y su impacto concreto, cerrado siempre por
+  // el veredicto financiero (sostenible / ajustada / en déficit, con las cifras exactas).
+  const buildNarrative = () => {
+    const paragraphs = [];
+
+    if (selectedTargets.length > 0) {
+      const phrases = selectedTargets.map((t) => {
+        const bits = [];
+        if (t.estimatedValue > 0) bits.push(formatCurrency(t.estimatedValue));
+        if (t.wage > 0) bits.push(`${formatCurrency(t.wage)}/sem`);
+        return `${t.name}${bits.length ? ` (${bits.join(' y ')})` : ''}`;
+      });
+      paragraphs.push(
+        `Para acometer ${selectedTargets.length === 1 ? 'el fichaje de' : 'los fichajes de'} ${joinNatural(phrases)}, el club destinaría ${formatCurrency(buyTransferTotal)} en traspasos y asumiría ${formatCurrency(buyWageTotal)}/sem más en nómina.`
+      );
+    }
+
+    if (selectedSellers.length > 0) {
+      const phrases = selectedSellers.map((p) => {
+        const value = saleValueFor(p);
+        const wage = getEffectiveWage(p);
+        const verb = p.transferStatus === 'Cedible' ? 'la cesión' : 'la venta';
+        const bits = [];
+        if (value > 0) bits.push(`aportará +${formatCurrency(value)} a las arcas`);
+        if (wage > 0) bits.push(`liberará ${formatCurrency(wage)}/sem de masa salarial`);
+        return `${verb} de ${p.name}${bits.length ? ` ${bits.join(' y ')}` : ' no tiene impacto económico registrado'}`;
+      });
+      paragraphs.push(`En el otro lado de la operación, ${joinNatural(phrases)}.`);
+    }
+
+    if (bonusAmount > 0) {
+      paragraphs.push(
+        `A esto se suman los +${formatCurrency(bonusAmount)} previstos${bonusLabel.trim() ? ` por ${bonusLabel.trim()}` : ' en premios y bonificaciones'}, que se incorporan directamente al presupuesto de traspasos.`
+      );
+    }
+
+    if (isComfortable) {
+      paragraphs.push(
+        `Con todo esto, la operación es totalmente sostenible: el club cerraría con ${formatCurrency(projectedTransferBudget)} de presupuesto de traspasos${hasWeeklyWageBudget ? ` y ${formatCurrency(projectedWageMargin)}/sem de margen salarial` : ''} libres para seguir operando en el mercado.`
+      );
+    } else if (isViable) {
+      paragraphs.push(
+        `Con todo esto, la operación es viable pero queda muy ajustada: solo restarían ${formatCurrency(projectedTransferBudget)} de presupuesto de traspasos${hasWeeklyWageBudget ? ` y ${formatCurrency(projectedWageMargin)}/sem de margen salarial` : ''}, sin apenas colchón para imprevistos.`
+      );
+    } else {
+      const deficits = [];
+      if (transferFails) deficits.push(`un déficit de ${formatCurrency(Math.abs(projectedTransferBudget))} en el presupuesto de traspasos`);
+      if (wageFails) deficits.push(`un déficit de ${formatCurrency(Math.abs(projectedWageMargin))}/sem en el margen salarial`);
+      paragraphs.push(`Con todo esto, la operación NO es viable: generaría ${joinNatural(deficits)}.`);
+    }
+
+    return paragraphs;
+  };
 
   return (
     <div className="space-y-4 animate-in fade-in">
@@ -207,42 +292,84 @@ export default function PlannerTab() {
         )}
       </div>
 
-      {/* Balance final: combina ambos bloques frente a los fondos reales del club. */}
-      {hasActivity ? (
-        <div className="bg-surface p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl space-y-3">
-          <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2"><Scale size={14} className="shrink-0" /> Balance de la Operación</span>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="min-w-0">
-              <div className={`text-sm md:text-base font-black italic truncate ${netTransferBalance >= 0 ? 'text-green-500' : 'text-red-500'}`}>{netTransferBalance >= 0 ? '+' : ''}{formatCurrency(netTransferBalance)}</div>
-              <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">Balance Traspasos</div>
+      {/* Premios y Bonificaciones estimadas: ingreso extra opcional (Liga, Copa, pretemporada,
+          objetivos de rendimiento...) que se suma directamente al presupuesto de traspasos de
+          la simulación. Desplegable para no ocupar espacio cuando no se usa. */}
+      <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden shadow-2xl">
+        <button type="button" onClick={() => setShowBonus((v) => !v)} className="w-full p-4 flex items-center justify-between gap-2 touch-manipulation">
+          <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2"><Gift size={14} className="text-yellow-500 shrink-0" /> Premios y Bonificaciones Estimadas</span>
+          <div className="flex items-center gap-2 shrink-0">
+            {bonusAmount > 0 && <span className="text-xs font-black text-yellow-500">+{formatCurrency(bonusAmount)}</span>}
+            {showBonus ? <ChevronUp size={14} className="text-fg-faint" /> : <ChevronDown size={14} className="text-fg-faint" />}
+          </div>
+        </button>
+        {showBonus && (
+          <div className="px-4 pb-4 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150">
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-fg-muted ml-1">Concepto (opcional)</label>
+              <input
+                type="text"
+                placeholder="Ej: Premio por ganar Liga, Copa, Torneo de pretemporada..."
+                value={bonusLabel}
+                onChange={(e) => setBonusLabel(e.target.value)}
+                className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-yellow-500 text-sm font-bold text-fg placeholder:text-fg-faint"
+              />
             </div>
-            <div className="min-w-0">
-              {hasWeeklyWageBudget ? (
-                <div className={`text-sm md:text-base font-black italic truncate ${netWageBalance >= 0 ? 'text-green-500' : 'text-red-500'}`}>{netWageBalance >= 0 ? '+' : ''}{formatCurrency(netWageBalance)}/sem</div>
-              ) : (
-                <div className="text-sm md:text-base font-black italic text-fg-faint truncate">Sin Límite</div>
-              )}
-              <div className="text-[8px] font-bold text-fg-faint uppercase tracking-widest">Balance Salarial</div>
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-fg-muted ml-1">Importe Estimado (€)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="Ej: 5.000.000"
+                value={bonusInput}
+                onChange={handleBonusChange}
+                className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-yellow-500 text-center font-black text-lg text-fg placeholder:text-fg-faint"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Balance final: fondos actuales vs. proyectados tras aplicar toda la simulación, más
+          el informe narrativo detallado del impacto de cada elemento y el veredicto final. */}
+      {hasActivity ? (
+        <div className="bg-surface p-4 md:p-5 rounded-[24px] md:rounded-[32px] border border-border-subtle shadow-2xl space-y-4">
+          <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-2"><Scale size={14} className="shrink-0" /> Balance de la Operación</span>
+
+          {/* Comparativa Fondos Actuales -> Fondos Proyectados. */}
+          <div className="space-y-2 pb-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-bold text-fg-muted shrink-0">Presup. Traspasos</span>
+              <span className="flex items-center gap-1.5 min-w-0">
+                <span className="text-xs font-black text-fg-faint shrink-0">{formatCurrency(transferBudget)}</span>
+                <ArrowRight size={11} className="text-fg-faint shrink-0" />
+                <span className={`text-xs font-black truncate ${projectedTransferBudget >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(projectedTransferBudget)}</span>
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-bold text-fg-muted shrink-0">Margen Salarial</span>
+              <span className="flex items-center gap-1.5 min-w-0">
+                <span className="text-xs font-black text-fg-faint shrink-0">{hasWeeklyWageBudget ? `${formatCurrency(wageMarginWeekly)}/sem` : 'Sin Límite'}</span>
+                <ArrowRight size={11} className="text-fg-faint shrink-0" />
+                <span className={`text-xs font-black truncate ${!hasWeeklyWageBudget ? 'text-fg-faint' : projectedWageMargin >= 0 ? 'text-green-500' : 'text-red-500'}`}>{hasWeeklyWageBudget ? `${formatCurrency(projectedWageMargin)}/sem` : 'Sin Límite'}</span>
+              </span>
             </div>
           </div>
 
-          <div className={`p-3 rounded-xl border flex items-start gap-2 ${isViable ? 'bg-green-500/10 border-green-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
-            {isViable ? <CheckCircle2 size={16} className="text-green-500 shrink-0 mt-0.5" /> : <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />}
+          <div className={`p-3 rounded-xl border flex items-start gap-2 ${isComfortable ? 'bg-green-500/10 border-green-500/20' : isViable ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+            {isComfortable ? <CheckCircle2 size={16} className="text-green-500 shrink-0 mt-0.5" /> : isViable ? <AlertTriangle size={16} className="text-yellow-500 shrink-0 mt-0.5" /> : <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />}
             <div className="min-w-0">
-              <div className={`text-[10px] font-black uppercase tracking-widest ${isViable ? 'text-green-500' : 'text-red-400'}`}>{isViable ? 'Viable' : 'No Viable'}</div>
-              {isViable ? (
-                <p className="text-[9px] font-bold text-fg-muted mt-0.5">La operación combinada (compras + ventas) es asumible con el presupuesto y el margen salarial actuales.</p>
-              ) : (
-                <div className="text-[9px] font-bold text-fg-muted mt-0.5 space-y-0.5">
-                  {transferFails && <p>Falta presupuesto de traspasos: {formatCurrency(Math.abs(netTransferBalance))}.</p>}
-                  {wageFails && <p>Falta margen salarial semanal: {formatCurrency(Math.abs(netWageBalance))}/sem.</p>}
-                </div>
-              )}
+              <div className={`text-[10px] font-black uppercase tracking-widest ${isComfortable ? 'text-green-500' : isViable ? 'text-yellow-500' : 'text-red-400'}`}>
+                {isComfortable ? 'Totalmente Viable' : isViable ? 'Viable (Margen Ajustado)' : 'No Viable'}
+              </div>
+              <div className="text-[9px] font-bold text-fg-muted mt-1 space-y-1.5 leading-relaxed">
+                {buildNarrative().map((paragraph, i) => <p key={i}>{paragraph}</p>)}
+              </div>
             </div>
           </div>
         </div>
       ) : (
-        <div className="p-10 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Selecciona objetivos y/o jugadores para calcular el balance</div>
+        <div className="p-10 text-center text-fg-faint font-black italic uppercase tracking-widest text-xs">Selecciona objetivos, jugadores o añade premios para calcular el balance</div>
       )}
     </div>
   );
