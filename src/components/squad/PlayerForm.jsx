@@ -50,8 +50,9 @@ const LOAN_DURATION_OPTIONS = [
   { value: '2 Temporadas', label: '2 Temporadas' },
 ];
 
-// Rol Pactado: expectativa de peso en la plantilla acordada al fichar/traer cedido al
-// jugador (no aplica a Cantera, que todavía no tiene un rol competitivo definido).
+// Relevancia (antes "Rol Pactado"): expectativa de peso en la plantilla acordada al fichar/
+// traer cedido al jugador (no aplica a Cantera, que todavía no tiene un rol competitivo
+// definido).
 const AGREED_ROLE_OPTIONS = [
   { value: 'Crucial', label: 'Crucial' },
   { value: 'Importante', label: 'Importante' },
@@ -99,7 +100,7 @@ const toFormState = (p) => {
     wage: formatValueInput(String(p?.wage || '')),
     releaseClause: formatValueInput(String(p?.releaseClause || '')),
     contractYears: p?.contractYears || '',
-    // Club de Procedencia y Rol Pactado: contexto de scouting/plantilla aplicable a cualquier
+    // Club de Procedencia y Relevancia: contexto de scouting/plantilla aplicable a cualquier
     // incorporación al primer equipo (Comprado o Cedido), distinto de "Club de Origen" (que es
     // específico del modelo de cesión entrante, el club que sigue siendo dueño del jugador).
     sourceClub: p?.sourceClub || '',
@@ -164,7 +165,7 @@ function SectionHeader({ emoji, title }) {
 // — esos jugadores nunca vinieron de otro club (son la base original del club), así que el
 // campo Club de Procedencia se oculta por completo (Paso 3 y Paso 4) y se guarda tal cual venga
 // en "prefill.sourceClub" (ver OnboardingWizard, que lo fija a "En el club desde el inicio")
-// sin que el usuario pueda tocarlo. Rol Pactado no se ve afectado, sigue visible y editable.
+// sin que el usuario pueda tocarlo. Relevancia no se ve afectada, sigue visible y editable.
 // skipInitialTransaction: usado por el asistente de configuración inicial del club (Create
 // Your Club) — un "Comprado" registrado ahí es estado base previo, no una compra real, así
 // que no debe descontar presupuesto ni generar un registro en el historial de transacciones.
@@ -446,7 +447,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
         value: form.type === 'Comprado' ? parseValue(form.value) : 0,
         loanDuration: form.type === 'Cedido' ? form.loanDuration : null,
         originClub: form.type === 'Cedido' ? form.originClub.trim() : null,
-        // Club de Procedencia y Rol Pactado: aplican a Comprado y Cedido por igual, nunca a
+        // Club de Procedencia y Relevancia: aplican a Comprado y Cedido por igual, nunca a
         // Cantera (ver guard del propio campo en el Paso 3/Revisión).
         sourceClub: form.type !== 'Cantera' && form.sourceClub.trim() ? form.sourceClub.trim() : null,
         agreedRole: form.type !== 'Cantera' && form.agreedRole ? form.agreedRole : null,
@@ -684,10 +685,10 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                       </div>
                     </div>
                   )}
-                  {/* Club de Procedencia y Rol Pactado: aplican a cualquier incorporación al
+                  {/* Club de Procedencia y Relevancia: aplican a cualquier incorporación al
                       primer equipo (Comprado o Cedido), nunca a Cantera. Club de Procedencia
                       se oculta por completo si hideSourceClub (partida "Empieza desde Cero"):
-                      Rol Pactado ocupa entonces la fila completa, sin dejar hueco vacío. */}
+                      Relevancia ocupa entonces la fila completa, sin dejar hueco vacío. */}
                   {form.type !== 'Cantera' && (
                     <div className={hideSourceClub ? '' : 'grid grid-cols-2 gap-3'}>
                       {!hideSourceClub && (
@@ -697,7 +698,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                         </div>
                       )}
                       <div className="space-y-1 relative">
-                        <label className="text-[9px] font-black text-fg-muted ml-1">Rol Pactado</label>
+                        <label className="text-[9px] font-black text-fg-muted ml-1">Relevancia</label>
                         <Dropdown value={form.agreedRole} options={AGREED_ROLE_OPTIONS} onChange={(v) => set({ agreedRole: v })} placeholder="Seleccionar" labelClassName="text-xs" />
                       </div>
                     </div>
@@ -913,7 +914,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                             <input autoFocus type="text" placeholder="Ej: Sporting Gijón" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.sourceClub} onChange={(e) => set({ sourceClub: e.target.value })} />
                           </ReviewRow>
                         )}
-                        <ReviewRow label="Rol Pactado" active={editField === 'agreedRole'} onOpen={() => setEditField('agreedRole')} display={form.agreedRole || 'Sin definir'}>
+                        <ReviewRow label="Relevancia" active={editField === 'agreedRole'} onOpen={() => setEditField('agreedRole')} display={form.agreedRole || 'Sin definir'}>
                           <Dropdown value={form.agreedRole} options={AGREED_ROLE_OPTIONS} onChange={(v) => { set({ agreedRole: v }); setEditField(null); }} placeholder="Seleccionar" />
                         </ReviewRow>
                       </>

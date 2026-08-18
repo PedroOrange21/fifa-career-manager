@@ -231,7 +231,7 @@ export default function FinanceTab({ onRequestEditPlayerWage, reopenWageBreakdow
                         <>
                           <DetailLine label="Precio de Traspaso Pagado" value={`-${formatCurrency(t.amount)}`} />
                           <DetailLine label={t.type === 'compra' ? 'Club de Procedencia' : 'Club de Origen'} value={(t.type === 'compra' ? t.sourceClub : t.club) || 'Sin definir'} />
-                          <DetailLine label="Rol Pactado" value={t.agreedRole || 'Sin definir'} />
+                          <DetailLine label="Relevancia" value={t.agreedRole || 'Sin definir'} />
                           {/* Dos filas superpuestas (semana arriba, año abajo en formato más
                               sutil) en vez de un único valor inline, mismo patrón que el resto
                               de la app. */}
