@@ -87,6 +87,10 @@ const toFormState = (p) => {
     secondaryPositions: positions.slice(1) || [],
     rating: p?.rating ? String(p.rating) : '',
     age: p?.age ? String(p.age) : '',
+    // Altura/Peso: datos físicos aplicables a cualquier jugador (incluida la Cantera), a
+    // diferencia del resto de campos de este bloque, exclusivos de Comprado/Cedido.
+    height: p?.height ? String(p.height) : '',
+    weight: p?.weight ? String(p.weight) : '',
     preferredFoot: p?.preferredFoot || 'Diestro',
     type: p?.type || 'Comprado',
     marketValue: formatValueInput(String(p?.marketValue || p?.value || '')),
@@ -105,6 +109,14 @@ const toFormState = (p) => {
     // específico del modelo de cesión entrante, el club que sigue siendo dueño del jugador).
     sourceClub: p?.sourceClub || '',
     agreedRole: p?.agreedRole || '',
+    // Estado, Cláusula de Reventa, Primas Extra y Prima de Fichaje: datos económicos
+    // adicionales, opcionales, exclusivos de Comprado/Cedido igual que Valor de Mercado/Sueldo
+    // — nunca aplican a Cantera. "estado" es texto libre (p. ej. "Descontento", "Feliz"), no
+    // un desplegable fijo, para no limitar lo que pueda venir de la tarjeta escaneada.
+    statusNote: p?.statusNote || '',
+    resaleClausePercent: p?.resaleClausePercent != null ? String(p.resaleClausePercent) : '',
+    extraBonuses: formatValueInput(String(p?.extraBonuses || '')),
+    signingBonus: formatValueInput(String(p?.signingBonus || '')),
     // No editables por el asistente en sí (transferStatus se cambia desde la Plantilla/Táctica,
     // no aquí), pero deben conservarse al guardar: si no se incluyeran en el payload de
     // handleConfirm, cualquier edición desde el Paso 4 resetearía en silencio a un jugador
@@ -198,7 +210,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
   // limitado por effectiveRestrictTypes a Comprado/Cedido en el Paso 3.
   const chooseDestination = (dest) => {
     setDestination(dest);
-    if (dest === 'academy') set({ type: 'Cantera', marketValue: '', wage: '', releaseClause: '', contractYears: '', age: form.age || '17' });
+    if (dest === 'academy') set({ type: 'Cantera', marketValue: '', wage: '', releaseClause: '', contractYears: '', statusNote: '', resaleClausePercent: '', extraBonuses: '', signingBonus: '', age: form.age || '17' });
   };
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -275,7 +287,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
     // La Cantera no maneja términos económicos: se limpian para no arrastrar en silencio un
     // valor de mercado/sueldo de un tipo anterior (p. ej. si se edita un "Comprado" y se
     // cambia a "Cantera") a un campo que ya no es visible ni editable.
-    if (t === 'Cantera') { patch.marketValue = ''; patch.wage = ''; patch.releaseClause = ''; }
+    if (t === 'Cantera') { patch.marketValue = ''; patch.wage = ''; patch.releaseClause = ''; patch.statusNote = ''; patch.resaleClausePercent = ''; patch.extraBonuses = ''; patch.signingBonus = ''; }
     set(patch);
   };
 
@@ -441,6 +453,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
         preferredFoot: form.preferredFoot || 'Diestro',
         photo: form.photo || null,
         nationality: form.nationality.trim() || null,
+        height: form.height ? parseInt(form.height) : null,
+        weight: form.weight ? parseInt(form.weight) : null,
         // La Cantera no tiene valor de mercado ni sueldo (campos ocultos en el asistente):
         // se guardan a 0 en vez de arrastrar lo que hubiera en el estado del formulario.
         marketValue: form.type === 'Cantera' ? 0 : parseValue(form.marketValue), type: form.type,
@@ -451,6 +465,12 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
         // Cantera (ver guard del propio campo en el Paso 3/Revisión).
         sourceClub: form.type !== 'Cantera' && form.sourceClub.trim() ? form.sourceClub.trim() : null,
         agreedRole: form.type !== 'Cantera' && form.agreedRole ? form.agreedRole : null,
+        // Estado, Cláusula de Reventa, Primas Extra y Prima de Fichaje: mismo criterio que
+        // Club de Procedencia/Relevancia justo arriba, nunca aplican a Cantera.
+        statusNote: form.type !== 'Cantera' && form.statusNote.trim() ? form.statusNote.trim() : null,
+        resaleClausePercent: form.type !== 'Cantera' && form.resaleClausePercent ? parseInt(form.resaleClausePercent) : null,
+        extraBonuses: form.type !== 'Cantera' ? (parseValue(form.extraBonuses) || null) : null,
+        signingBonus: form.type !== 'Cantera' ? (parseValue(form.signingBonus) || null) : null,
         buyOption: form.type === 'Cedido' && form.hasBuyOption ? (parseValue(form.buyOption) || null) : null,
         wagePercentage: form.type === 'Cedido' && form.wagePercentage ? parseInt(form.wagePercentage) : null,
         // Conserva el estado de mercado real del jugador (Activo/Cedible/Transferible/
@@ -653,6 +673,18 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                       <input type="number" inputMode="numeric" pattern="[0-9]*" required placeholder="23" min="15" max="50" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.age} onChange={(e) => set({ age: e.target.value })} />
                     </div>
                   </div>
+                  {/* Altura/Peso: datos físicos opcionales, aplicables a cualquier tipo de
+                      jugador (también Cantera), a diferencia del resto de este paso. */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Altura (cm)</label>
+                      <input type="number" inputMode="numeric" placeholder="Ej: 182" min="140" max="220" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.height} onChange={(e) => set({ height: e.target.value })} />
+                    </div>
+                    <div className="space-y-1 relative">
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Peso (kg)</label>
+                      <input type="number" inputMode="numeric" placeholder="Ej: 75" min="40" max="120" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.weight} onChange={(e) => set({ weight: e.target.value })} />
+                    </div>
+                  </div>
                   {/* Potencial: perfil deportivo, no económico — vive aquí junto a Media/Edad,
                       pero exclusivo de la Cantera. Un jugador del primer equipo (Comprado o
                       Cedido) no tiene rango de potencial. */}
@@ -737,6 +769,32 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                         <input type="text" inputMode="numeric" required placeholder="Ej: 500.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.wage} onChange={formatMoneyField('wage')} />
                       </div>
                     </div>
+                  )}
+
+                  {/* Estado, Cláusula de Reventa, Primas Extra y Prima de Fichaje: términos
+                      económicos adicionales opcionales, mismo criterio que Valor de Mercado/
+                      Sueldo justo arriba — ocultos por completo para Cantera. */}
+                  {form.type !== 'Cantera' && (
+                    <>
+                      <div className="space-y-1 relative">
+                        <label className="text-[9px] font-black text-fg-muted ml-1">Estado (opcional)</label>
+                        <input type="text" placeholder="Ej: Descontento, Feliz, Quiere salir..." onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.statusNote} onChange={(e) => set({ statusNote: e.target.value })} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1 relative">
+                          <label className="text-[9px] font-black text-fg-muted ml-1">Cláusula Reventa (%)</label>
+                          <input type="number" inputMode="numeric" placeholder="Ej: 20" min="0" max="100" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.resaleClausePercent} onChange={(e) => set({ resaleClausePercent: e.target.value })} />
+                        </div>
+                        <div className="space-y-1 relative">
+                          <label className="text-[9px] font-black text-fg-muted ml-1">Primas Extra (€)</label>
+                          <input type="text" inputMode="numeric" placeholder="Ej: 2.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.extraBonuses} onChange={formatMoneyField('extraBonuses')} />
+                        </div>
+                      </div>
+                      <div className="space-y-1 relative">
+                        <label className="text-[9px] font-black text-fg-muted ml-1">Prima de Fichaje (€)</label>
+                        <input type="text" inputMode="numeric" placeholder="Ej: 5.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.signingBonus} onChange={formatMoneyField('signingBonus')} />
+                      </div>
+                    </>
                   )}
 
                   {form.type === 'Cedido' && (
@@ -881,6 +939,13 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                       <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
                     </ReviewRow>
 
+                    <ReviewRow label="Altura (cm)" active={editField === 'height'} onOpen={() => setEditField('height')} display={form.height || 'Sin definir'}>
+                      <input autoFocus type="number" inputMode="numeric" min="140" max="220" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.height} onChange={(e) => set({ height: e.target.value })} />
+                    </ReviewRow>
+                    <ReviewRow label="Peso (kg)" active={editField === 'weight'} onOpen={() => setEditField('weight')} display={form.weight || 'Sin definir'}>
+                      <input autoFocus type="number" inputMode="numeric" min="40" max="120" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.weight} onChange={(e) => set({ weight: e.target.value })} />
+                    </ReviewRow>
+
                     {/* Potencial: perfil deportivo, no económico — igual que en el Paso 2,
                         exclusivo de la Cantera. */}
                     {form.type === 'Cantera' && (
@@ -925,6 +990,25 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                       <ReviewRow label="Valor de Mercado (€)" active={editField === 'marketValue'} onOpen={() => setEditField('marketValue')} display={`${form.marketValue || '0'} €`}>
                         <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.marketValue} onChange={formatMoneyField('marketValue')} />
                       </ReviewRow>
+                    )}
+
+                    {/* Estado, Cláusula de Reventa, Primas Extra y Prima de Fichaje: mismo
+                        criterio que Valor de Mercado justo arriba, ocultos para Cantera. */}
+                    {form.type !== 'Cantera' && (
+                      <>
+                        <ReviewRow label="Estado" active={editField === 'statusNote'} onOpen={() => setEditField('statusNote')} display={form.statusNote || 'Sin definir'}>
+                          <input autoFocus type="text" placeholder="Ej: Descontento, Feliz..." onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.statusNote} onChange={(e) => set({ statusNote: e.target.value })} />
+                        </ReviewRow>
+                        <ReviewRow label="Cláusula Reventa (%)" active={editField === 'resaleClausePercent'} onOpen={() => setEditField('resaleClausePercent')} display={form.resaleClausePercent ? `${form.resaleClausePercent}%` : 'Sin definir'}>
+                          <input autoFocus type="number" inputMode="numeric" min="0" max="100" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.resaleClausePercent} onChange={(e) => set({ resaleClausePercent: e.target.value })} />
+                        </ReviewRow>
+                        <ReviewRow label="Primas Extra (€)" active={editField === 'extraBonuses'} onOpen={() => setEditField('extraBonuses')} display={`${form.extraBonuses || '0'} €`}>
+                          <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.extraBonuses} onChange={formatMoneyField('extraBonuses')} />
+                        </ReviewRow>
+                        <ReviewRow label="Prima de Fichaje (€)" active={editField === 'signingBonus'} onOpen={() => setEditField('signingBonus')} display={`${form.signingBonus || '0'} €`}>
+                          <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.signingBonus} onChange={formatMoneyField('signingBonus')} />
+                        </ReviewRow>
+                      </>
                     )}
 
                     {/* Campos dinámicos: cambian según el Tipo de Adquisición elegido arriba. */}

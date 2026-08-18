@@ -8,6 +8,8 @@ import { abbreviateValue, abbreviateName, formatLoanDuration } from '../../utils
 import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import SwipeableRow from '../common/SwipeableRow';
 import PlayerForm from './PlayerForm';
+import AddPlayerChoiceModal from './AddPlayerChoiceModal';
+import ScanPlayerCardModal from './ScanPlayerCardModal';
 import ConfirmModal from '../common/ConfirmModal';
 import SellPlayerModal from '../economy/SellPlayerModal';
 import LoanOutModal from '../economy/LoanOutModal';
@@ -60,6 +62,12 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [ficharConfirming, setFicharConfirming] = useState(false);
   const ficharRef = useRef(null);
   useOnClickOutside(ficharRef, () => setFicharConfirming(false), ficharConfirming);
+  // "Fichar Jugador" abre primero este selector (Manual / Escanear con IA) en vez de saltar
+  // directo al asistente — Manual sigue el flujo de siempre; Escanear abre ScanPlayerCardModal,
+  // que al terminar entrega un "prefill" ya traducido y abre PlayerForm en el Paso 4 (Revisión)
+  // para que el usuario solo tenga que repasar y confirmar los datos leídos de la tarjeta.
+  const [showAddChoice, setShowAddChoice] = useState(false);
+  const [showScanModal, setShowScanModal] = useState(false);
 
   useEffect(() => {
     if (pendingEditPlayer) {
@@ -140,9 +148,21 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormSourceTargetId(null); setFormInitialStep(4); setShowForm(true); };
 
   const handleFicharClick = () => {
-    if (HAS_HOVER) { openNewForm(); return; }
-    if (ficharConfirming) { openNewForm(); setFicharConfirming(false); }
+    if (HAS_HOVER) { setShowAddChoice(true); return; }
+    if (ficharConfirming) { setShowAddChoice(true); setFicharConfirming(false); }
     else { setFicharConfirming(true); }
+  };
+
+  // Al terminar el escaneo por IA, se abre PlayerForm directamente en el Paso 4 (Revisión)
+  // con todo prerrellenado, igual que hace la edición rápida — así el usuario repasa y
+  // confirma en una sola pantalla en vez de recorrer el asistente paso a paso.
+  const handleScanExtracted = (prefillData) => {
+    setShowScanModal(false);
+    setEditingPlayer(null);
+    setFormPrefill(prefillData);
+    setFormSourceTargetId(null);
+    setFormInitialStep(4);
+    setShowForm(true);
   };
 
   return (
@@ -262,6 +282,15 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       )}
 
       {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} sourceTargetId={formSourceTargetId} initialStep={formInitialStep} onClose={() => setShowForm(false)} />}
+
+      {showAddChoice && (
+        <AddPlayerChoiceModal
+          onClose={() => setShowAddChoice(false)}
+          onManual={() => { setShowAddChoice(false); openNewForm(); }}
+          onScan={() => { setShowAddChoice(false); setShowScanModal(true); }}
+        />
+      )}
+      {showScanModal && <ScanPlayerCardModal onClose={() => setShowScanModal(false)} onExtracted={handleScanExtracted} />}
       {sellingPlayer && <SellPlayerModal player={sellingPlayer} onClose={() => setSellingPlayer(null)} />}
       {loaningPlayer && <LoanOutModal player={loaningPlayer} onClose={() => setLoaningPlayer(null)} />}
       {promotingPlayer && <PromoteToFirstTeamModal player={promotingPlayer} onClose={() => setPromotingPlayer(null)} />}
