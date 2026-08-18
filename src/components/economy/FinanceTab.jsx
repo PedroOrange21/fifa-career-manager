@@ -148,8 +148,18 @@ export default function FinanceTab() {
                           <DetailLine label="Precio de Traspaso Pagado" value={`-${formatCurrency(t.amount)}`} />
                           <DetailLine label={t.type === 'compra' ? 'Club de Procedencia' : 'Club de Origen'} value={(t.type === 'compra' ? t.sourceClub : t.club) || 'Sin definir'} />
                           <DetailLine label="Rol Pactado" value={t.agreedRole || 'Sin definir'} />
-                          {t.wageMonthly ? <DetailLine label="Impacto Salarial" value={`+${formatCurrency(t.wageMonthly)}/mes · +${formatCurrency(t.wageMonthly * 12)}/año`} /> : null}
-                          <DetailLine label="Posición y Media" value={t.position ? `${t.position} · ${t.rating ?? '—'}` : 'Sin definir'} />
+                          {/* Dos filas superpuestas (mes arriba, año abajo en formato más
+                              sutil) en vez de un único valor inline, mismo patrón que el resto
+                              de la app. */}
+                          {t.wageMonthly ? (
+                            <div className="flex items-start justify-between gap-2 text-[10px]">
+                              <span className="font-bold text-fg-muted pt-px">Impacto Salarial</span>
+                              <span className="text-right leading-tight shrink-0">
+                                <span className="block font-black text-fg">+{formatCurrency(t.wageMonthly)}/mes</span>
+                                <span className="block font-bold text-fg-faint text-[9px] mt-0.5">+{formatCurrency(t.wageMonthly * 12)}/año</span>
+                              </span>
+                            </div>
+                          ) : null}
                         </>
                       )}
                     </div>

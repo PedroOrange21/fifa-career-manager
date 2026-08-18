@@ -50,8 +50,17 @@ function TargetRow({ t, onSign, onEdit, onDelete, selected, onToggleSelect }) {
           ref={rowRef}
           onClick={() => { if (offset !== 0) close(); }}
           style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : 'transform 200ms ease-out' }}
-          className={`relative touch-pan-y p-3 md:p-4 border-l-4 transition-colors ${STATUS_BORDER[t.status] || STATUS_BORDER.Seguimiento} ${selected ? 'bg-green-500/5' : 'bg-surface'}`}
+          className={`relative touch-pan-y border-l-4 transition-colors ${STATUS_BORDER[t.status] || STATUS_BORDER.Seguimiento}`}
         >
+          {/* El tinte de selección (bg-green-500/5) es semitransparente a propósito, pero sin
+              una base opaca detrás los botones de swipe (Editar/Borrar) se transparentaban por
+              debajo de la tarjeta incluso en reposo. Se arregla con una capa base 100% opaca
+              (bg-surface) y el tinte encima, en vez de aplicar el color directamente sobre el
+              contenido — el contenido real también debe ser "relative" (no estático) para que
+              pinte por encima de estas dos capas absolutas en vez de quedar detrás. */}
+          <div className="absolute inset-0 bg-surface" />
+          {selected && <div className="absolute inset-0 bg-green-500/5" />}
+          <div className="relative p-3 md:p-4">
           <div className="flex items-start gap-2 md:gap-2.5">
             {/* Checkbox pequeño y sutil, como elemento propio de la fila (no superpuesto sobre la
                 insignia) para que ambos convivan sin tocarse; el "gap" del contenedor ya separa
@@ -104,6 +113,7 @@ function TargetRow({ t, onSign, onEdit, onDelete, selected, onToggleSelect }) {
           <button type="button" onClick={() => setExpanded((e) => !e)} className="w-full mt-2.5 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-fg-faint hover:text-fg hover:bg-well transition-colors text-[9px] font-black uppercase tracking-widest touch-manipulation">
             {expanded ? 'Menos Detalle' : 'Más Detalle'} <ChevronDown size={14} className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
           </button>
+          </div>
         </div>
       )}
     </SwipeableRow>

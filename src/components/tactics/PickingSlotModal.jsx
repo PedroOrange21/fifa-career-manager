@@ -1,4 +1,4 @@
-import { X, Check, Search } from 'lucide-react';
+import { X, Check, Search, GraduationCap } from 'lucide-react';
 import { FORMATIONS } from '../../constants/formations';
 import { getCardStyle } from '../../utils/cardStyle';
 import { useClubData } from '../../context/ClubDataContext';
@@ -63,25 +63,36 @@ export default function PickingSlotModal({ pickingSlot, onClose, onNavigateToSco
           )}
           {eligiblePlayers.map((p) => {
             const isLoanedOut = p.transferStatus === 'CedidoFuera';
+            // Un canterano no promocionado al primer equipo (type === 'Cantera'; al promover
+            // pasa a 'Comprado', ver PromoteToFirstTeamModal) no puede alinearse todavía —
+            // bloqueado igual que un cedido fuera, con su propia insignia distintiva.
+            const isAcademy = p.type === 'Cantera';
+            const isBlocked = isLoanedOut || isAcademy;
             const isAlreadyIn11 = Object.values(lineup).includes(p.id); const isAlreadyInBench = Object.values(bench).includes(p.id);
             const isCurrentSlot = isCurrentSlotPlayer(p);
             return (
               <button
                 key={p.id}
                 onClick={() => pick(p.id)}
-                disabled={isLoanedOut}
-                className={`w-full p-3 md:p-4 rounded-2xl flex items-center gap-3 md:gap-4 transition-all border ${isLoanedOut ? 'opacity-50 grayscale pointer-events-none bg-well/50 border-transparent' : isCurrentSlot ? 'border-green-500 bg-green-500/10' : 'bg-well border-transparent hover:bg-well-strong'}`}
+                disabled={isBlocked}
+                className={`relative w-full p-3 md:p-4 rounded-2xl flex items-center gap-3 md:gap-4 transition-all border ${isBlocked ? 'opacity-50 grayscale bg-well/50 border-transparent cursor-not-allowed' : isCurrentSlot ? 'border-green-500 bg-green-500/10' : 'bg-well border-transparent hover:bg-well-strong'}`}
               >
+                {isAcademy && (
+                  <span title="Canterano: no disponible hasta ser promocionado al primer equipo" className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                    <GraduationCap size={11} />
+                  </span>
+                )}
                 <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none ${getCardStyle(p.rating)}`}><span className="text-[7px] md:text-[8px] opacity-70 mb-0.5">{p.positions?.[0]}</span><span className="text-base md:text-lg">{p.rating}</span></div>
                 <div className="text-left flex-1 min-w-0">
                   <div className="font-black uppercase italic text-sm md:text-base truncate text-black dark:text-white">{p.name}</div>
                   <div className="flex items-center gap-2 mt-0.5 md:mt-1">
                     <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase">{p.age} Años</span>
                     {isLoanedOut && (<span className="text-[7px] md:text-[8px] bg-zinc-500/20 text-zinc-400 px-2 py-0.5 rounded uppercase font-black tracking-widest">Cedido Fuera</span>)}
-                    {(!isLoanedOut && !isCurrentSlot && (isAlreadyIn11 || isAlreadyInBench)) && (<span className={`text-[7px] md:text-[8px] px-2 py-0.5 rounded uppercase font-black tracking-widest ${isAlreadyIn11 ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>{isAlreadyIn11 ? 'En el 11' : 'Banquillo'}</span>)}
+                    {isAcademy && (<span className="text-[7px] md:text-[8px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded uppercase font-black tracking-widest">Cantera</span>)}
+                    {(!isBlocked && !isCurrentSlot && (isAlreadyIn11 || isAlreadyInBench)) && (<span className={`text-[7px] md:text-[8px] px-2 py-0.5 rounded uppercase font-black tracking-widest ${isAlreadyIn11 ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>{isAlreadyIn11 ? 'En el 11' : 'Banquillo'}</span>)}
                   </div>
                 </div>
-                {isCurrentSlot && !isLoanedOut && <Check className="text-green-500" size={18} />}
+                {isCurrentSlot && !isBlocked && <Check className="text-green-500" size={18} />}
               </button>
             );
           })}

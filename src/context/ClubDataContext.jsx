@@ -57,7 +57,13 @@ export function ClubDataProvider({ children }) {
   const pendingUndoRef = useRef(null);
   const UNDO_WINDOW_MS = 5500;
 
-  const scheduleUndo = (kind, id, label, finalize) => {
+  // "onCancel" (opcional, quinto argumento): a diferencia de eliminar un jugador/objetivo
+  // (donde el elemento sigue intacto en Firestore hasta que expira la ventana, así que
+  // "Deshacer" no tiene que restaurar nada más que dejar de ocultarlo), vaciar el Once/
+  // Banquillo muta el estado local de inmediato (setLineup({})/setBench({})) para que la
+  // pizarra se vea vacía al instante. "onCancel" deshace exactamente esa mutación local si se
+  // pulsa "Deshacer" antes de que expire la ventana.
+  const scheduleUndo = (kind, id, label, finalize, onCancel) => {
     if (pendingUndoRef.current) {
       clearTimeout(pendingUndoRef.current.timer);
       pendingUndoRef.current.finalize();
@@ -67,7 +73,7 @@ export function ClubDataProvider({ children }) {
       setPendingUndo(null);
       finalize();
     }, UNDO_WINDOW_MS);
-    const entry = { kind, id, label, deadline: Date.now() + UNDO_WINDOW_MS, timer, finalize };
+    const entry = { kind, id, label, deadline: Date.now() + UNDO_WINDOW_MS, timer, finalize, onCancel };
     pendingUndoRef.current = entry;
     setPendingUndo(entry);
   };
@@ -78,6 +84,7 @@ export function ClubDataProvider({ children }) {
     clearTimeout(entry.timer);
     pendingUndoRef.current = null;
     setPendingUndo(null);
+    entry.onCancel?.();
   };
 
   useEffect(() => {
@@ -389,14 +396,32 @@ export function ClubDataProvider({ children }) {
     setLineup({}); setBench({}); setActiveTacticName(null); saveTactics(formation, {}, {}, null);
   };
 
+  // Vaciar Once/Banquillo con ventana de "Deshacer" (mismo UndoToast que eliminar jugador): la
+  // pizarra se ve vacía al instante, pero el guardado real en Firestore se retrasa hasta que
+  // expira la ventana sin que se pulse "Deshacer" — en cuyo caso "onCancel" restaura la
+  // alineación/suplentes previos tal cual estaban, sin haber tocado Firestore en ningún momento.
   const clearLineup = () => {
     if (!user || !activeClubId) return;
-    setLineup({}); setActiveTacticName(null); saveTactics(formation, {}, bench, null);
+    const prevLineup = lineup;
+    const prevTacticName = activeTacticName;
+    setLineup({}); setActiveTacticName(null);
+    scheduleUndo(
+      'lineup-clear', 'lineup', 'Once inicial vaciado',
+      async () => { await saveTactics(formation, {}, bench, null); },
+      () => { setLineup(prevLineup); setActiveTacticName(prevTacticName); },
+    );
   };
 
   const clearBench = () => {
     if (!user || !activeClubId) return;
-    setBench({}); setActiveTacticName(null); saveTactics(formation, lineup, {}, null);
+    const prevBench = bench;
+    const prevTacticName = activeTacticName;
+    setBench({}); setActiveTacticName(null);
+    scheduleUndo(
+      'bench-clear', 'bench', 'Banquillo vaciado',
+      async () => { await saveTactics(formation, lineup, {}, null); },
+      () => { setBench(prevBench); setActiveTacticName(prevTacticName); },
+    );
   };
 
   const handleFormationChange = (newForm) => {
