@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, ChevronLeft, Camera, Image as ImageIcon, ShieldAlert, ScanLine } from 'lucide-react';
+import { X, ChevronLeft, Camera, Image as ImageIcon, ShieldAlert, ScanLine, CopyX } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
+import { useClubData } from '../../context/ClubDataContext';
 import { scanPlayerCard, mapScanResultToPrefill, mapAcademyScanResultToPrefill, scanPlayerCardsQueue } from '../../services/geminiPlayerScan';
 import { prepareImageForScan } from '../../utils/imagePrep';
+import { findDuplicatePlayer } from '../../utils/duplicatePlayer';
 
 const mapByMode = (extracted, mode) => (mode === 'academia' ? mapAcademyScanResultToPrefill(extracted) : mapScanResultToPrefill(extracted));
 
@@ -39,12 +41,17 @@ const getPhaseLabel = (progress) => (PHASES.find((p) => progress < p.ceiling) ||
 export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtracted, onBack, mode = 'primerEquipo', forceBatch = false }) {
   useBodyScrollLock();
   useAutoHideChrome();
+  const { players } = useClubData();
 
-  const [status, setStatus] = useState('idle'); // 'idle' | 'scanning' | 'batchScanning' | 'error'
+  const [status, setStatus] = useState('idle'); // 'idle' | 'scanning' | 'batchScanning' | 'duplicate' | 'error'
   const [progress, setProgress] = useState(0);
   const [batchInfo, setBatchInfo] = useState(null); // { index, total, fileName }
   const [error, setError] = useState('');
   const [preview, setPreview] = useState('');
+  // Escaneo individual que resultó ser un posible duplicado de un jugador ya registrado (ver
+  // findDuplicatePlayer): se retiene aquí en vez de llamar a onExtracted de inmediato, para
+  // poder mostrar el aviso y dejar que el usuario decida si de verdad quiere continuar.
+  const [pendingDuplicate, setPendingDuplicate] = useState(null); // { mapped, existing } | null
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
   const progressTimerRef = useRef(null);
@@ -102,13 +109,37 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
       stopProgressTimer();
       setProgress(85);
       await animateToComplete(); // Fase 4: extrayendo estadísticas.
-      onExtracted(mapByMode(extracted, mode));
+      const mapped = mapByMode(extracted, mode);
+      // Sistema global anti-duplicados (ver utils/duplicatePlayer.js): antes de precargar el
+      // formulario, se compara contra la plantilla ya guardada. Si coincide, se retiene el
+      // resultado y se avisa en vez de abrir la Revisión Final directamente — el usuario decide
+      // si de verdad quiere continuar (p. ej. dos jugadores homónimos legítimos).
+      const existingMatch = findDuplicatePlayer(mapped, players);
+      if (existingMatch) {
+        setStatus('duplicate');
+        setPendingDuplicate({ mapped, existing: existingMatch });
+        return;
+      }
+      onExtracted(mapped);
     } catch (err) {
       stopProgressTimer();
       console.error('Error de /api/scan-player:', err);
       setError(err.message || 'No se pudo analizar la imagen. Inténtalo de nuevo.');
       setStatus('error');
     }
+  };
+
+  const confirmDuplicateAnyway = () => {
+    if (!pendingDuplicate) return;
+    const { mapped } = pendingDuplicate;
+    setPendingDuplicate(null);
+    setStatus('idle');
+    onExtracted(mapped);
+  };
+  const cancelDuplicate = () => {
+    setPendingDuplicate(null);
+    setStatus('idle');
+    setPreview('');
   };
 
   const processBatch = async (files) => {
@@ -190,7 +221,24 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
           </div>
         )}
 
-        {!isBusy && (
+        {status === 'duplicate' && pendingDuplicate && (
+          <div className="flex flex-col items-center gap-4 py-4">
+            {preview && <img src={preview} alt="Tarjeta escaneada" className="w-24 h-24 rounded-2xl object-cover border border-border-subtle" />}
+            <div className="w-full bg-yellow-500/10 border border-yellow-500/30 p-3 rounded-xl flex gap-2 text-yellow-500">
+              <CopyX size={16} className="shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-wide">Jugador ya registrado / omitido por duplicado</p>
+                <p className="text-[9px] font-bold text-yellow-500/80 mt-1">{pendingDuplicate.mapped.name} coincide con «{pendingDuplicate.existing.name}», ya en tu plantilla ({pendingDuplicate.existing.positions?.[0] || '—'}{pendingDuplicate.existing.age ? `, ${pendingDuplicate.existing.age} años` : ''}).</p>
+              </div>
+            </div>
+            <div className="w-full flex gap-2">
+              <button type="button" onClick={cancelDuplicate} className="flex-1 py-3 rounded-xl bg-well-strong text-fg font-black uppercase text-[10px] hover:brightness-125 transition-all touch-manipulation">Cancelar</button>
+              <button type="button" onClick={confirmDuplicateAnyway} className="flex-1 py-3 rounded-xl bg-yellow-500 text-black font-black uppercase text-[10px] hover:bg-yellow-400 transition-all touch-manipulation">Continuar de Todas Formas</button>
+            </div>
+          </div>
+        )}
+
+        {!isBusy && status !== 'duplicate' && (
           <div className="space-y-4">
             <div className="p-3 rounded-2xl bg-well border border-border-subtle">
               <p className="text-[10px] font-bold text-fg-muted leading-relaxed">

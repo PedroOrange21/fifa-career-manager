@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { X, Check, ShieldAlert, RefreshCcw, GraduationCap } from 'lucide-react';
+import { X, Check, ShieldAlert, RefreshCcw, GraduationCap, CopyX } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import { getCardStyle } from '../../utils/cardStyle';
 import { buildPlayerPayload } from '../../utils/playerPayload';
+import { findDuplicatePlayer } from '../../utils/duplicatePlayer';
 
 // Paso final de la carga masiva con IA (varias fotos escaneadas en cola por
 // scanPlayerCardsQueue, ver ScanPlayerCardModal): tabla de revisión con lo que Gemini extrajo
@@ -16,15 +17,19 @@ import { buildPlayerPayload } from '../../utils/playerPayload';
 //   (posición+valor en primer equipo, rango de potencial en academia) y al texto del título.
 // - results: { succeeded: [prefill, ...], failed: [{fileName, error}, ...] } — succeeded ya
 //   viene con "type" resuelto por Gemini (Comprado/Cedido) en modo primerEquipo, o "Cantera" en
-//   modo academia.
+//   modo academia. Una fila puede venir con "reclassified: true" (ver esCanterano en
+//   geminiPlayerScan.js): una tarjeta de Academia colada por error en un lote de Primer Equipo,
+//   ya con type "Cantera" — se guarda igualmente en un solo paso, con un aviso distinto en vez
+//   de forzarla a los campos de primer equipo.
 // - extraDefaults: se fusiona en cada fila antes de guardarla (p. ej. { isInitialSquad: true,
 //   sourceClub: 'En el club desde el inicio' } para "Ya en el Club" o el "Empieza desde Cero"
-//   de OnboardingWizard) — nunca se muestra en la tabla, solo se aplica al guardar.
+//   de OnboardingWizard) — nunca se muestra en la tabla, solo se aplica al guardar, y NUNCA se
+//   aplica a una fila reclasificada como Cantera (esos defaults son de primer equipo).
 // - skipInitialTransaction: idéntico al de PlayerForm, pasado tal cual a addOrUpdatePlayer.
 export default function BulkScanReviewModal({ mode = 'primerEquipo', results, extraDefaults = {}, skipInitialTransaction = false, onClose, onSaved }) {
   useBodyScrollLock();
   useAutoHideChrome();
-  const { addOrUpdatePlayer } = useClubData();
+  const { players, addOrUpdatePlayer } = useClubData();
 
   // Las filas sin nombre legible no se pueden guardar de forma útil: se separan de entrada
   // junto a los fallos reales de escaneo, en vez de mostrarse como una fila fantasma en la
@@ -33,7 +38,13 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, ex
   const namelessCount = (results?.succeeded?.length || 0) - rows.length;
   const failedCount = (results?.failed?.length || 0) + namelessCount;
 
-  const [excluded, setExcluded] = useState(() => new Set());
+  // Sistema global anti-duplicados (ver utils/duplicatePlayer.js): cada fila se compara contra
+  // los jugadores ya guardados en Firestore Y contra las filas anteriores de esta misma cola
+  // (dos fotos de la misma tarjeta en un solo lote también cuentan como duplicado). Se calcula
+  // una sola vez por fila, no en cada render, para que el índice de "filas previas" sea estable.
+  const duplicateOf = rows.map((r, i) => findDuplicatePlayer(r, [...players, ...rows.slice(0, i)]));
+
+  const [excluded, setExcluded] = useState(() => new Set(duplicateOf.map((dup, i) => (dup ? i : null)).filter((i) => i !== null)));
   const [saving, setSaving] = useState(false);
   const [saveProgress, setSaveProgress] = useState({ done: 0, total: 0 });
   const [saveError, setSaveError] = useState('');
@@ -47,6 +58,8 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, ex
   };
 
   const includedCount = rows.length - excluded.size;
+  const duplicateCount = duplicateOf.filter(Boolean).length;
+  const reclassifiedCount = rows.filter((r) => r.reclassified).length;
 
   const handleSaveAll = async () => {
     if (saving || includedCount === 0) return;
@@ -57,7 +70,10 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, ex
     let saved = 0;
     try {
       for (const row of toSave) {
-        const payload = buildPlayerPayload({ ...row, ...extraDefaults });
+        // Una fila reclasificada como Cantera nunca recibe los extraDefaults de primer equipo
+        // (isInitialSquad, sourceClub fijo...): esos no significan nada para un canterano.
+        const merged = row.type === 'Cantera' ? { ...row } : { ...row, ...extraDefaults };
+        const payload = buildPlayerPayload(merged);
         // eslint-disable-next-line no-await-in-loop
         await addOrUpdatePlayer(payload, undefined, { skipFinancialEffects: skipInitialTransaction });
         saved += 1;
@@ -97,6 +113,16 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, ex
               <ShieldAlert size={14} className="shrink-0" /><span>{failedCount} foto{failedCount === 1 ? '' : 's'} no se pudo procesar o no tenía datos legibles.</span>
             </div>
           )}
+          {duplicateCount > 0 && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 rounded-xl mb-3 flex gap-2 text-yellow-500 text-[10px] font-black items-center">
+              <CopyX size={14} className="shrink-0" /><span>{duplicateCount} jugador{duplicateCount === 1 ? '' : 'es'} ya registrado{duplicateCount === 1 ? '' : 's'} — omitido{duplicateCount === 1 ? '' : 's'} por duplicado.</span>
+            </div>
+          )}
+          {reclassifiedCount > 0 && (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl mb-3 flex gap-2 text-emerald-400 text-[10px] font-black items-center">
+              <GraduationCap size={14} className="shrink-0" /><span>{reclassifiedCount} canterano{reclassifiedCount === 1 ? '' : 's'} detectado{reclassifiedCount === 1 ? '' : 's'} (se guardará{reclassifiedCount === 1 ? '' : 'n'} directamente en Academia).</span>
+            </div>
+          )}
           {saveError && (
             <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl mb-3 flex gap-2 text-red-400 text-[10px] font-black items-center">
               <ShieldAlert size={14} className="shrink-0" /><span>{saveError}</span>
@@ -108,6 +134,8 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, ex
               <div className="p-4 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Sin resultados aprovechables</div>
             ) : rows.map((r, i) => {
               const isOut = excluded.has(i);
+              const isDuplicate = !!duplicateOf[i];
+              const isReclassified = !!r.reclassified;
               return (
                 <button key={i} type="button" onClick={() => toggleRow(i)} disabled={saving} className={`w-full px-3 py-2.5 flex items-center gap-3 text-left transition-opacity touch-manipulation ${isOut ? 'opacity-40' : ''}`}>
                   <div className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(parseInt(r.rating) || 0)}`}>
@@ -115,11 +143,17 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, ex
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-black text-fg truncate">{r.name}</div>
-                    <div className="text-[9px] font-bold text-fg-faint uppercase tracking-wide truncate">
-                      {mode === 'academia'
-                        ? `${r.positions?.[0] || '—'} · Pot. ${r.potential || '—'} · ${r.age || '—'} Años`
-                        : `${r.positions?.[0] || '—'} · ${r.type || 'Comprado'} · ${r.age || '—'} Años`}
-                    </div>
+                    {isDuplicate ? (
+                      <div className="text-[9px] font-bold text-yellow-500 uppercase tracking-wide truncate">Jugador ya registrado / omitido por duplicado</div>
+                    ) : isReclassified ? (
+                      <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-wide truncate">Canterano detectado (se moverá a Academia)</div>
+                    ) : (
+                      <div className="text-[9px] font-bold text-fg-faint uppercase tracking-wide truncate">
+                        {mode === 'academia'
+                          ? `${r.positions?.[0] || '—'} · Pot. ${r.potential || '—'} · ${r.age || '—'} Años`
+                          : `${r.positions?.[0] || '—'} · ${r.type || 'Comprado'} · ${r.age || '—'} Años`}
+                      </div>
+                    )}
                   </div>
                   <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${isOut ? 'border-border-subtle' : 'border-green-500 bg-green-500'}`}>
                     {!isOut && <Check size={12} className="text-black" />}

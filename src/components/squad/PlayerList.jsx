@@ -311,7 +311,12 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
     setFormSourceTargetId(null);
     setFormInitialStep(4);
     setFormPostScanReview(true);
-    if (pendingDestination === 'academia') {
+    // Reclasificación automática (ver esCanterano en geminiPlayerScan.js): una tarjeta de
+    // Academia colada por error en el flujo de Primer Equipo (prefillData.type === 'Cantera',
+    // marcada con reclassified: true) se trata exactamente igual que un escaneo nativo de
+    // Academia, sin importar si el destino elegido era Primer Equipo o si el tipo de operación
+    // era "Ya en el Club" — el canterano detectado manda sobre esas elecciones previas.
+    if (pendingDestination === 'academia' || prefillData.type === 'Cantera') {
       setFormPrefill(prefillData);
       setFormLockedType('Cantera');
       setFormRestrictTypes(null);

@@ -80,6 +80,27 @@ export async function scanPlayerCard(file, mode = 'primerEquipo') {
 // usuario negocia al ficharlo, igual que ya hace "Fichar desde Objetivos" en MarketTab.jsx.
 export function mapScanResultToPrefill(extracted) {
   const positions = [extracted.posicionPrincipal, ...(extracted.posicionesSecundarias || [])].filter(Boolean);
+
+  // Autodetección de tarjeta de Academia colada en un lote de Primer Equipo (ver esCanterano
+  // en api/scan-player.js): en vez de forzar los campos de primer equipo sobre una tarjeta que
+  // en realidad es de un canterano, se reclasifica aquí mismo con el mapeo de Cantera —
+  // "reclassified: true" es solo una marca para la UI (BulkScanReviewModal/ScanPlayerCardModal
+  // muestran el aviso "Canterano detectado"), nunca se guarda: buildPlayerPayload no la lee.
+  if (extracted.esCanterano) {
+    return {
+      type: 'Cantera',
+      name: extracted.nombre || '',
+      rating: extracted.media || '',
+      potential: extracted.potencialCantera || '',
+      positions,
+      nationality: extracted.nacionalidad || '',
+      age: extracted.edad || '',
+      preferredFoot: extracted.piernaBuena === 'Zurdo' ? 'Zurdo' : 'Diestro',
+      marketValue: '',
+      reclassified: true,
+    };
+  }
+
   const common = {
     name: extracted.nombre || '',
     rating: extracted.media || '',

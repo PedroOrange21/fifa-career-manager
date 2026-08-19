@@ -84,6 +84,11 @@ const RESPONSE_SCHEMA = {
     esCesion: { type: Type.BOOLEAN, nullable: true, description: 'true si la tarjeta indica que el jugador está cedido de otro club (texto tipo "En cesión del...", "Cedido por...", o un escudo de club de origen distinto del propio), false o null si no hay ningún indicio de cesión.' },
     clubCesion: { type: Type.STRING, nullable: true, description: 'Solo si esCesion es true: nombre del club que cede al jugador (el dueño real), identificado por el texto o el escudo junto a él.' },
     duracionCesion: { type: Type.STRING, enum: ['6 Meses', '1 Temporada', '2 Temporadas'], nullable: true, description: 'Solo si esCesion es true y la tarjeta indica una duración de cesión: la opción de este enum más cercana a lo que muestra la tarjeta.' },
+    // Autodetección de tarjeta de Academia colada por error en un lote de Primer Equipo: si la
+    // imagen en realidad muestra un RANGO de potencial (ej. "75-94") o viene de la pantalla de
+    // Academia/Jóvenes Promesas, márcalo aquí en vez de forzar los datos de primer equipo.
+    esCanterano: { type: Type.BOOLEAN, nullable: true, description: 'true si esta tarjeta en realidad es de un canterano de la Academia de Jóvenes Promesas (muestra un RANGO de potencial tipo "75-94", o es la pantalla de Academia/Jóvenes Promesas) en vez de un jugador de primer equipo — aunque se te haya pedido analizar una tarjeta de primer equipo, señala este caso si lo detectas. false o null en cualquier tarjeta normal de primer equipo.' },
+    potencialCantera: { type: Type.STRING, nullable: true, description: 'Solo si esCanterano es true: el rango de potencial tal como aparece (ej. "75-94"), o un único número de potencial como texto si no se muestra como rango.' },
   },
 };
 
@@ -115,6 +120,17 @@ Detección de cesión (muy importante, revísalo con cuidado antes de rellenar d
   duracionCesion = null, y en su lugar sí rellena duración de contrato (años restantes o fecha
   de finalización) y cláusula de rescisión en euros si la tarjeta las muestra — es un jugador
   en propiedad (traspaso), no cedido.
+
+Detección de tarjeta de Academia colada por error (revísalo antes de nada, es prioritario
+sobre el resto de reglas): si la imagen en realidad muestra un RANGO de potencial (ej.
+"75-94", dos números separados por un guion) en vez de una única media, o es visiblemente la
+pantalla de Academia/Jóvenes Promesas del juego, esto NO es una tarjeta de primer equipo: pon
+esCanterano = true, potencialCantera = ese rango tal cual (o el número único si no es un
+rango), y rellena el resto de campos deportivos que sí veas (nombre, media, posición,
+nacionalidad, edad, pierna) con normalidad — pero deja sueldoSemanal, valorMercado,
+duracionContrato, clausulaRescision, relevancia, esCesion, clubCesion y duracionCesion todos a
+null, un canterano no tiene esos datos. Si es una tarjeta de primer equipo normal, esCanterano
+= false (o null) y potencialCantera = null.
 
 Reglas importantes:
 - Todos los importes en euros deben ir como número entero puro, SIN puntos de miles, SIN comas, SIN el símbolo "€" y sin abreviar (ej. escribe 45000000, nunca "45M" ni "45.000.000 €").

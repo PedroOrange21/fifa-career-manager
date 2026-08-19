@@ -56,9 +56,13 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const { clubs, activeClubId, activeClub, createClub, completeOnboarding } = useClubs();
   const { players } = useClubData();
 
+  // "status" (Tipo de Inicio de Partida) va ANTES que "budget" (Fondos): así, al llegar a
+  // Fondos, ya se sabe si el club empieza desde cero (selector de presupuesto habitual) o es
+  // una partida ya avanzada (campo único de presupuesto actual, sin presets — ver
+  // currentStepId === 'budget' más abajo).
   const STEP_SEQUENCE = clubExists
     ? ['status', 'active', 'academy', 'summary']
-    : ['identity', 'budget', 'status', 'active', 'academy', 'summary'];
+    : ['identity', 'status', 'budget', 'active', 'academy', 'summary'];
 
   const [step, setStep] = useState(0);
   const currentStepId = STEP_SEQUENCE[step];
@@ -73,6 +77,10 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const [budget, setBudget] = useState(BUDGET_PRESETS[0]);
   const [customMode, setCustomMode] = useState(false);
   const [customBudget, setCustomBudget] = useState('');
+  // Campo único de "Modo Carrera ya Empezado" (startType === 'continue'): separado de
+  // customBudget/customMode (los del selector de presets de "Empezar desde Cero") para que
+  // volver atrás y cambiar de tipo de inicio no arrastre un valor del otro modo por error.
+  const [continueBudgetInput, setContinueBudgetInput] = useState('');
   const [createdClubId, setCreatedClubId] = useState(null);
 
   // --- Paso Estado de la Partida ---
@@ -118,13 +126,20 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
     setCustomBudget(formatted);
     setBudget(parseValue(formatted));
   };
+  const onContinueBudgetChange = (raw) => {
+    const formatted = formatValueInput(raw);
+    setContinueBudgetInput(formatted);
+    setBudget(parseValue(formatted));
+  };
 
   const activeRosterPlayers = players.filter((p) => p.type !== 'Cantera');
   const academyRosterPlayers = players.filter((p) => p.type === 'Cantera');
 
   const canGoNext = () => {
     if (currentStepId === 'identity') return name.trim().length > 0;
-    if (currentStepId === 'budget') return !customMode || parseValue(customBudget) > 0;
+    // "Modo Carrera ya Empezado": campo único directo, sin selector de presets — solo hace
+    // falta que el usuario haya introducido una cantidad mayor que cero.
+    if (currentStepId === 'budget') return startType === 'continue' ? parseValue(continueBudgetInput) > 0 : (!customMode || parseValue(customBudget) > 0);
     if (currentStepId === 'status') return !!startType;
     if (currentStepId === 'academy') return hasAcademy !== null;
     return true;
@@ -278,25 +293,43 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
 
               {currentStepId === 'budget' && (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 p-3 rounded-2xl bg-well border border-border-subtle">
-                    <Wallet size={16} className="text-green-500 shrink-0" />
-                    <span className="text-xs font-bold text-fg-muted">Fondos para fichajes y masa salarial desde el primer día</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {BUDGET_PRESETS.map((amount) => (
-                      <button key={amount} type="button" onClick={() => pickPreset(amount)} className={`py-3 rounded-xl text-[10px] font-black uppercase border transition-all ${!customMode && budget === amount ? 'bg-green-500 text-black border-green-500' : 'bg-well border-border-subtle text-fg-secondary hover:border-fg-muted'}`}>
-                        {abbreviateBudget(amount)}
-                      </button>
-                    ))}
-                    <button type="button" onClick={pickCustom} className={`py-3 rounded-xl text-[10px] font-black uppercase border transition-all ${customMode ? 'bg-green-500 text-black border-green-500' : 'bg-well border-border-subtle text-fg-secondary hover:border-fg-muted'}`}>
-                      Personalizar
-                    </button>
-                  </div>
-                  {customMode && (
-                    <div className="space-y-2 animate-in fade-in duration-150">
-                      <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Cantidad Personalizada</label>
-                      <input type="text" inputMode="numeric" autoFocus placeholder="Ej: 20.000.000" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={customBudget} onChange={(e) => onCustomBudgetChange(e.target.value)} />
-                    </div>
+                  {startType === 'continue' ? (
+                    <>
+                      {/* "Modo Carrera ya Empezado": sin selector de presets — un único campo
+                          directo con el presupuesto real de la partida en curso, tal como lo
+                          muestra el propio juego. */}
+                      <div className="flex items-start gap-2 p-3 rounded-2xl bg-well border border-border-subtle">
+                        <Wallet size={16} className="text-green-500 shrink-0 mt-0.5" />
+                        <span className="text-xs font-bold text-fg-muted leading-relaxed">Ve en tu juego a la pestaña <span className="text-fg font-black">Finanzas &gt; Resumen del presupuesto</span> e introduce los datos actuales de tu club.</span>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Presupuesto para Traspasos Actual (€)</label>
+                        <input type="text" inputMode="numeric" autoFocus placeholder="Ej: 45.000.000" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={continueBudgetInput} onChange={(e) => onContinueBudgetChange(e.target.value)} />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 p-3 rounded-2xl bg-well border border-border-subtle">
+                        <Wallet size={16} className="text-green-500 shrink-0" />
+                        <span className="text-xs font-bold text-fg-muted">Fondos para fichajes y masa salarial desde el primer día</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {BUDGET_PRESETS.map((amount) => (
+                          <button key={amount} type="button" onClick={() => pickPreset(amount)} className={`py-3 rounded-xl text-[10px] font-black uppercase border transition-all ${!customMode && budget === amount ? 'bg-green-500 text-black border-green-500' : 'bg-well border-border-subtle text-fg-secondary hover:border-fg-muted'}`}>
+                            {abbreviateBudget(amount)}
+                          </button>
+                        ))}
+                        <button type="button" onClick={pickCustom} className={`py-3 rounded-xl text-[10px] font-black uppercase border transition-all ${customMode ? 'bg-green-500 text-black border-green-500' : 'bg-well border-border-subtle text-fg-secondary hover:border-fg-muted'}`}>
+                          Personalizar
+                        </button>
+                      </div>
+                      {customMode && (
+                        <div className="space-y-2 animate-in fade-in duration-150">
+                          <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Cantidad Personalizada</label>
+                          <input type="text" inputMode="numeric" autoFocus placeholder="Ej: 20.000.000" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={customBudget} onChange={(e) => onCustomBudgetChange(e.target.value)} />
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {/* El Presupuesto Semanal (salarios) ya no se pide: se calcula solo como
