@@ -116,6 +116,10 @@ Detección de cesión (muy importante, revísalo con cuidado antes de rellenar d
   (6 Meses / 1 Temporada / 2 Temporadas) más parecida a la duración de cesión que muestre la
   tarjeta si aparece. En este caso NO rellenes duracionContrato ni clausulaRescision (van a
   null): un jugador cedido no tiene esos datos como propietario, son del club de origen.
+  Si el club de origen aparece solo como una abreviatura de 3-4 letras junto al escudo (p. ej.
+  "VAL", "RMA", "ATM", "BAR"/"FCB", "SEV", "BET", "RSO", "VIL", "ATH"), intenta devolver el
+  nombre completo del club en vez de la abreviatura (ej. "Valencia CF" en vez de "VAL") si lo
+  reconoces con confianza; si no lo reconoces, devuelve la abreviatura tal cual la ves.
 - Si NO encuentras ningún indicio de cesión: esCesion = false (o null), clubCesion = null,
   duracionCesion = null, y en su lugar sí rellena duración de contrato (años restantes o fecha
   de finalización) y cláusula de rescisión en euros si la tarjeta las muestra — es un jugador

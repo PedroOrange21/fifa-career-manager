@@ -217,12 +217,15 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
     return { prefill: { type: 'Comprado' }, restrictTypes: ['Comprado', 'Cedido'], skipInitialTransaction: true };
   };
 
-  // Mismo criterio que playerFormPropsFor, pero para BulkScanReviewModal: "extraDefaults" se
-  // fusiona en cada fila detectada antes de guardarla, en vez de en props de PlayerForm.
+  // Mismo criterio que playerFormPropsFor, pero para BulkScanReviewModal: "propertyDefault" es
+  // solo el punto de partida de cada fila detectada como Propiedad (nunca Cedido/Cantera, que
+  // la IA ya clasifica sola) — el usuario puede corregirlo fila a fila en la propia tabla. En
+  // Onboarding, tanto empezando desde cero como continuando una carrera ya avanzada, una
+  // tarjeta de Propiedad se preasigna siempre a "Ya en el Club": es la forma natural de dar de
+  // alta la plantilla de partida sin tener que rellenar precio/club de origen de cada jugador.
   const bulkScanPropsFor = (mode) => {
-    if (mode === 'academy') return { mode: 'academia', extraDefaults: {}, skipInitialTransaction: true };
-    if (isScratch) return { mode: 'primerEquipo', extraDefaults: { type: 'Comprado', isInitialSquad: true, sourceClub: 'En el club desde el inicio' }, skipInitialTransaction: true };
-    return { mode: 'primerEquipo', extraDefaults: {}, skipInitialTransaction: true };
+    if (mode === 'academy') return { mode: 'academia', propertyDefault: 'Comprado', skipInitialTransaction: true };
+    return { mode: 'primerEquipo', propertyDefault: 'Inicial', skipInitialTransaction: true };
   };
 
   const handleBulkScanExtracted = (results) => {
@@ -517,7 +520,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
         <BulkScanReviewModal
           mode={bulkReview.mode}
           results={bulkReview.results}
-          extraDefaults={bulkReview.extraDefaults}
+          propertyDefault={bulkReview.propertyDefault}
           skipInitialTransaction={bulkReview.skipInitialTransaction}
           onClose={() => setBulkReview(null)}
         />

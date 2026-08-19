@@ -350,7 +350,7 @@ export default function AcademyTab() {
   // BulkScanReviewModal), sin pasar por PlayerForm en absoluto.
   const handleBatchScanExtracted = (results) => {
     setAddStep(null);
-    setBulkReview({ mode: 'academia', results, extraDefaults: {}, skipInitialTransaction: false });
+    setBulkReview({ mode: 'academia', results, propertyDefault: 'Comprado', skipInitialTransaction: false });
   };
 
   return (
@@ -453,7 +453,7 @@ export default function AcademyTab() {
         <BulkScanReviewModal
           mode={bulkReview.mode}
           results={bulkReview.results}
-          extraDefaults={bulkReview.extraDefaults}
+          propertyDefault={bulkReview.propertyDefault}
           skipInitialTransaction={bulkReview.skipInitialTransaction}
           onClose={() => setBulkReview(null)}
         />

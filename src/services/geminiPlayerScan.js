@@ -63,6 +63,24 @@ export async function scanPlayerCard(file, mode = 'primerEquipo') {
   return payload.data;
 }
 
+// Diccionario de códigos de 3-4 letras -> nombre completo del club, para resolver el "Club de
+// Origen" de una cesión cuando la tarjeta solo muestra la abreviatura (p. ej. "VAL" en vez de
+// "Valencia CF"). El prompt de Gemini (ver api/scan-player.js) ya intenta resolverlo por
+// contexto o escudo, pero esto normaliza el resultado con independencia de lo que devuelva
+// literalmente — si Gemini ya entregó un nombre completo que no coincide con ninguna clave de
+// aquí, se deja tal cual (fallback a `value` en resolveClubName).
+const CLUB_ABBREVIATIONS = {
+  VAL: 'Valencia CF', RMA: 'Real Madrid', ATM: 'Atlético de Madrid', BAR: 'FC Barcelona', FCB: 'FC Barcelona',
+  SEV: 'Sevilla FC', BET: 'Real Betis', RSO: 'Real Sociedad', VIL: 'Villarreal CF', ATH: 'Athletic Club',
+  CEL: 'RC Celta', ESP: 'RCD Espanyol', GET: 'Getafe CF', GIR: 'Girona FC', OSA: 'CA Osasuna',
+  RAY: 'Rayo Vallecano', ALA: 'Deportivo Alavés', MLL: 'RCD Mallorca', LEG: 'CD Leganés', VLD: 'Real Valladolid',
+};
+const resolveClubName = (raw) => {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  return CLUB_ABBREVIATIONS[value.toUpperCase()] || value;
+};
+
 // Traduce el JSON en español devuelto por el endpoint al objeto "prefill" que espera
 // PlayerForm. Importante: PlayerForm (toFormState) deriva primaryPosition/secondaryPositions
 // únicamente a partir de un array "positions" (principal primero) — pasarlas como claves
@@ -115,11 +133,12 @@ export function mapScanResultToPrefill(extracted) {
   };
 
   if (extracted.esCesion) {
+    const clubName = resolveClubName(extracted.clubCesion);
     return {
       ...common,
       type: 'Cedido',
-      sourceClub: extracted.clubCesion || '',
-      originClub: extracted.clubCesion || '',
+      sourceClub: clubName,
+      originClub: clubName,
       loanDuration: extracted.duracionCesion || '1 Temporada',
     };
   }
@@ -163,14 +182,19 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // por segundo, y una cola secuencial da además un progreso real y predecible) — usado tanto por
 // la carga masiva con IA de PlayerList/AcademyTab como por los dos bloques de OnboardingWizard.
 // Cada foto pasa por el mismo pipeline que un escaneo individual (prepareImageForScan para
-// HEIC/compresión, scanPlayerCard, y el mapeo correspondiente al modo), con una pequeña espera
-// de seguridad entre llamadas sucesivas a la API (DELAY_BETWEEN_CALLS_MS) para no encadenarlas
-// pegadas y arriesgarnos a un 429 de la API de Gemini. onProgress(info) se invoca en cada
-// cambio de fase de la foto en curso — { index (0-based), total, fileName, phase } — para que
-// la UI pueda mostrar "Procesando jugador/canterano X de N..." con su propia sub-fase.
-// Devuelve { succeeded: [prefill, ...], failed: [{ fileName, error }, ...] }: los fallos
-// individuales (foto borrosa, respuesta inválida...) no interrumpen el resto de la cola.
-const DELAY_BETWEEN_CALLS_MS = 700;
+// HEIC/compresión, scanPlayerCard, y el mapeo correspondiente al modo), con una espera de
+// seguridad entre llamadas sucesivas a la API (DELAY_BETWEEN_CALLS_MS, 2-3s) para no
+// encadenarlas pegadas y arriesgarnos a un 429 de cuota de la API de Gemini en lotes grandes.
+// onProgress(info) se invoca en cada cambio de fase de la foto en curso — { index (0-based),
+// total, fileName, phase } — para que la UI pueda mostrar "Procesando jugador/canterano X de
+// N..." con su propia sub-fase.
+// Tolerancia a fallos por imagen (cola con try/catch, nunca Promise.all: una imagen que
+// truena no debe tirar abajo el resto del lote): cada resultado logrado, incluso si viene
+// incompleto (p. ej. sin nombre legible), se añade a "succeeded" con su fileName — es la propia
+// UI de revisión (BulkScanReviewModal) la que decide si mostrarlo como "lectura parcial" y
+// dejar que el usuario lo complete a mano o lo descarte, en vez de perderlo aquí en silencio.
+// Solo una excepción real (red caída, respuesta inválida...) va a "failed": { fileName, error }.
+const DELAY_BETWEEN_CALLS_MS = 2500;
 export async function scanPlayerCardsQueue(files, mode, onProgress) {
   const mapper = mode === 'academia' ? mapAcademyScanResultToPrefill : mapScanResultToPrefill;
   const succeeded = [];
@@ -192,7 +216,7 @@ export async function scanPlayerCardsQueue(files, mode, onProgress) {
 
       report('scanning');
       const extracted = await scanPlayerCard(preparedFile, mode);
-      succeeded.push(mapper(extracted));
+      succeeded.push({ ...mapper(extracted), fileName: file.name });
     } catch (err) {
       console.error('Error escaneando la imagen:', file.name, err);
       failed.push({ fileName: file.name, error: err.message || 'No se pudo analizar la imagen.' });

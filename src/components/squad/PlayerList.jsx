@@ -80,7 +80,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   // (esquema/prompt de Gemini y mapper distintos, ver geminiPlayerScan.js).
   const [pendingDestination, setPendingDestination] = useState('primerEquipo');
   // Resultado de un escaneo con VARIAS fotos a la vez (ver forceBatch/onBatchExtracted en
-  // ScanPlayerCardModal): { mode, results, extraDefaults, skipInitialTransaction } para
+  // ScanPlayerCardModal): { mode, results, propertyDefault, skipInitialTransaction } para
   // BulkScanReviewModal, o null si no hay ninguna revisión en lote pendiente.
   const [bulkReview, setBulkReview] = useState(null);
   const [sellingPlayer, setSellingPlayer] = useState(null);
@@ -338,20 +338,21 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   };
 
   // Al terminar el escaneo por IA de VARIAS fotos a la vez, se abre BulkScanReviewModal con la
-  // tabla de revisión y guardado en lote, sin pasar por PlayerForm en absoluto — extraDefaults/
+  // tabla de revisión y guardado en lote, sin pasar por PlayerForm en absoluto — propertyDefault/
   // skipInitialTransaction reflejan la misma lógica de "Ya en el Club" que ya aplica al
   // escaneo individual, para que el resultado sea idéntico independientemente de cuántas fotos
-  // se hayan escaneado a la vez.
+  // se hayan escaneado a la vez. El usuario puede corregir el tipo fila a fila en la propia
+  // tabla, así que esto es solo el punto de partida.
   const handleBatchScanExtracted = (results) => {
     setAddStep(null);
     if (pendingDestination === 'academia') {
-      setBulkReview({ mode: 'academia', results, extraDefaults: {}, skipInitialTransaction: false });
+      setBulkReview({ mode: 'academia', results, propertyDefault: 'Comprado', skipInitialTransaction: false });
       return;
     }
     setBulkReview({
       mode: 'primerEquipo',
       results,
-      extraDefaults: pendingIsInitialSquad ? { type: 'Comprado', isInitialSquad: true, sourceClub: 'En el club desde el inicio' } : {},
+      propertyDefault: pendingIsInitialSquad ? 'Inicial' : 'Comprado',
       skipInitialTransaction: pendingIsInitialSquad,
     });
   };
@@ -530,7 +531,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
         <BulkScanReviewModal
           mode={bulkReview.mode}
           results={bulkReview.results}
-          extraDefaults={bulkReview.extraDefaults}
+          propertyDefault={bulkReview.propertyDefault}
           skipInitialTransaction={bulkReview.skipInitialTransaction}
           onClose={() => setBulkReview(null)}
         />
