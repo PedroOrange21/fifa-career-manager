@@ -122,6 +122,45 @@ Reglas importantes:
 - No incluyas en la respuesta ningún dato fuera del esquema indicado (nada de altura, peso, cláusula de reventa, primas extra o prima de fichaje): esos campos ya no existen en la ficha de la aplicación.
 - Responde exclusivamente con el JSON que cumpla el esquema indicado, sin texto adicional.`;
 
+// Esquema y prompt específicos para tarjetas de la Academia de Jóvenes Promesas: un canterano
+// en este modelo de datos (type "Cantera") NUNCA tiene términos económicos de primer equipo
+// (sueldo, cláusula de rescisión, precio de traspaso, relevancia en la plantilla) — solo los
+// campos deportivos/de identidad que sí existen en su ficha, más el rango de potencial que es
+// lo que distingue a un canterano de un jugador ya formado.
+const ACADEMY_RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    nombre: { type: Type.STRING, nullable: true, description: 'Nombre completo del canterano tal como aparece en la tarjeta.' },
+    media: { type: Type.INTEGER, nullable: true, description: 'Media/valoración actual (OVR), número entre 1 y 99.' },
+    potencial: { type: Type.STRING, nullable: true, description: 'Rango de potencial tal como lo muestra la tarjeta (ej. "75-94"); si solo hay un único número de potencial, devuélvelo igualmente como texto (ej. "88").' },
+    posicionPrincipal: { type: Type.STRING, nullable: true, description: 'Abreviatura de la posición principal (ej. DC, MC, LD, POR).' },
+    posicionesSecundarias: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true, description: 'Abreviaturas de posiciones secundarias, si las muestra la tarjeta.' },
+    nacionalidad: { type: Type.STRING, nullable: true },
+    edad: { type: Type.INTEGER, nullable: true },
+    piernaBuena: { type: Type.STRING, enum: ['Diestro', 'Zurdo'], nullable: true },
+    valorMercado: { type: Type.INTEGER, nullable: true, description: 'Valor de mercado en euros, solo el número.' },
+  },
+};
+
+const ACADEMY_PROMPT = `Eres un asistente experto en leer tarjetas de jugador del videojuego EA Sports FC (Modo Carrera), específicamente de la sección Academia de Jóvenes Promesas (Academy/Youth Prospects), donde se muestran los canteranos del club.
+
+Analiza la imagen adjunta y extrae ÚNICAMENTE los datos que aparezcan visibles en la tarjeta del canterano, con la máxima precisión posible:
+- nombre completo
+- media/valoración actual (OVR)
+- rango de potencial (ej. "75-94") o un único número de potencial si no se muestra como rango
+- posición principal (abreviatura, ej. DC, MC, LD, POR)
+- posiciones secundarias (si las hay)
+- nacionalidad
+- edad
+- pierna buena (Diestro o Zurdo)
+- valor de mercado en euros
+
+Reglas importantes:
+- Un canterano de la Academia NUNCA tiene sueldo, cláusula de rescisión, precio de traspaso, club de procedencia ni relevancia en la plantilla — son datos de primer equipo que no existen en su ficha. Aunque la imagen mostrara algo parecido, ignóralo: no forma parte del esquema y no debes intentar rellenarlo.
+- El importe de valor de mercado debe ir como número entero puro, SIN puntos de miles, SIN comas, SIN el símbolo "€" y sin abreviar (ej. escribe 4500000, nunca "4.5M").
+- Si un dato no aparece visible en la imagen o no puedes leerlo con confianza, devuelve null en ese campo — no inventes ni adivines valores.
+- Responde exclusivamente con el JSON que cumpla el esquema indicado, sin texto adicional.`;
+
 // Nota: el límite de tamaño de petición de las funciones Serverless de Vercel (~4.5 MB por
 // defecto) es un límite de plataforma, no configurable aquí — una foto de móvil ya comprimida
 // en JPEG/base64 entra sobradamente dentro de ese margen.
@@ -136,13 +175,18 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { imageBase64: rawImageBase64, mimeType: rawMimeType } = req.body || {};
+  const { imageBase64: rawImageBase64, mimeType: rawMimeType, mode: rawMode } = req.body || {};
   if (!rawImageBase64) {
     res.status(400).json({ error: 'No se recibió ninguna imagen.' });
     return;
   }
   const imageBase64 = sanitizeBase64(rawImageBase64);
   const mimeType = sanitizeMimeType(rawMimeType);
+  // "academia" activa el esquema/prompt de canteranos (ver ACADEMY_RESPONSE_SCHEMA/PROMPT);
+  // cualquier otro valor (incluido ausente) usa el de primer equipo, el comportamiento previo.
+  const isAcademy = rawMode === 'academia';
+  const promptText = isAcademy ? ACADEMY_PROMPT : PROMPT;
+  const schema = isAcademy ? ACADEMY_RESPONSE_SCHEMA : RESPONSE_SCHEMA;
 
   const ai = new GoogleGenAI({ apiKey });
   const callModel = (model) => ai.models.generateContent({
@@ -151,14 +195,14 @@ export default async function handler(req, res) {
       {
         role: 'user',
         parts: [
-          { text: PROMPT },
+          { text: promptText },
           { inlineData: { mimeType, data: imageBase64 } },
         ],
       },
     ],
     config: {
       responseMimeType: 'application/json',
-      responseSchema: RESPONSE_SCHEMA,
+      responseSchema: schema,
     },
   });
 

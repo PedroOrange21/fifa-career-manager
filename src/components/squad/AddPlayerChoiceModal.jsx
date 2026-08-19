@@ -2,11 +2,12 @@ import { X, ChevronLeft, PenLine, ScanLine, ChevronRight } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
-// Tercer paso de "Fichar Jugador" (tras elegir Primer Equipo en AddPlayerDestinationModal y
-// fijar Comprado/Cedido en AddPlayerOperationTypeModal): elegir entre rellenar el asistente a
-// mano o escanear la tarjeta del jugador con IA (Gemini Vision) para prerrellenarlo
-// automáticamente. onBack vuelve al paso de Tipo de Operación sin cerrar del todo el flujo de
-// alta.
+// Selector de Método de alta, reutilizado en tres sitios: Paso de Método de "Fichar Jugador"
+// en PlayerList (tras Tipo de Operación en Primer Equipo, o directo tras elegir Academia en el
+// Paso 1); botón "Fichar Canterano" de AcademyTab (sin pasos previos, ya en la Academia); y
+// dentro de esos mismos flujos. Elegir entre rellenar el asistente a mano o escanear la
+// tarjeta del jugador con IA (Gemini Vision, una o varias fotos) para prerrellenarlo
+// automáticamente. onBack, si se pasa, vuelve al paso anterior sin cerrar del todo el flujo.
 export default function AddPlayerChoiceModal({ onManual, onScan, onClose, onBack }) {
   useBodyScrollLock();
   useAutoHideChrome();

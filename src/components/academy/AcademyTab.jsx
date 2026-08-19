@@ -10,6 +10,9 @@ import { parsePotentialRange } from '../../utils/format';
 import { ALL_POSITIONS } from '../../constants/positions';
 import PlayerForm from '../squad/PlayerForm';
 import PlayerInfoModal from '../squad/PlayerInfoModal';
+import AddPlayerChoiceModal from '../squad/AddPlayerChoiceModal';
+import ScanPlayerCardModal from '../squad/ScanPlayerCardModal';
+import BulkScanReviewModal from '../squad/BulkScanReviewModal';
 import ConfirmModal from '../common/ConfirmModal';
 import SwipeableRow from '../common/SwipeableRow';
 import UpdateRatingModal from './UpdateRatingModal';
@@ -245,6 +248,7 @@ export default function AcademyTab() {
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [formPrefill, setFormPrefill] = useState(null);
   const [formInitialStep, setFormInitialStep] = useState(1);
+  const [formPostScanReview, setFormPostScanReview] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState('potential-desc');
   const [showSort, setShowSort] = useState(false);
@@ -253,6 +257,13 @@ export default function AcademyTab() {
   const [ficharConfirming, setFicharConfirming] = useState(false);
   const ficharRef = useRef(null);
   useOnClickOutside(ficharRef, () => setFicharConfirming(false), ficharConfirming);
+  // "Fichar Canterano" abre directamente el selector de Método (Manual o Escanear con IA, sin
+  // paso de Destino: ya estamos en la Academia) — ver AddPlayerChoiceModal/ScanPlayerCardModal,
+  // los mismos componentes que reutiliza PlayerList para su propio flujo de "Fichar Jugador".
+  // Con una sola foto, el escaneo abre PlayerForm en el Paso 4 (Revisión); con varias, abre
+  // BulkScanReviewModal con la tabla de revisión y guardado en lote.
+  const [addStep, setAddStep] = useState(null); // null | 'method' | 'scan'
+  const [bulkReview, setBulkReview] = useState(null);
 
   // Cada modal (PromoteToFirstTeamModal, UpdateRatingModal, PlayerForm) oculta la cabecera y
   // la barra de navegación por sí mismo (useAutoHideChrome), así que aquí ya no hace falta
@@ -283,17 +294,43 @@ export default function AcademyTab() {
   const sortedYouth = sortPlayers(allYouth);
 
   // Editar desde la Academia abre directamente el Paso 4, igual que desde la Plantilla.
-  const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormInitialStep(4); setShowForm(true); };
-  // Fichar nuevo canterano: mismo asistente que "Fichar Jugador" de la Plantilla, pero con el
-  // Tipo de Adquisición bloqueado en "Cantera" — un canterano no tiene sección de Economía
-  // (ni sueldo, ni cláusula, ni costes), así que el Paso de Términos Económicos se salta por
-  // completo, tanto al fichar como al editar.
-  const openNewForm = () => { setEditingPlayer(null); setFormPrefill({ type: 'Cantera' }); setFormInitialStep(1); setShowForm(true); };
+  const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormInitialStep(4); setFormPostScanReview(false); setShowForm(true); };
+  // Fichar nuevo canterano a mano: mismo asistente que "Fichar Jugador" de la Plantilla, pero
+  // con el Tipo de Adquisición bloqueado en "Cantera" — un canterano no tiene sección de
+  // Economía (ni sueldo, ni cláusula, ni costes), así que el Paso de Términos Económicos se
+  // salta por completo, tanto al fichar como al editar.
+  const openNewForm = () => {
+    setAddStep(null);
+    setEditingPlayer(null);
+    setFormPrefill({ type: 'Cantera' });
+    setFormInitialStep(1);
+    setFormPostScanReview(false);
+    setShowForm(true);
+  };
 
   const handleFicharClick = () => {
-    if (HAS_HOVER) { openNewForm(); return; }
-    if (ficharConfirming) { openNewForm(); setFicharConfirming(false); }
+    if (HAS_HOVER) { setAddStep('method'); return; }
+    if (ficharConfirming) { setAddStep('method'); setFicharConfirming(false); }
     else { setFicharConfirming(true); }
+  };
+
+  // Escaneo con IA de UNA sola tarjeta: abre PlayerForm directamente en el Paso 4 (Revisión,
+  // única pantalla, ver postScanReview) con el canterano ya prerrellenado, igual que hace
+  // PlayerList con "Fichar Jugador" -> Academia -> Escanear con IA.
+  const handleScanExtracted = (prefillData) => {
+    setAddStep(null);
+    setEditingPlayer(null);
+    setFormPrefill(prefillData);
+    setFormInitialStep(4);
+    setFormPostScanReview(true);
+    setShowForm(true);
+  };
+
+  // Escaneo con IA de VARIAS tarjetas a la vez: tabla de revisión y guardado en lote (ver
+  // BulkScanReviewModal), sin pasar por PlayerForm en absoluto.
+  const handleBatchScanExtracted = (results) => {
+    setAddStep(null);
+    setBulkReview({ mode: 'academia', results, extraDefaults: {}, skipInitialTransaction: false });
   };
 
   return (
@@ -374,7 +411,33 @@ export default function AcademyTab() {
       {showPotentialInfo && <PotentialInfoModal onClose={() => setShowPotentialInfo(false)} />}
       {updatingPlayer && <UpdateRatingModal player={updatingPlayer} onClose={() => setUpdatingPlayer(null)} />}
       {promotingPlayer && <PromoteToFirstTeamModal player={promotingPlayer} onClose={() => setPromotingPlayer(null)} />}
-      {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} initialStep={formInitialStep} lockedType="Cantera" onClose={() => setShowForm(false)} />}
+      {showForm && <PlayerForm editingPlayer={editingPlayer} prefill={formPrefill} initialStep={formInitialStep} lockedType="Cantera" postScanReview={formPostScanReview} onClose={() => setShowForm(false)} />}
+
+      {addStep === 'method' && (
+        <AddPlayerChoiceModal
+          onClose={() => setAddStep(null)}
+          onManual={openNewForm}
+          onScan={() => setAddStep('scan')}
+        />
+      )}
+      {addStep === 'scan' && (
+        <ScanPlayerCardModal
+          mode="academia"
+          onClose={() => setAddStep(null)}
+          onBack={() => setAddStep('method')}
+          onExtracted={handleScanExtracted}
+          onBatchExtracted={handleBatchScanExtracted}
+        />
+      )}
+      {bulkReview && (
+        <BulkScanReviewModal
+          mode={bulkReview.mode}
+          results={bulkReview.results}
+          extraDefaults={bulkReview.extraDefaults}
+          skipInitialTransaction={bulkReview.skipInitialTransaction}
+          onClose={() => setBulkReview(null)}
+        />
+      )}
       {selectedPlayerInfo && (
         <PlayerInfoModal
           player={selectedPlayerInfo}

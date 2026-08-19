@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Check, ChevronLeft, ChevronRight, ChevronDown, Plus, Wallet, Users, Sparkles, RotateCcw, Shield, Camera, RefreshCcw, ShieldAlert } from 'lucide-react';
+import { X, Check, ChevronLeft, ChevronRight, ChevronDown, Plus, Wallet, Users, Sparkles, RotateCcw, Shield, Camera, RefreshCcw, ShieldAlert, ScanLine } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency, formatValueInput, parseValue, weeklyWageBudgetFromTransfer } from '../../utils/format';
@@ -7,6 +7,8 @@ import { resizeImageToDataUrl } from '../../utils/image';
 import { getCardStyle } from '../../utils/cardStyle';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import PlayerForm from '../squad/PlayerForm';
+import ScanPlayerCardModal from '../squad/ScanPlayerCardModal';
+import BulkScanReviewModal from '../squad/BulkScanReviewModal';
 
 const BUDGET_PRESETS = [1000000, 5000000, 10000000, 50000000, 100000000, 200000000, 500000000, 1000000000];
 
@@ -83,6 +85,14 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   // este asistente; cada ficha se guarda directamente en Firestore, así que la lista que se
   // muestra aquí simplemente lee "players" en vivo, sin estado local propio. ---
   const [addingPlayerMode, setAddingPlayerMode] = useState(null); // 'active' | 'academy' | null
+
+  // --- Carga masiva con IA (una o varias fotos): mismo ScanPlayerCardModal/
+  // BulkScanReviewModal que reutilizan PlayerList y AcademyTab. forceBatch=true en
+  // ScanPlayerCardModal para que incluso UNA sola foto pase por la tabla de revisión en vez de
+  // abrir PlayerForm directamente — aquí la intención es siempre "carga masiva", nunca una
+  // ficha individual paso a paso. ---
+  const [bulkScanMode, setBulkScanMode] = useState(null); // 'active' | 'academy' | null
+  const [bulkReview, setBulkReview] = useState(null);
 
   // --- Paso Resumen: desglose desplegable de las dos listas ("Jugadores"/"Canteranos") ---
   const [expandedGroup, setExpandedGroup] = useState(null); // 'active' | 'academy' | null
@@ -190,6 +200,19 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
     if (mode === 'academy') return { prefill: { type: 'Cantera' }, lockedType: 'Cantera', skipInitialTransaction: true };
     if (isScratch) return { prefill: { type: 'Comprado', sourceClub: 'En el club desde el inicio' }, lockedType: 'Comprado', hidePurchasePrice: true, hideSourceClub: true, skipInitialTransaction: true };
     return { prefill: { type: 'Comprado' }, restrictTypes: ['Comprado', 'Cedido'], skipInitialTransaction: true };
+  };
+
+  // Mismo criterio que playerFormPropsFor, pero para BulkScanReviewModal: "extraDefaults" se
+  // fusiona en cada fila detectada antes de guardarla, en vez de en props de PlayerForm.
+  const bulkScanPropsFor = (mode) => {
+    if (mode === 'academy') return { mode: 'academia', extraDefaults: {}, skipInitialTransaction: true };
+    if (isScratch) return { mode: 'primerEquipo', extraDefaults: { type: 'Comprado', isInitialSquad: true, sourceClub: 'En el club desde el inicio' }, skipInitialTransaction: true };
+    return { mode: 'primerEquipo', extraDefaults: {}, skipInitialTransaction: true };
+  };
+
+  const handleBulkScanExtracted = (results) => {
+    setBulkReview({ ...bulkScanPropsFor(bulkScanMode), results });
+    setBulkScanMode(null);
   };
 
   const STEP_LABELS = {
@@ -316,9 +339,14 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                       </div>
                     ))}
                   </div>
-                  <button type="button" onClick={() => setAddingPlayerMode('active')} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                    <Plus size={14} /> Añadir Jugador
-                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => setBulkScanMode('active')} className="py-3 rounded-2xl border border-dashed border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
+                      <ScanLine size={13} /> Carga Masiva IA
+                    </button>
+                    <button type="button" onClick={() => setAddingPlayerMode('active')} className="py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
+                      <Plus size={13} /> Manual
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -341,9 +369,14 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                           </div>
                         ))}
                       </div>
-                      <button type="button" onClick={() => setAddingPlayerMode('academy')} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                        <Plus size={14} /> Añadir Canterano
-                      </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button type="button" onClick={() => setBulkScanMode('academy')} className="py-3 rounded-2xl border border-dashed border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
+                          <ScanLine size={13} /> Carga Masiva IA
+                        </button>
+                        <button type="button" onClick={() => setAddingPlayerMode('academy')} className="py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
+                          <Plus size={13} /> Manual
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
@@ -437,6 +470,24 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
 
       {addingPlayerMode && (
         <PlayerForm {...playerFormPropsFor(addingPlayerMode)} onClose={() => setAddingPlayerMode(null)} />
+      )}
+
+      {bulkScanMode && (
+        <ScanPlayerCardModal
+          mode={bulkScanMode === 'academy' ? 'academia' : 'primerEquipo'}
+          forceBatch
+          onClose={() => setBulkScanMode(null)}
+          onBatchExtracted={handleBulkScanExtracted}
+        />
+      )}
+      {bulkReview && (
+        <BulkScanReviewModal
+          mode={bulkReview.mode}
+          results={bulkReview.results}
+          extraDefaults={bulkReview.extraDefaults}
+          skipInitialTransaction={bulkReview.skipInitialTransaction}
+          onClose={() => setBulkReview(null)}
+        />
       )}
     </>
   );

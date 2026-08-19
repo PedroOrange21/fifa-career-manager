@@ -4,6 +4,7 @@
 // respuesta. Antes esta llamada se hacía directo desde el navegador con la clave incrustada
 // en el bundle público; se movió al backend porque además de exponer la clave, algunos
 // navegadores/redes móviles bloqueaban la petición saliente directa a la API de Google.
+import { prepareImageForScan } from '../utils/imagePrep';
 
 // Convierte un File/Blob (foto de cámara o galería) a base64 puro, sin el prefijo
 // "data:image/...;base64," que añade FileReader — el endpoint espera el base64 a secas.
@@ -19,10 +20,13 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
 });
 
 // Analiza la foto de una tarjeta de jugador vía api/scan-player.js y devuelve el JSON
-// extraído (mismas claves que describe ese endpoint). Lanza un Error con mensaje legible en
-// español si algo falla (sin conexión, servidor sin clave configurada, respuesta inválida...),
-// para que la UI que llama a esta función pueda mostrarlo directamente al usuario.
-export async function scanPlayerCard(file) {
+// extraído (mismas claves que describe ese endpoint). "mode" ('primerEquipo' por defecto o
+// 'academia') decide qué esquema/prompt usa el servidor (ver api/scan-player.js) — un
+// canterano de la Academia nunca trae términos económicos de primer equipo, así que su
+// extracción es deliberadamente más reducida. Lanza un Error con mensaje legible en español si
+// algo falla (sin conexión, servidor sin clave configurada, respuesta inválida...), para que la
+// UI que llama a esta función pueda mostrarlo directamente al usuario.
+export async function scanPlayerCard(file, mode = 'primerEquipo') {
   if (!file) throw new Error('No se ha seleccionado ninguna imagen.');
   const imageBase64 = await fileToBase64(file);
 
@@ -31,7 +35,7 @@ export async function scanPlayerCard(file) {
     response = await fetch('/api/scan-player', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64, mimeType: file.type || 'image/jpeg' }),
+      body: JSON.stringify({ imageBase64, mimeType: file.type || 'image/jpeg', mode }),
     });
   } catch (err) {
     console.error('Error de red llamando a /api/scan-player:', err);
@@ -110,4 +114,72 @@ export function mapScanResultToPrefill(extracted) {
     contractYears,
     releaseClause: extracted.clausulaRescision || '',
   };
+}
+
+// Traduce el JSON de una tarjeta de Academia (ver ACADEMY_RESPONSE_SCHEMA en
+// api/scan-player.js) al mismo formato de "prefill" que espera PlayerForm, pero solo con los
+// campos que existen de verdad en un canterano (type "Cantera"): nunca sueldo, cláusula,
+// precio de traspaso, club de procedencia ni relevancia — esos ni siquiera están en el esquema
+// de extracción de este modo, así que no hay nada que dejar vacío a propósito aquí.
+export function mapAcademyScanResultToPrefill(extracted) {
+  const positions = [extracted.posicionPrincipal, ...(extracted.posicionesSecundarias || [])].filter(Boolean);
+  return {
+    type: 'Cantera',
+    name: extracted.nombre || '',
+    rating: extracted.media || '',
+    potential: extracted.potencial || '',
+    positions,
+    nationality: extracted.nacionalidad || '',
+    age: extracted.edad || '',
+    preferredFoot: extracted.piernaBuena === 'Zurdo' ? 'Zurdo' : 'Diestro',
+    marketValue: extracted.valorMercado || '',
+  };
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Escanea varias fotos EN SECUENCIA (nunca en paralelo: Gemini aplica límites de peticiones
+// por segundo, y una cola secuencial da además un progreso real y predecible) — usado tanto por
+// la carga masiva con IA de PlayerList/AcademyTab como por los dos bloques de OnboardingWizard.
+// Cada foto pasa por el mismo pipeline que un escaneo individual (prepareImageForScan para
+// HEIC/compresión, scanPlayerCard, y el mapeo correspondiente al modo), con una pequeña espera
+// de seguridad entre llamadas sucesivas a la API (DELAY_BETWEEN_CALLS_MS) para no encadenarlas
+// pegadas y arriesgarnos a un 429 de la API de Gemini. onProgress(info) se invoca en cada
+// cambio de fase de la foto en curso — { index (0-based), total, fileName, phase } — para que
+// la UI pueda mostrar "Procesando jugador/canterano X de N..." con su propia sub-fase.
+// Devuelve { succeeded: [prefill, ...], failed: [{ fileName, error }, ...] }: los fallos
+// individuales (foto borrosa, respuesta inválida...) no interrumpen el resto de la cola.
+const DELAY_BETWEEN_CALLS_MS = 700;
+export async function scanPlayerCardsQueue(files, mode, onProgress) {
+  const mapper = mode === 'academia' ? mapAcademyScanResultToPrefill : mapScanResultToPrefill;
+  const succeeded = [];
+  const failed = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const report = (phase) => onProgress?.({ index: i, total: files.length, fileName: file.name, phase });
+
+    try {
+      report('preparing');
+      let preparedFile;
+      try {
+        preparedFile = await prepareImageForScan(file);
+      } catch (err) {
+        console.error('Error preparando la imagen (conversión/compresión):', file.name, err);
+        preparedFile = file;
+      }
+
+      report('scanning');
+      const extracted = await scanPlayerCard(preparedFile, mode);
+      succeeded.push(mapper(extracted));
+    } catch (err) {
+      console.error('Error escaneando la imagen:', file.name, err);
+      failed.push({ fileName: file.name, error: err.message || 'No se pudo analizar la imagen.' });
+    }
+
+    // No hace falta esperar tras la última: solo se frena entre llamadas consecutivas de verdad.
+    if (i < files.length - 1) await sleep(DELAY_BETWEEN_CALLS_MS);
+  }
+
+  return { succeeded, failed };
 }
