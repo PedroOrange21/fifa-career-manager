@@ -120,7 +120,14 @@ function TargetRow({ t, onSign, onEdit, onDelete }) {
             {t.originClub && (
               <span className="flex items-center gap-1 text-[9px] md:text-[10px] font-black text-blue-400 uppercase tracking-wide bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded-lg truncate max-w-[140px]"><MapPin size={11} className="shrink-0" /> {t.originClub}</span>
             )}
-            <span className="text-[9px] md:text-[10px] font-black text-fg-muted uppercase tracking-widest bg-well px-2 py-1 rounded-lg">{t.estimatedValue > 0 ? abbreviateValue(t.estimatedValue) : 'Sin Valor'}</span>
+            {t.operationType === 'Cedido' ? (
+              <>
+                <span className="text-[9px] md:text-[10px] font-black text-yellow-500 uppercase tracking-widest bg-yellow-500/10 border border-yellow-500/20 px-2 py-1 rounded-lg">Cesión{t.loanDuration ? ` · ${t.loanDuration}` : ''}</span>
+                <span className="text-[9px] md:text-[10px] font-black text-fg-muted uppercase tracking-widest bg-well px-2 py-1 rounded-lg">{t.loanCost > 0 ? `${abbreviateValue(t.loanCost)} Cesión` : 'Sin Coste Cesión'}</span>
+              </>
+            ) : (
+              <span className="text-[9px] md:text-[10px] font-black text-fg-muted uppercase tracking-widest bg-well px-2 py-1 rounded-lg">{t.estimatedValue > 0 ? abbreviateValue(t.estimatedValue) : 'Sin Valor'}</span>
+            )}
             <span className="text-[9px] md:text-[10px] font-black text-fg-muted uppercase tracking-widest bg-well px-2 py-1 rounded-lg">{t.wage > 0 ? `${abbreviateValue(t.wage)}/SEM` : 'Sin Salario'}</span>
           </div>
 
@@ -204,6 +211,12 @@ export default function MarketTab({ onSignTarget }) {
   };
 
   const signTarget = (t) => {
+    // El objetivo ya venía marcado como Cesión (ver TargetForm/operationType): se ficha
+    // directamente como "Cedido" en vez de forzar "Comprado", con su club de origen y duración
+    // ya integrados — el coste de cesión en sí no tiene equivalente en la ficha real del
+    // jugador (una cesión entrante no tiene coste de traspaso en este modelo, solo % de
+    // salario asumido), así que no hay nada que trasladar ahí más allá del sueldo.
+    const isLoan = t.operationType === 'Cedido';
     onSignTarget({
       photo: t.photo || '',
       name: t.name,
@@ -214,9 +227,11 @@ export default function MarketTab({ onSignTarget }) {
       rating: t.rating ? String(t.rating) : '',
       marketValue: formatValueInput(String(t.estimatedValue || '')),
       wage: formatValueInput(String(t.wage || '')),
-      type: 'Comprado',
+      type: isLoan ? 'Cedido' : 'Comprado',
       value: '',
-      originClub: t.originClub || '',
+      sourceClub: t.originClub || '',
+      originClub: isLoan ? (t.originClub || '') : '',
+      loanDuration: isLoan ? (t.loanDuration || '1 Temporada') : '1 Temporada',
     }, t.id);
   };
 

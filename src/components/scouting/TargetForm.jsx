@@ -7,6 +7,7 @@ import { resizeImageToDataUrl } from '../../utils/image';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
+import Dropdown from '../common/Dropdown';
 
 export const STATUS_OPTIONS = ['Seguimiento', 'Negociando', 'Prioritario', 'Descartado'];
 export const STATUS_LABELS = { Seguimiento: 'En Seguimiento', Negociando: 'Negociando', Prioritario: 'Prioritario', Descartado: 'Descartado' };
@@ -19,7 +20,18 @@ export const STATUS_STYLE = {
 
 const FOOT_OPTIONS = ['Diestro', 'Zurdo', 'Ambas'];
 
-const emptyTarget = { photo: '', name: '', nationality: '', originClub: '', primaryPosition: '', secondaryPositions: [], preferredFoot: 'Diestro', age: '', rating: '', estimatedValue: '', wage: '', status: 'Seguimiento', notes: '' };
+// Tipo de operación prevista del objetivo: determina qué importes tiene sentido pedir en el
+// Planificador (ver PlannerTab.jsx) — un traspaso definitivo tiene precio de compra estimado;
+// una cesión, en cambio, no exige precio de traspaso, sino un coste de cesión opcional (puede
+// ser 0, muchas cesiones no llevan cuota) y una duración. El sueldo aplica por igual a ambas.
+export const OPERATION_TYPE_OPTIONS = ['Comprado', 'Cedido'];
+const LOAN_DURATION_OPTIONS = [
+  { value: '6 Meses', label: '6 Meses' },
+  { value: '1 Temporada', label: '1 Temporada' },
+  { value: '2 Temporadas', label: '2 Temporadas' },
+];
+
+const emptyTarget = { photo: '', name: '', nationality: '', originClub: '', primaryPosition: '', secondaryPositions: [], preferredFoot: 'Diestro', age: '', rating: '', operationType: 'Comprado', estimatedValue: '', loanCost: '', loanDuration: '1 Temporada', wage: '', status: 'Seguimiento', notes: '' };
 
 const targetToFormState = (t) => ({
   photo: t.photo || '', name: t.name, nationality: t.nationality || '', originClub: t.originClub || '',
@@ -27,7 +39,11 @@ const targetToFormState = (t) => ({
   secondaryPositions: t.secondaryPositions || t.positions?.slice(1) || [],
   preferredFoot: t.preferredFoot || 'Diestro',
   age: t.age || '', rating: t.rating || '',
-  estimatedValue: formatValueInput(String(t.estimatedValue || '')), wage: formatValueInput(String(t.wage || '')),
+  operationType: t.operationType === 'Cedido' ? 'Cedido' : 'Comprado',
+  estimatedValue: formatValueInput(String(t.estimatedValue || '')),
+  loanCost: formatValueInput(String(t.loanCost || '')),
+  loanDuration: t.loanDuration || '1 Temporada',
+  wage: formatValueInput(String(t.wage || '')),
   status: t.status || 'Seguimiento', notes: t.notes || '',
 });
 
@@ -74,6 +90,7 @@ export default function TargetForm({ editingTarget, onClose }) {
     setFormError('');
     setIsSubmitting(true);
     try {
+      const isLoan = target.operationType === 'Cedido';
       await addOrUpdateTarget({
         photo: target.photo || null,
         name: target.name.trim(),
@@ -84,7 +101,12 @@ export default function TargetForm({ editingTarget, onClose }) {
         preferredFoot: target.preferredFoot,
         age: target.age ? parseInt(target.age) : null,
         rating: target.rating ? parseInt(target.rating) : null,
-        estimatedValue: parseValue(target.estimatedValue),
+        operationType: target.operationType,
+        // Una cesión no tiene precio de traspaso (se pide coste de cesión y duración en su
+        // lugar); un traspaso definitivo no tiene coste de cesión ni duración.
+        estimatedValue: isLoan ? 0 : parseValue(target.estimatedValue),
+        loanCost: isLoan ? parseValue(target.loanCost) : 0,
+        loanDuration: isLoan ? target.loanDuration : null,
         wage: parseValue(target.wage), status: target.status,
         notes: target.notes.trim() || null,
       }, editingTarget?.id);
@@ -160,10 +182,21 @@ export default function TargetForm({ editingTarget, onClose }) {
             <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Edad</label><input type="number" min="14" max="50" className="w-full h-14 bg-well rounded-xl outline-none border border-border-subtle text-center font-black text-xl text-fg placeholder:text-fg-faint" value={target.age} onChange={(e) => setTarget({ ...target, age: e.target.value })} /></div>
             <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Media</label><input type="number" min="1" max="99" className="w-full h-14 bg-well rounded-xl outline-none border border-border-subtle text-center font-black text-xl text-fg placeholder:text-fg-faint" value={target.rating} onChange={(e) => setTarget({ ...target, rating: e.target.value })} /></div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Valor de Mercado (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 20.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.estimatedValue} onChange={(e) => setTarget({ ...target, estimatedValue: formatValueInput(e.target.value) })} /></div>
-            <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Aproximado (€/sem)</label><input type="text" inputMode="numeric" placeholder="Ej: 500.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.wage} onChange={(e) => setTarget({ ...target, wage: formatValueInput(e.target.value) })} /></div>
+          <div className="space-y-1">
+            <label className="text-[9px] font-black text-fg-muted ml-1">Tipo de Operación Prevista</label>
+            <div className="flex gap-2">
+              {OPERATION_TYPE_OPTIONS.map((t) => (<button key={t} type="button" onClick={() => setTarget({ ...target, operationType: t })} className={`flex-1 py-2.5 rounded-xl text-[9px] font-black uppercase transition-all border ${target.operationType === t ? (t === 'Cedido' ? 'bg-yellow-600 text-white border-yellow-600' : 'bg-blue-600 text-white border-blue-600') : 'bg-well text-fg-muted border-border-subtle hover:bg-well-strong'}`}>{t === 'Cedido' ? 'Cesión' : 'Compra / Traspaso'}</button>))}
+            </div>
           </div>
+          {target.operationType === 'Cedido' ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Coste de Cesión (€, opcional)</label><input type="text" inputMode="numeric" placeholder="Ej: 2.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.loanCost} onChange={(e) => setTarget({ ...target, loanCost: formatValueInput(e.target.value) })} /></div>
+              <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Duración de Cesión</label><Dropdown value={target.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => setTarget({ ...target, loanDuration: v })} labelClassName="text-xs" /></div>
+            </div>
+          ) : (
+            <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Precio de Compra Previsto (€)</label><input type="text" inputMode="numeric" placeholder="Ej: 20.000.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.estimatedValue} onChange={(e) => setTarget({ ...target, estimatedValue: formatValueInput(e.target.value) })} /></div>
+          )}
+          <div className="space-y-1"><label className="text-[9px] font-black text-fg-muted ml-1">Sueldo Aproximado (€/sem)</label><input type="text" inputMode="numeric" placeholder="Ej: 500.000" className="w-full bg-well p-4 rounded-xl outline-none border border-border-subtle text-center font-black text-fg placeholder:text-fg-faint" value={target.wage} onChange={(e) => setTarget({ ...target, wage: formatValueInput(e.target.value) })} /></div>
           <div className="space-y-1">
             <label className="text-[9px] font-black text-fg-muted ml-1">Estado de Seguimiento</label>
             <div className="grid grid-cols-2 gap-2">

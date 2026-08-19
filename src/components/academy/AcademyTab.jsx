@@ -35,28 +35,45 @@ const SORT_OPTIONS = [
   { id: 'position-asc', label: 'Posición en el Campo', icon: LayoutGrid },
 ];
 
-// Código de color de la badge de potencial, estilo EA FC: clasifica al canterano según el
-// techo máximo de su rango de proyección (p. ej. "82-90" -> 90; con un valor único, ese mismo
-// número), la misma cifra que ya usa PotentialBar para la barra de progreso. PROJECTION_STYLES
-// es la única fuente de verdad de los 4 estilos — tanto la badge real de cada tarjeta como la
-// tabla del modal "Más info" (ver POTENTIAL_INFO_TIERS) leen de aquí, así que no pueden
-// desincronizarse entre sí.
-const PROJECTION_STYLES = {
-  gold: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-  blue: 'text-sky-400 bg-sky-500/10 border-sky-500/20',
-  yellow: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
-  gray: 'text-fg-muted bg-well-strong border-border-subtle',
+// Sistema de recomendación binario (sustituye al semáforo de 4 colores anterior): en vez de
+// clasificar por franjas de "calidad" del potencial, da una recomendación directa y accionable
+// sobre qué hacer con el canterano — MANTENER (alto potencial, merece quedarse por su
+// proyección futura) o DESCARTAR (bajo potencial, libera hueco para nuevas incorporaciones).
+// Reglas, en este orden:
+//   1. Si tiene un rango de potencial asignado: su techo máximo decide — >= 84 Mantener,
+//      < 84 Descartar (esto ya incluye, sin necesitar una regla aparte, el caso "< 80" que se
+//      pedía explícitamente descartar).
+//   2. Si todavía NO tiene potencial asignado (recién fichado, aún sin valorar por el
+//      ojeador): se usa la media actual ajustada a la edad como aproximación — 19 años o menos
+//      con media >= 70 es una media "destacada para su edad" y recomienda Mantener; 17-18 años
+//      con media <= 62 es una media "muy baja" y recomienda Descartar directo.
+//   3. Si no hay datos suficientes para aplicar ninguna de las dos reglas anteriores (falta
+//      edad o media), no se da recomendación — sin badge, en vez de adivinar.
+// RECOMMENDATION_STYLES/RECOMMENDATION_LABELS son la única fuente de verdad de los dos estados:
+// tanto la badge real de cada tarjeta como la tabla del modal "Más Info" leen de aquí, así que
+// no pueden desincronizarse entre sí.
+const POTENTIAL_KEEP_THRESHOLD = 84;
+const STANDOUT_RATING_MAX_AGE = 19;
+const STANDOUT_RATING_MIN = 70;
+const WEAK_TEEN_MIN_AGE = 17;
+const WEAK_TEEN_MAX_AGE = 18;
+const WEAK_TEEN_RATING_MAX = 62;
+
+const RECOMMENDATION_STYLES = {
+  keep: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+  discard: 'text-red-400 bg-red-500/10 border-red-500/20',
 };
-function getPotentialTier(maxPotential) {
-  if (maxPotential == null) return 'gray';
-  if (maxPotential >= 90) return 'gold';
-  if (maxPotential >= 85) return 'blue';
-  if (maxPotential >= 80) return 'yellow';
-  return 'gray';
-}
-function getProjectionTier(p) {
-  const parsed = parsePotentialRange(p.potential);
-  return getPotentialTier(parsed?.max ?? null);
+const RECOMMENDATION_LABELS = { keep: 'Mantener', discard: 'Descartar' };
+const RECOMMENDATION_DOT = { keep: 'bg-emerald-400', discard: 'bg-red-400' };
+
+function getYouthRecommendation(p) {
+  const ceiling = parsePotentialRange(p.potential)?.max ?? null;
+  if (ceiling != null) return ceiling >= POTENTIAL_KEEP_THRESHOLD ? 'keep' : 'discard';
+  if (p.age != null && p.rating != null) {
+    if (p.age <= STANDOUT_RATING_MAX_AGE && p.rating >= STANDOUT_RATING_MIN) return 'keep';
+    if (p.age >= WEAK_TEEN_MIN_AGE && p.age <= WEAK_TEEN_MAX_AGE && p.rating <= WEAK_TEEN_RATING_MAX) return 'discard';
+  }
+  return null;
 }
 
 // Orden táctico natural en el terreno de juego (Portero → Defensas → Centrocampistas →
@@ -79,21 +96,19 @@ function PotentialBar({ rating, potential }) {
   );
 }
 
-// Referencia "tier" (clave de PROJECTION_STYLES) explícita en cada fila: la tabla del modal
-// pinta cada rango con `PROJECTION_STYLES[tier]`, exactamente el mismo objeto que usa la badge
-// real de la tarjeta (getProjectionTier), así que ambas vistas quedan literalmente enlazadas al
-// mismo estilo — es imposible que se desincronicen entre sí.
-const POTENTIAL_INFO_TIERS = [
-  { tier: 'gold', range: '90 - 99', label: 'Oro / Verde Brillante', desc: 'Tiene potencial para ser especial: futura estrella mundial.' },
-  { tier: 'blue', range: '85 - 89', label: 'Azul / Verde Azulado', desc: 'Un gran potencial: jugador de primer nivel.' },
-  { tier: 'yellow', range: '80 - 84', label: 'Amarillo / Naranja', desc: 'Mostrando gran potencial: buen jugador de rotación o titular.' },
-  { tier: 'gray', range: '< 80', label: 'Gris / Neutro', desc: 'En desarrollo, sin rango de potencial destacado.' },
+// Referencia explícita en cada fila: la tabla del modal pinta cada regla con
+// RECOMMENDATION_STYLES[key], exactamente el mismo objeto que usa la badge real de la tarjeta
+// (getYouthRecommendation), así que ambas vistas quedan literalmente enlazadas al mismo
+// estilo — es imposible que se desincronicen entre sí.
+const RECOMMENDATION_INFO_RULES = [
+  { key: 'keep', title: `Potencial ${POTENTIAL_KEEP_THRESHOLD}+`, desc: 'Rango de potencial con techo máximo de 84 o más: proyección de primer nivel, merece la pena conservarlo en la Academia.' },
+  { key: 'keep', title: `Sin potencial, media destacada`, desc: `Todavía sin rango de potencial asignado, pero con ${STANDOUT_RATING_MAX_AGE} años o menos y media actual de ${STANDOUT_RATING_MIN} o más: una progresión ya notable para su edad.` },
+  { key: 'discard', title: `Potencial por debajo de ${POTENTIAL_KEEP_THRESHOLD}`, desc: 'Rango de potencial con techo máximo por debajo de 84 (incluye cualquier techo inferior a 80): proyección limitada, libera hueco para nuevas incorporaciones.' },
+  { key: 'discard', title: `Sin potencial, media muy baja`, desc: `Todavía sin rango de potencial asignado, pero con ${WEAK_TEEN_MIN_AGE}-${WEAK_TEEN_MAX_AGE} años y media actual de ${WEAK_TEEN_RATING_MAX} o menos: a esa edad ya debería rendir más.` },
 ];
 
-// Popover explicativo del criterio de color del potencial: el techo de proyección que da el
-// ojeador (rango tipo "64-88" -> 88, o un valor único) sitúa al canterano en una de estas 4
-// franjas (ver getPotentialTier más arriba), y esas mismas franjas son las que pinta la badge
-// real de cada tarjeta.
+// Popover explicativo del sistema de recomendación Mantener/Descartar: las reglas exactas de
+// corte de potencial, edad y media que decide getYouthRecommendation más arriba.
 function PotentialInfoModal({ onClose }) {
   useBodyScrollLock();
   useAutoHideChrome();
@@ -101,22 +116,22 @@ function PotentialInfoModal({ onClose }) {
     <div className="fixed inset-0 bg-black/80 z-[300] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-surface border border-border w-full sm:max-w-sm rounded-t-[28px] sm:rounded-[28px] p-5 md:p-6 max-h-[85dvh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
         <div className="flex items-center justify-between mb-1">
-          <h3 className="font-black italic uppercase text-fg flex items-center gap-2 text-sm"><Info size={16} className="text-emerald-500" /> Rangos de Potencial</h3>
+          <h3 className="font-black italic uppercase text-fg flex items-center gap-2 text-sm"><Info size={16} className="text-emerald-500" /> Mantener o Descartar</h3>
           <button type="button" onClick={onClose} className="p-1.5 -mr-1.5 text-fg-faint hover:text-fg transition-colors touch-manipulation"><X size={18} /></button>
         </div>
-        <p className="text-[10px] text-fg-muted font-bold leading-relaxed mb-4">El color se determina según el techo máximo del rango de proyección que estima el ojeador para el canterano.</p>
+        <p className="text-[10px] text-fg-muted font-bold leading-relaxed mb-4">Recomendación automática para decidir de un vistazo qué canteranos merece la pena conservar en la Academia y cuáles liberan hueco para nuevas incorporaciones.</p>
         <div className="space-y-2">
-          {POTENTIAL_INFO_TIERS.map((tier) => (
-            <div key={tier.range} className="flex items-center gap-3 p-3 rounded-xl bg-well border border-border-subtle">
-              <span className={`shrink-0 w-14 text-center text-[10px] font-black py-1.5 rounded-lg border ${PROJECTION_STYLES[tier.tier]}`}>{tier.range}</span>
+          {RECOMMENDATION_INFO_RULES.map((rule) => (
+            <div key={rule.title} className="flex items-center gap-3 p-3 rounded-xl bg-well border border-border-subtle">
+              <span className={`shrink-0 text-center text-[9px] font-black uppercase tracking-widest px-2 py-1.5 rounded-lg border ${RECOMMENDATION_STYLES[rule.key]}`}>{RECOMMENDATION_LABELS[rule.key]}</span>
               <div className="min-w-0">
-                <div className="text-[10px] font-black uppercase tracking-widest text-fg">{tier.label}</div>
-                <div className="text-[10px] text-fg-muted font-bold leading-snug mt-0.5">{tier.desc}</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-fg">{rule.title}</div>
+                <div className="text-[10px] text-fg-muted font-bold leading-snug mt-0.5">{rule.desc}</div>
               </div>
             </div>
           ))}
         </div>
-        <p className="text-[9px] text-fg-faint font-bold leading-relaxed mt-4 pt-3 border-t border-border-subtle">Si el canterano todavía no tiene un rango de potencial asignado, o su techo máximo es inferior a 80, la badge se muestra en gris neutro.</p>
+        <p className="text-[9px] text-fg-faint font-bold leading-relaxed mt-4 pt-3 border-t border-border-subtle">Si al canterano le falta la edad o la media (datos obligatorios en su ficha) para aplicar estas reglas, no se muestra ninguna recomendación.</p>
       </div>
     </div>
   );
@@ -130,6 +145,7 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail
   const [moreRect, setMoreRect] = useState(null);
   const moreBtnDesktopRef = useRef(null);
   const moreMenuRef = useRef(null);
+  const youthRecommendation = getYouthRecommendation(p);
 
   useEffect(() => {
     if (!showMore) return;
@@ -194,9 +210,13 @@ function YouthPlayerRow({ p, onUpdate, onPromote, onEdit, onDelete, onViewDetail
             </div>
             <div className="flex flex-col items-end gap-1 shrink-0">
               <span className="text-[8px] text-fg-faint font-black uppercase tracking-widest">{p.age} Años</span>
-              {p.potential ? (
+              {p.potential && <span className="text-[8px] text-fg-faint font-bold uppercase tracking-widest">Pot. {p.potential}</span>}
+              {youthRecommendation ? (
                 <>
-                  <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border ${PROJECTION_STYLES[getProjectionTier(p)]}`}>Pot. {p.potential}</span>
+                  <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border ${RECOMMENDATION_STYLES[youthRecommendation]}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${RECOMMENDATION_DOT[youthRecommendation]}`} />
+                    {RECOMMENDATION_LABELS[youthRecommendation]}
+                  </span>
                   <button type="button" onClick={(e) => { e.stopPropagation(); onShowPotentialInfo?.(); }} className="flex items-center gap-0.5 text-[7px] font-black uppercase tracking-widest text-fg-faint hover:text-fg-secondary transition-colors touch-manipulation">
                     <Info size={8} className="shrink-0" /> Más Info
                   </button>

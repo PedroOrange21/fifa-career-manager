@@ -27,10 +27,14 @@ const joinNatural = (items) => {
 };
 
 // Fila compacta y seleccionable del bloque "Entradas / Compras": toda la fila es un único
-// botón (checkbox + badge + nombre + traspaso/sueldo estimados), sin acciones propias — fichar
-// o editar el objetivo sigue viviendo exclusivamente en la pestaña Objetivos.
+// botón (checkbox + badge + nombre + traspaso-o-coste-de-cesión/sueldo estimados), sin acciones
+// propias — fichar o editar el objetivo sigue viviendo exclusivamente en la pestaña Objetivos.
+// Un objetivo marcado como Cesión (ver operationType en TargetForm) muestra su coste de cesión
+// en vez del precio de compra, y una etiqueta "Cesión" para distinguirlo de un vistazo de un
+// traspaso definitivo.
 function BuyRow({ t, selected, onToggle }) {
   const positions = positionsOf(t);
+  const isLoan = t.operationType === 'Cedido';
   return (
     <button
       type="button"
@@ -43,10 +47,13 @@ function BuyRow({ t, selected, onToggle }) {
       <span className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center font-black text-[10px] leading-none shrink-0 ${getCardStyle(t.rating || 0)}`}>{t.rating || '—'}</span>
       <span className="flex-1 min-w-0">
         <span className="block font-bold text-sm text-fg truncate">{t.name}</span>
-        <span className="block text-[8px] font-black uppercase tracking-widest text-green-500/80 truncate">{positions.join(' · ') || '—'}</span>
+        <span className="flex items-center gap-1.5 truncate">
+          <span className="text-[8px] font-black uppercase tracking-widest text-green-500/80 truncate">{positions.join(' · ') || '—'}</span>
+          {isLoan && <span className="shrink-0 text-[7px] font-black uppercase tracking-widest text-yellow-500 bg-yellow-500/10 border border-yellow-500/20 px-1.5 py-0.5 rounded">Cesión</span>}
+        </span>
       </span>
       <span className="text-right shrink-0 leading-tight">
-        <span className="block text-xs font-black text-fg">{t.estimatedValue > 0 ? formatCurrency(t.estimatedValue) : 'Sin valor'}</span>
+        <span className="block text-xs font-black text-fg">{isLoan ? (t.loanCost > 0 ? formatCurrency(t.loanCost) : 'Sin coste') : (t.estimatedValue > 0 ? formatCurrency(t.estimatedValue) : 'Sin valor')}</span>
         <span className="block text-[8px] font-bold text-fg-faint mt-0.5">{t.wage > 0 ? `${formatCurrency(t.wage)}/sem` : 'Sin salario'}</span>
       </span>
     </button>
@@ -150,7 +157,12 @@ export default function PlannerTab() {
   const selectedTargets = targets.filter((t) => selectedTargetIds.has(t.id));
   const selectedSellers = saleCandidates.filter((p) => selectedPlayerIds.has(p.id));
 
-  const buyTransferTotal = selectedTargets.reduce((sum, t) => sum + (t.estimatedValue || 0), 0);
+  // Traspasos (Comprado) y costes de cesión (Cedido) se suman por separado — ambos restan del
+  // mismo Presupuesto de Traspasos al proyectar el balance, pero se muestran como dos líneas
+  // distintas (ver footer de "Entradas / Compras" y el informe narrativo) para que quede claro
+  // cuánto de la cifra total es un traspaso definitivo y cuánto es coste de cesión.
+  const buyTransferTotal = selectedTargets.filter((t) => t.operationType !== 'Cedido').reduce((sum, t) => sum + (t.estimatedValue || 0), 0);
+  const buyLoanCostTotal = selectedTargets.filter((t) => t.operationType === 'Cedido').reduce((sum, t) => sum + (t.loanCost || 0), 0);
   const buyWageTotal = selectedTargets.reduce((sum, t) => sum + (t.wage || 0), 0);
   const sellIncomeTotal = selectedSellers.reduce((sum, p) => sum + saleValueFor(p), 0);
   const sellWageFreedTotal = selectedSellers.reduce((sum, p) => sum + getEffectiveWage(p), 0);
@@ -173,7 +185,7 @@ export default function PlannerTab() {
   // se recalcula desde el presupuesto de traspasos YA proyectado (incluye premios/52), y el
   // margen proyectado lo compara contra la masa salarial ya proyectada (con las altas/bajas
   // aplicadas) — así un premio, por ejemplo, también sube ligeramente el margen semanal.
-  const projectedTransferBudget = (transferBudget + sellIncomeTotal + bonusAmount) - buyTransferTotal;
+  const projectedTransferBudget = (transferBudget + sellIncomeTotal + bonusAmount) - buyTransferTotal - buyLoanCostTotal;
   const projectedWeeklyBudget = weeklyWageBudgetFromTransfer(projectedTransferBudget);
   const projectedWageBillWeekly = (currentWageBillWeekly - sellWageFreedTotal) + buyWageTotal;
   const projectedWageMargin = projectedWeeklyBudget - projectedWageBillWeekly;
@@ -201,13 +213,18 @@ export default function PlannerTab() {
 
     if (selectedTargets.length > 0) {
       const phrases = selectedTargets.map((t) => {
+        const isLoan = t.operationType === 'Cedido';
         const bits = [];
-        if (t.estimatedValue > 0) bits.push(formatCurrency(t.estimatedValue));
+        if (isLoan) { if (t.loanCost > 0) bits.push(`${formatCurrency(t.loanCost)} de coste de cesión`); }
+        else if (t.estimatedValue > 0) bits.push(formatCurrency(t.estimatedValue));
         if (t.wage > 0) bits.push(`${formatCurrency(t.wage)}/sem`);
-        return `${t.name}${bits.length ? ` (${bits.join(' y ')})` : ''}`;
+        return `${t.name}${isLoan ? ' (cesión' : ''}${bits.length ? `${isLoan ? ', ' : ' ('}${bits.join(' y ')})` : (isLoan ? ')' : '')}`;
       });
+      const costBits = [];
+      if (buyTransferTotal > 0) costBits.push(`${formatCurrency(buyTransferTotal)} en traspasos`);
+      if (buyLoanCostTotal > 0) costBits.push(`${formatCurrency(buyLoanCostTotal)} en costes de cesión`);
       paragraphs.push(
-        `Para acometer ${selectedTargets.length === 1 ? 'el fichaje de' : 'los fichajes de'} ${joinNatural(phrases)}, el club destinaría ${formatCurrency(buyTransferTotal)} en traspasos y asumiría ${formatCurrency(buyWageTotal)}/sem más en nómina.`
+        `Para acometer ${selectedTargets.length === 1 ? 'el fichaje de' : 'los fichajes de'} ${joinNatural(phrases)}, el club destinaría${costBits.length ? ` ${joinNatural(costBits)}` : ' 0 € en traspasos o cesiones'} y asumiría ${formatCurrency(buyWageTotal)}/sem más en nómina.`
       );
     }
 
@@ -284,12 +301,28 @@ export default function PlannerTab() {
           ) : targets.map((t) => <BuyRow key={t.id} t={t} selected={selectedTargetIds.has(t.id)} onToggle={toggleTarget} />)}
         </div>
         {selectedTargets.length > 0 && (
-          <div className="p-3 md:p-4 bg-well-strong/50 border-t border-border-subtle flex items-center justify-between gap-2">
-            <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted">Total Compras</span>
-            <span className="text-right leading-tight">
-              <span className="block text-xs font-black text-red-400">-{formatCurrency(buyTransferTotal)}</span>
-              <span className="block text-[9px] font-bold text-fg-faint mt-0.5">-{formatCurrency(buyWageTotal)}/sem</span>
-            </span>
+          <div className="p-3 md:p-4 bg-well-strong/50 border-t border-border-subtle space-y-1.5">
+            {/* Traspasos y costes de cesión se muestran como líneas separadas (ver
+                buyTransferTotal/buyLoanCostTotal): ambos restan del mismo Presupuesto de
+                Traspasos, pero conviene distinguir de un vistazo cuánto es compra en firme y
+                cuánto es coste de cesión. Se omite la línea que esté a 0 para no ensuciar el
+                resumen cuando todos los objetivos seleccionados son del mismo tipo. */}
+            {buyTransferTotal > 0 && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted">Traspasos</span>
+                <span className="text-xs font-black text-red-400">-{formatCurrency(buyTransferTotal)}</span>
+              </div>
+            )}
+            {buyLoanCostTotal > 0 && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted">Costes de Cesión</span>
+                <span className="text-xs font-black text-yellow-500">-{formatCurrency(buyLoanCostTotal)}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted">Sueldo Total</span>
+              <span className="text-[9px] font-bold text-fg-faint">-{formatCurrency(buyWageTotal)}/sem</span>
+            </div>
           </div>
         )}
       </div>
