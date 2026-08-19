@@ -2,10 +2,11 @@ import { X, ChevronLeft, PenLine, ScanLine, ChevronRight } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
-// Segundo paso de "Fichar Jugador" (tras elegir Primer Equipo en AddPlayerDestinationModal):
-// elegir entre rellenar el asistente a mano o escanear la tarjeta del jugador con IA (Gemini
-// Vision) para prerrellenarlo automáticamente. onBack vuelve al paso de Destino sin cerrar
-// del todo el flujo de alta.
+// Tercer paso de "Fichar Jugador" (tras elegir Primer Equipo en AddPlayerDestinationModal y
+// fijar Comprado/Cedido en AddPlayerOperationTypeModal): elegir entre rellenar el asistente a
+// mano o escanear la tarjeta del jugador con IA (Gemini Vision) para prerrellenarlo
+// automáticamente. onBack vuelve al paso de Tipo de Operación sin cerrar del todo el flujo de
+// alta.
 export default function AddPlayerChoiceModal({ onManual, onScan, onClose, onBack }) {
   useBodyScrollLock();
   useAutoHideChrome();

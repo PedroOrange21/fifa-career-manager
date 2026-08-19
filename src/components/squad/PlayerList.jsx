@@ -9,6 +9,7 @@ import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import SwipeableRow from '../common/SwipeableRow';
 import PlayerForm from './PlayerForm';
 import AddPlayerDestinationModal from './AddPlayerDestinationModal';
+import AddPlayerOperationTypeModal from './AddPlayerOperationTypeModal';
 import AddPlayerChoiceModal from './AddPlayerChoiceModal';
 import ScanPlayerCardModal from './ScanPlayerCardModal';
 import ConfirmModal from '../common/ConfirmModal';
@@ -53,8 +54,11 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [formSourceTargetId, setFormSourceTargetId] = useState(null);
   const [formInitialStep, setFormInitialStep] = useState(1);
   const [formLockedType, setFormLockedType] = useState(null);
-  const [formRestrictTypes, setFormRestrictTypes] = useState(null);
   const [formPostScanReview, setFormPostScanReview] = useState(false);
+  // Comprado/Cedido elegido en el Paso 2 (AddPlayerOperationTypeModal): se guarda aparte de
+  // formLockedType porque hace falta ANTES de que exista un PlayerForm al que pasárselo —
+  // tanto openFirstTeamManualForm como el ScanPlayerCardModal del Paso 4 lo consumen al vuelo.
+  const [pendingOperationType, setPendingOperationType] = useState(null);
   const [sellingPlayer, setSellingPlayer] = useState(null);
   const [loaningPlayer, setLoaningPlayer] = useState(null);
   const [endingLoanPlayer, setEndingLoanPlayer] = useState(null);
@@ -66,16 +70,21 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [ficharConfirming, setFicharConfirming] = useState(false);
   const ficharRef = useRef(null);
   useOnClickOutside(ficharRef, () => setFicharConfirming(false), ficharConfirming);
-  // "Fichar Jugador" abre un asistente de 3 pasos, cada uno pudiendo volver al anterior con
+  // "Fichar Jugador" abre un asistente de 4 pasos, cada uno pudiendo volver al anterior con
   // "Atrás" (ver onBack de cada modal) sin cerrar el flujo entero:
   //   1. Destino (AddPlayerDestinationModal) — Primer Equipo o Academia/Cantera.
-  //   2. Método (AddPlayerChoiceModal, solo si Primer Equipo) — Manual o Escanear con IA.
-  //   3a. Manual -> PlayerForm clásico, con el tipo ya restringido/fijado según el destino.
-  //   3b. Escanear con IA (ScanPlayerCardModal) -> al terminar entrega un "prefill" ya
-  //       traducido y abre PlayerForm en el Paso 4 (Revisión) para repasar y confirmar.
-  // Academia/Cantera no ofrece escaneo por IA (igual que el propio alta directa de
-  // AcademyTab): pasa directa al asistente manual con lockedType="Cantera".
-  const [addStep, setAddStep] = useState(null); // null | 'destination' | 'method' | 'scan'
+  //   2. Tipo de Operación (AddPlayerOperationTypeModal, solo si Primer Equipo) — Comprado o
+  //      Cedido, para que el resto del flujo sepa de entrada qué campos económicos/
+  //      contractuales pedir.
+  //   3. Método (AddPlayerChoiceModal) — Manual o Escanear con IA.
+  //   4a. Manual -> PlayerForm clásico, con el tipo ya fijado (lockedType) según lo elegido en
+  //       el Paso 2.
+  //   4b. Escanear con IA (ScanPlayerCardModal) -> al terminar entrega un "prefill" ya
+  //       traducido con ese mismo tipo y abre PlayerForm en el Paso 4 (Revisión) para repasar
+  //       y confirmar.
+  // Academia/Cantera no pasa por Tipo de Operación ni ofrece escaneo por IA (igual que el
+  // propio alta directa de AcademyTab): va directa al asistente manual con lockedType="Cantera".
+  const [addStep, setAddStep] = useState(null); // null | 'destination' | 'operationType' | 'method' | 'scan'
 
   useEffect(() => {
     if (pendingEditPlayer) {
@@ -84,7 +93,6 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       setFormSourceTargetId(null);
       setFormInitialStep(4);
       setFormLockedType(null);
-      setFormRestrictTypes(null);
       setFormPostScanReview(false);
       setShowForm(true);
       onConsumePendingEdit();
@@ -102,7 +110,6 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       setFormSourceTargetId(__targetId || null);
       setFormInitialStep(1);
       setFormLockedType(null);
-      setFormRestrictTypes(null);
       setFormPostScanReview(false);
       setShowForm(true);
       onConsumePendingPrefill();
@@ -158,7 +165,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
 
   // Editar desde la lista (activos o cedidos) abre directamente el Paso 4 con los datos
   // precargados, sin pasar por el asistente paso a paso.
-  const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormSourceTargetId(null); setFormInitialStep(4); setFormLockedType(null); setFormRestrictTypes(null); setFormPostScanReview(false); setShowForm(true); };
+  const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormSourceTargetId(null); setFormInitialStep(4); setFormLockedType(null); setFormPostScanReview(false); setShowForm(true); };
 
   const handleFicharClick = () => {
     if (HAS_HOVER) { setAddStep('destination'); return; }
@@ -166,23 +173,32 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
     else { setFicharConfirming(true); }
   };
 
-  // Paso 2 (Método) elegido "Manual" tras Paso 1 (Destino) = Primer Equipo: asistente clásico
-  // desde el Paso 1, con el tipo restringido a Comprado/Cedido (sin Cantera).
+  // Paso 2 (Tipo de Operación) resuelto: se guarda la elección y se continúa al Paso 3
+  // (Método) — Comprado/Cedido hace falta fijarlo antes de saber qué pedir en el resto del
+  // flujo (ver pendingOperationType, consumido por openFirstTeamManualForm y el
+  // ScanPlayerCardModal del Paso 4).
+  const selectOperationType = (type) => {
+    setPendingOperationType(type);
+    setAddStep('method');
+  };
+
+  // Paso 3 (Método) elegido "Manual" tras fijar Comprado/Cedido en el Paso 2: asistente
+  // clásico desde el Paso 1, con el tipo ya bloqueado (sin selector, igual que Academia) —
+  // determina de entrada qué campos económicos/contractuales pedir en el Paso 3 del wizard.
   const openFirstTeamManualForm = () => {
     setAddStep(null);
     setEditingPlayer(null);
     setFormPrefill(null);
     setFormSourceTargetId(null);
     setFormInitialStep(1);
-    setFormLockedType(null);
-    setFormRestrictTypes(['Comprado', 'Cedido']);
+    setFormLockedType(pendingOperationType);
     setFormPostScanReview(false);
     setShowForm(true);
   };
 
-  // Paso 1 (Destino) = Academia/Cantera: sin paso de Método (no hay escaneo por IA para
-  // canteranos), directo al asistente manual con el tipo fijado, igual que el alta propia de
-  // AcademyTab.
+  // Paso 1 (Destino) = Academia/Cantera: sin pasos de Tipo de Operación ni Método (no aplica
+  // Comprado/Cedido ni escaneo por IA a los canteranos), directo al asistente manual con el
+  // tipo fijado, igual que el alta propia de AcademyTab.
   const openAcademyForm = () => {
     setAddStep(null);
     setEditingPlayer(null);
@@ -190,23 +206,22 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
     setFormSourceTargetId(null);
     setFormInitialStep(1);
     setFormLockedType('Cantera');
-    setFormRestrictTypes(null);
     setFormPostScanReview(false);
     setShowForm(true);
   };
 
   // Al terminar el escaneo por IA, se abre PlayerForm directamente en el Paso 4 (Revisión,
-  // única pantalla, ver postScanReview) con todo prerrellenado, igual que hace la edición
-  // rápida — así el usuario solo tiene que repasar y confirmar los datos leídos de la tarjeta,
-  // completando a mano los que la IA nunca puede traer (Club de Procedencia, Precio de Compra).
+  // única pantalla, ver postScanReview) con todo prerrellenado según el tipo fijado en el
+  // Paso 2 — así el usuario solo tiene que repasar y confirmar los datos leídos de la tarjeta,
+  // completando a mano los que la IA nunca puede traer (Club de Procedencia siempre; Precio de
+  // Compra si es Comprado; Club de Origen si es Cedido).
   const handleScanExtracted = (prefillData) => {
     setAddStep(null);
     setEditingPlayer(null);
     setFormPrefill(prefillData);
     setFormSourceTargetId(null);
     setFormInitialStep(4);
-    setFormLockedType(null);
-    setFormRestrictTypes(['Comprado', 'Cedido']);
+    setFormLockedType(pendingOperationType);
     setFormPostScanReview(true);
     setShowForm(true);
   };
@@ -334,7 +349,6 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
           sourceTargetId={formSourceTargetId}
           initialStep={formInitialStep}
           lockedType={formLockedType}
-          restrictTypes={formRestrictTypes}
           postScanReview={formPostScanReview}
           onClose={() => setShowForm(false)}
         />
@@ -343,14 +357,21 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       {addStep === 'destination' && (
         <AddPlayerDestinationModal
           onClose={() => setAddStep(null)}
-          onSelectFirstTeam={() => setAddStep('method')}
+          onSelectFirstTeam={() => setAddStep('operationType')}
           onSelectAcademy={openAcademyForm}
+        />
+      )}
+      {addStep === 'operationType' && (
+        <AddPlayerOperationTypeModal
+          onClose={() => setAddStep(null)}
+          onBack={() => setAddStep('destination')}
+          onSelect={selectOperationType}
         />
       )}
       {addStep === 'method' && (
         <AddPlayerChoiceModal
           onClose={() => setAddStep(null)}
-          onBack={() => setAddStep('destination')}
+          onBack={() => setAddStep('operationType')}
           onManual={openFirstTeamManualForm}
           onScan={() => setAddStep('scan')}
         />
@@ -360,6 +381,7 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
           onClose={() => setAddStep(null)}
           onBack={() => setAddStep('method')}
           onExtracted={handleScanExtracted}
+          operationType={pendingOperationType}
         />
       )}
       {sellingPlayer && <SellPlayerModal player={sellingPlayer} onClose={() => setSellingPlayer(null)} />}

@@ -191,8 +191,11 @@ function SectionHeader({ emoji, title }) {
 // postScanReview: usado exclusivamente por el resultado del escaneo con IA (ver
 // handleScanExtracted en PlayerList) — deja la Revisión Final como pantalla única y directa
 // (sin barra de progreso "Paso 4 de 4" ni botón "Anterior", ya que aquí no hay pasos 1-3
-// recorridos de verdad en esta sesión) y resalta en rojo Club de Procedencia y Precio de
-// Compra si siguen vacíos, porque son datos que la tarjeta escaneada nunca trae.
+// recorridos de verdad en esta sesión) y resalta en rojo los campos que la tarjeta escaneada
+// nunca trae y siguen vacíos: Club de Procedencia (Comprado y Cedido), Precio de Compra
+// (Comprado) o Club de Origen (Cedido) — el tipo concreto ya lo decidió el usuario en
+// AddPlayerOperationTypeModal antes incluso de escanear, ver operationType en
+// mapScanResultToPrefill.
 export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onClose, initialStep = 1, initialEditField = null, lockedType = null, restrictTypes = null, hidePurchasePrice = false, hideSourceClub = false, skipInitialTransaction = false, postScanReview = false }) {
   const { addOrUpdatePlayer, deleteTarget } = useClubData();
   useAutoHideChrome();
@@ -400,14 +403,16 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
   // directo del Paso 2 (Atributos) al Paso 4 (Revisión) en vez de dejar una pantalla vacía.
   const skipEconomyStep = lockedType === 'Cantera';
 
-  // Únicamente tras un escaneo con IA: el club de procedencia y el precio de compra nunca
-  // aparecen en la propia tarjeta del jugador (no son datos visibles en ella, a diferencia de
-  // la media, la posición o el sueldo), así que se marcan como pendientes de rellenar a mano
-  // hasta que el usuario los complete — momento en el que dejan de estar "missing" al instante,
-  // sin necesidad de un estado aparte, porque se derivan directamente de form.
+  // Únicamente tras un escaneo con IA: club de procedencia (Comprado y Cedido), precio de
+  // compra (Comprado) y club de origen (Cedido) nunca aparecen en la propia tarjeta del
+  // jugador (no son datos visibles en ella, a diferencia de la media, la posición o el
+  // sueldo), así que se marcan como pendientes de rellenar a mano hasta que el usuario los
+  // complete — momento en el que dejan de estar "missing" al instante, sin necesidad de un
+  // estado aparte, porque se derivan directamente de form.
   const scanSourceClubMissing = postScanReview && form.type !== 'Cantera' && !hideSourceClub && !form.sourceClub.trim();
   const scanPurchasePriceMissing = postScanReview && form.type === 'Comprado' && !hidePurchasePrice && (!form.value || parseValue(form.value) <= 0);
-  const hasScanMissingFields = scanSourceClubMissing || scanPurchasePriceMissing;
+  const scanOriginClubMissing = postScanReview && form.type === 'Cedido' && !form.originClub.trim();
+  const hasScanMissingFields = scanSourceClubMissing || scanPurchasePriceMissing || scanOriginClubMissing;
 
   // --- Navegación: exclusivamente por los botones Anterior/Siguiente del pie. ---
   const goNext = () => {
@@ -936,8 +941,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
 
                     {form.type === 'Cedido' && (
                       <>
-                        <ReviewRow label="Club de Origen" active={editField === 'originClub'} onOpen={() => setEditField('originClub')} display={form.originClub || 'Sin definir'}>
-                          <input autoFocus type="text" placeholder="Ej: Real Madrid" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} />
+                        <ReviewRow label="Club de Origen" active={editField === 'originClub'} onOpen={() => setEditField('originClub')} display={form.originClub || 'Sin definir'} missing={scanOriginClubMissing}>
+                          <input autoFocus type="text" placeholder="Ej: Real Madrid" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={scanOriginClubMissing ? REVIEW_INPUT_ERROR_CLASS : REVIEW_INPUT_CLASS} value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} />
                         </ReviewRow>
                         <ReviewRow label="Duración Cesión" active={editField === 'loanDuration'} onOpen={() => setEditField('loanDuration')} display={form.loanDuration}>
                           <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => { set({ loanDuration: v }); setEditField(null); }} />

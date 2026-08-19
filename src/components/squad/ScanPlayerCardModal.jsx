@@ -18,13 +18,16 @@ const PHASES = [
 ];
 const getPhaseLabel = (progress) => (PHASES.find((p) => progress < p.ceiling) || PHASES[PHASES.length - 1]).label;
 
-// Tercer paso de "Fichar Jugador" (tras elegir Escanear con IA en AddPlayerChoiceModal):
+// Cuarto paso de "Fichar Jugador" (tras elegir Escanear con IA en AddPlayerChoiceModal, que a
+// su vez llega después de fijar Comprado/Cedido en AddPlayerOperationTypeModal):
 // instrucciones + dos formas de aportar la imagen (cámara del móvil o galería), barra de
 // progreso mientras se procesa/analiza la foto, y manejo de errores con reintento — sin salir
-// nunca de este mismo modal hasta tener un resultado o cancelar. onExtracted recibe el objeto
+// nunca de este mismo modal hasta tener un resultado o cancelar. operationType se traslada tal
+// cual a mapScanResultToPrefill (la tarjeta nunca indica si el fichaje es en propiedad o
+// cedido, eso ya lo decidió el usuario en el paso anterior). onExtracted recibe el objeto
 // "prefill" ya traducido a los campos de PlayerForm. onBack (oculto durante el escaneo, igual
 // que el cierre) vuelve al paso de Método sin perder el flujo de alta.
-export default function ScanPlayerCardModal({ onClose, onExtracted, onBack }) {
+export default function ScanPlayerCardModal({ onClose, onExtracted, onBack, operationType }) {
   useBodyScrollLock();
   useAutoHideChrome();
 
@@ -91,7 +94,7 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBack }) {
       stopProgressTimer();
       setProgress(85);
       await animateToComplete(); // Fase 4: extrayendo estadísticas.
-      onExtracted(mapScanResultToPrefill(extracted));
+      onExtracted(mapScanResultToPrefill(extracted, operationType));
     } catch (err) {
       stopProgressTimer();
       console.error('Error de /api/scan-player:', err);

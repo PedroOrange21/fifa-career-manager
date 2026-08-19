@@ -62,19 +62,25 @@ export async function scanPlayerCard(file) {
 // Traduce el JSON en español devuelto por el endpoint al objeto "prefill" que espera
 // PlayerForm. Importante: PlayerForm (toFormState) deriva primaryPosition/secondaryPositions
 // únicamente a partir de un array "positions" (principal primero) — pasarlas como claves
-// sueltas no tendría ningún efecto. "value" (Precio de Compra, lo que el club paga por el
-// traspaso) se deja vacío a propósito: no es un dato de la propia tarjeta del jugador, sino la
+// sueltas no tendría ningún efecto.
+// operationType ('Comprado' o 'Cedido'): decidido por el usuario en el paso previo al propio
+// escaneo (ver AddPlayerOperationTypeModal), no algo que la IA pueda inferir de la tarjeta. Los
+// campos exclusivos de Cedido (club de origen, duración de cesión, opción de compra) no están
+// en absoluto en el esquema de extracción — la tarjeta no los muestra — así que quedan a cargo
+// del usuario en la Revisión Final, igual que "value" (Precio de Compra, lo que el club paga
+// por el traspaso en Comprado) se deja vacío a propósito: no es un dato de la tarjeta, sino la
 // cifra que el usuario negocia al ficharlo, igual que ya hace "Fichar desde Objetivos" en
 // MarketTab.jsx.
-export function mapScanResultToPrefill(extracted) {
+export function mapScanResultToPrefill(extracted, operationType = 'Comprado') {
   const positions = [extracted.posicionPrincipal, ...(extracted.posicionesSecundarias || [])].filter(Boolean);
   // "duracionContrato" puede venir como "3 años", "3", o una fecha — solo nos interesa un
-  // número de años entre 1 y 5 (el rango que admite el desplegable de Años de Contrato).
+  // número de años entre 1 y 5 (el rango que admite el desplegable de Años de Contrato de
+  // "Comprado"; en "Cedido" este dato no se usa, ver Duración de Cesión más abajo).
   const contractYearsMatch = String(extracted.duracionContrato || '').match(/\d+/);
   const contractYears = contractYearsMatch ? Math.min(5, Math.max(1, parseInt(contractYearsMatch[0], 10))) : '';
 
   return {
-    type: 'Comprado',
+    type: operationType,
     name: extracted.nombre || '',
     rating: extracted.media || '',
     potential: extracted.potencial || '',
