@@ -768,7 +768,6 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
                 <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{p.age} Años</span>
                 {p.marketValue ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(p.marketValue)}</span> : null}
                 {p.type === 'Cedido' && p.loanDuration && (<span className="text-[7px] md:text-[8px] font-black uppercase tracking-widest bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded">Ced. {formatLoanDuration(p.loanDuration)}</span>)}
-                {p.isInitialSquad && (<span className="text-[7px] md:text-[8px] font-black uppercase tracking-widest bg-zinc-500/20 text-zinc-400 border border-zinc-500/30 px-2 py-0.5 rounded">Ya en el Club</span>)}
               </div>
             </div>
           </div>
