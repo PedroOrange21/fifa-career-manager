@@ -58,7 +58,11 @@ async function scanPlayerCardOnce(file, mode) {
     throw err;
   }
   if (!payload?.data) {
-    throw new Error('El servidor no devolvió ningún dato de la imagen.');
+    // Contrato "unreadable" (ver api/scan-player.js): Gemini respondió con HTTP 200 pero sin
+    // datos aprovechables (foto borrosa, mal encuadrada, o algo que no es una tarjeta de
+    // jugador) — un fallo del propio contenido de esta foto, no de la conexión ni de la cuota,
+    // así que nunca lleva "status" y por tanto scanPlayerCard nunca lo reintenta.
+    throw new Error(payload?.error === 'unreadable' ? 'No se pudo leer ningún dato en esta foto. Prueba con una imagen más nítida y bien encuadrada.' : 'El servidor no devolvió ningún dato de la imagen.');
   }
   return payload.data;
 }

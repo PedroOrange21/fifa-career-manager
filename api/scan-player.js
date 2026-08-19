@@ -226,6 +226,11 @@ export default async function handler(req, res) {
     config: {
       responseMimeType: 'application/json',
       responseSchema: schema,
+      // Temperatura baja a propósito: queremos una transcripción fiel y determinista de los
+      // datos EXACTOS que muestra la tarjeta (nombre, cifras, textos), no una respuesta creativa
+      // — reduce además la probabilidad de que el modelo "rellene" un campo con una suposición
+      // en vez de devolver null cuando el dato no es legible.
+      temperature: 0.1,
     },
   });
 
@@ -249,8 +254,14 @@ export default async function handler(req, res) {
 
   const text = response?.text;
   if (!text) {
+    // "unreadable" a propósito con HTTP 200, no 502: esto significa que Gemini SÍ respondió
+    // pero no encontró nada legible en la imagen (foto borrosa, mal encuadrada, pantalla que no
+    // es una tarjeta de jugador...) — un fallo del propio contenido de la foto, no del servicio.
+    // Devolverlo como 200 evita que la cola del frontend lo confunda con un error de
+    // infraestructura (429/503, que sí dispara los reintentos con backoff) y dejar así que cada
+    // foto ilegible se anote y se continúe con la siguiente sin reventar el resto del lote.
     console.error('Gemini respondió sin texto utilizable. Respuesta completa:', JSON.stringify(response)?.slice(0, 2000));
-    res.status(502).json({ error: 'Gemini no devolvió ningún dato legible de la imagen. Prueba con una foto más nítida y bien encuadrada.' });
+    res.status(200).json({ error: 'unreadable', data: null });
     return;
   }
 
@@ -258,8 +269,11 @@ export default async function handler(req, res) {
   try {
     data = parseGeminiJson(text);
   } catch (err) {
+    // Mismo contrato "unreadable" + 200 que arriba: la respuesta de Gemini llegó pero no se
+    // pudo parsear como JSON limpio (texto sobrante, valla de código sin cerrar...) — de nuevo
+    // un problema de esta imagen concreta, no del servicio en sí.
     console.error('Respuesta de Gemini no es JSON válido:', text.slice(0, 2000), err);
-    res.status(502).json({ error: 'La respuesta de Gemini no tuvo el formato esperado. Inténtalo de nuevo.', details: err.message });
+    res.status(200).json({ error: 'unreadable', data: null });
     return;
   }
 
