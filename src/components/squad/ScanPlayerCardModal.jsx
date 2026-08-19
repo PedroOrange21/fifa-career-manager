@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, ChevronLeft, Camera, Image as ImageIcon, ShieldAlert, ScanLine, CopyX } from 'lucide-react';
+import { X, ChevronLeft, Camera, Image as ImageIcon, ShieldAlert, ScanLine, CopyX, Trash2, Zap } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import { useClubData } from '../../context/ClubDataContext';
@@ -8,6 +8,9 @@ import { prepareImageForScan } from '../../utils/imagePrep';
 import { findDuplicatePlayer } from '../../utils/duplicatePlayer';
 
 const mapByMode = (extracted, mode) => (mode === 'academia' ? mapAcademyScanResultToPrefill(extracted) : mapScanResultToPrefill(extracted));
+
+let queuedPhotoIdCounter = 0;
+const nextQueuedPhotoId = () => `cam-${Date.now()}-${queuedPhotoIdCounter++}`;
 
 // Fases visibles del escaneo INDIVIDUAL, mapeadas a los dos pasos asíncronos reales del
 // proceso (prepareImageForScan y scanPlayerCard): como ninguno de los dos reporta progreso
@@ -23,6 +26,20 @@ const PHASES = [
 ];
 const getPhaseLabel = (progress) => (PHASES.find((p) => progress < p.ceiling) || PHASES[PHASES.length - 1]).label;
 
+// Progreso del escaneo EN LOTE: a diferencia del individual, aquí sí hay una fase real y
+// reportada por scanPlayerCardsQueue (ver onProgress ahí) — 'preparing' (comprimiendo la
+// imagen), 'scanning' (llamando a Gemini) o 'retrying' (esperando tras un 429/503 antes de
+// reintentar). BATCH_PHASE_FRACTION combina esa fase con el índice de la foto en curso para que
+// el % global nunca se quede parado mientras se comprime/reintenta una imagen concreta.
+const BATCH_PHASE_FRACTION = { preparing: 0.15, scanning: 0.55, retrying: 0.75 };
+const batchPercentFor = (info) => (info ? Math.min(99, Math.round(((info.index + (BATCH_PHASE_FRACTION[info.phase] ?? 0.5)) / info.total) * 100)) : 0);
+const batchLabelFor = (info, scanNoun) => {
+  if (!info) return '';
+  if (info.phase === 'preparing') return `Comprimiendo foto ${info.index + 1} de ${info.total}...`;
+  if (info.phase === 'retrying') return `Límite de peticiones alcanzado, reintentando en ${Math.round((info.delayMs || 0) / 1000)}s (intento ${info.attempt} de 3)...`;
+  return `Escaneando ${scanNoun} ${info.index + 1} de ${info.total}...`;
+};
+
 // Último paso de "Fichar Jugador" (o del botón "Fichar Canterano" de AcademyTab, o de la carga
 // masiva de OnboardingWizard) tras elegir Escanear con IA: instrucciones + dos formas de
 // aportar la imagen (cámara del móvil, una foto, o galería, una o varias), barra de progreso
@@ -36,6 +53,11 @@ const getPhaseLabel = (progress) => (PHASES.find((p) => progress < p.ceiling) ||
 // una sola foto): se procesan en cola, con una espera de seguridad entre llamadas a la API
 // (ver scanPlayerCardsQueue), y el resultado { succeeded, failed } se entrega a onBatchExtracted
 // para que el llamador muestre una tabla de revisión y guarde en lote (ver BulkScanReviewModal).
+// Modo captura continua de cámara: cada "Tomar Foto" solo dispara UN disparo del propio sistema
+// operativo (input capture="environment"), así que en vez de escanear esa foto al momento se va
+// acumulando en "cameraQueue" (con miniatura) — el usuario puede seguir pulsando "Hacer otra
+// foto" para encadenar varias antes de lanzar el escaneo de todas juntas con "Escanear fotos".
+// La galería no necesita esto: ya admite selección múltiple nativa en un solo picker.
 // onBack (oculto durante el escaneo, igual que el cierre) vuelve al paso anterior sin perder el
 // flujo de alta.
 export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtracted, onBack, mode = 'primerEquipo', forceBatch = false }) {
@@ -43,15 +65,18 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
   useAutoHideChrome();
   const { players } = useClubData();
 
-  const [status, setStatus] = useState('idle'); // 'idle' | 'scanning' | 'batchScanning' | 'duplicate' | 'error'
+  const [status, setStatus] = useState('idle'); // 'idle' | 'capturing' | 'scanning' | 'batchScanning' | 'duplicate' | 'error'
   const [progress, setProgress] = useState(0);
-  const [batchInfo, setBatchInfo] = useState(null); // { index, total, fileName }
+  const [batchInfo, setBatchInfo] = useState(null); // { index, total, fileName, phase, attempt?, delayMs? }
   const [error, setError] = useState('');
   const [preview, setPreview] = useState('');
   // Escaneo individual que resultó ser un posible duplicado de un jugador ya registrado (ver
   // findDuplicatePlayer): se retiene aquí en vez de llamar a onExtracted de inmediato, para
   // poder mostrar el aviso y dejar que el usuario decida si de verdad quiere continuar.
   const [pendingDuplicate, setPendingDuplicate] = useState(null); // { mapped, existing } | null
+  // Cola de captura continua de cámara (ver comentario del componente): [{ id, file,
+  // previewUrl }]. Solo relevante mientras status === 'capturing'.
+  const [cameraQueue, setCameraQueue] = useState([]);
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
   const progressTimerRef = useRef(null);
@@ -60,6 +85,9 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
     if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
   };
   useEffect(() => stopProgressTimer, []);
+  // Las miniaturas de la cola de captura son Object URLs: se liberan al desmontar el modal para
+  // no acumular memoria en una sesión con muchas fotos encadenadas.
+  useEffect(() => () => cameraQueue.forEach((item) => URL.revokeObjectURL(item.previewUrl)), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sube el progreso acercándose cada vez más despacio a "ceiling" sin llegar nunca a tocarlo,
   // dando sensación de trabajo real en curso mientras dura una promesa de duración desconocida.
@@ -103,7 +131,7 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
     setProgress(50);
     setPreview(URL.createObjectURL(preparedFile));
 
-    creepProgressTo(85); // Fase 3: análisis con Gemini.
+    creepProgressTo(85); // Fase 3: análisis con Gemini (incluye reintentos automáticos 429/503).
     try {
       const extracted = await scanPlayerCard(preparedFile, mode);
       stopProgressTimer();
@@ -144,10 +172,8 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
 
   const processBatch = async (files) => {
     setStatus('batchScanning');
-    setBatchInfo({ index: 0, total: files.length, fileName: files[0]?.name || '' });
-    const results = await scanPlayerCardsQueue(files, mode, ({ index, total, fileName }) => {
-      setBatchInfo({ index, total, fileName });
-    });
+    setBatchInfo({ index: 0, total: files.length, fileName: files[0]?.name || '', phase: 'preparing' });
+    const results = await scanPlayerCardsQueue(files, mode, (info) => setBatchInfo(info));
     if (results.succeeded.length === 0) {
       setError('No se pudo extraer ningún dato de las fotos seleccionadas. Inténtalo de nuevo con fotos más nítidas.');
       setStatus('error');
@@ -163,18 +189,54 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
     else processBatch(files);
   };
 
-  const handleFileChange = (e) => {
+  // Selección desde galería: admite varias a la vez en un único picker nativo, así que se
+  // procesan de inmediato tal cual las entrega el input — no pasa por la cola de captura.
+  const handleGalleryChange = (e) => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
     processFiles(files);
   };
 
+  // Captura desde cámara: el input capture="environment" solo permite UN disparo por
+  // invocación del sistema operativo, así que aquí NO se escanea de inmediato — se añade a
+  // cameraQueue con su miniatura y se muestra la pantalla de "X fotos listas para escanear",
+  // desde donde se puede seguir encadenando fotos con "Hacer otra foto".
+  const handleCameraChange = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setError('');
+    setCameraQueue((prev) => [...prev, { id: nextQueuedPhotoId(), file, previewUrl: URL.createObjectURL(file) }]);
+    setStatus('capturing');
+  };
+
+  const removeQueuedPhoto = (id) => {
+    setCameraQueue((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      const next = prev.filter((item) => item.id !== id);
+      if (next.length === 0) setStatus('idle');
+      return next;
+    });
+  };
+
+  const startScanningQueuedPhotos = () => {
+    const files = cameraQueue.map((item) => item.file);
+    setCameraQueue([]);
+    processFiles(files);
+  };
+
+  const handleClose = () => {
+    cameraQueue.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    onClose();
+  };
+
   const isBusy = status === 'scanning' || status === 'batchScanning';
-  const batchPercent = batchInfo ? Math.round(((batchInfo.index + 0.5) / batchInfo.total) * 100) : 0;
+  const batchPercent = batchPercentFor(batchInfo);
   const scanNoun = mode === 'academia' ? 'canterano' : 'jugador';
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={isBusy ? undefined : onClose}>
+    <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={isBusy ? undefined : handleClose}>
       <div className="bg-surface border border-border p-5 rounded-[32px] w-full max-w-sm shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2">
@@ -184,7 +246,7 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
             <h3 className="font-black italic text-blue-400 text-sm uppercase flex items-center gap-2"><ScanLine size={16} /> Escanear con IA</h3>
           </div>
           {!isBusy && (
-            <button type="button" onClick={onClose} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
+            <button type="button" onClick={handleClose} className="p-1 text-fg-faint hover:text-fg transition-colors"><X size={18} /></button>
           )}
         </div>
 
@@ -209,7 +271,7 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
             <div className="w-full space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[10px] font-black uppercase tracking-widest text-fg-muted truncate">
-                  Procesando {scanNoun} {batchInfo.index + 1} de {batchInfo.total}...
+                  {batchLabelFor(batchInfo, scanNoun)}
                 </p>
                 <span className="text-xs font-black text-blue-400 tabular-nums shrink-0">{batchPercent}%</span>
               </div>
@@ -238,13 +300,44 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
           </div>
         )}
 
-        {!isBusy && status !== 'duplicate' && (
+        {status === 'capturing' && (
+          <div className="space-y-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-fg-muted">{cameraQueue.length} foto{cameraQueue.length === 1 ? '' : 's'} lista{cameraQueue.length === 1 ? '' : 's'} para escanear</p>
+            <div className="grid grid-cols-4 gap-2">
+              {cameraQueue.map((item) => (
+                <div key={item.id} className="relative aspect-square rounded-xl overflow-hidden border border-border-subtle group">
+                  <img src={item.previewUrl} alt="Foto capturada" className="w-full h-full object-cover" />
+                  <button type="button" onClick={() => removeQueuedPhoto(item.id)} title="Eliminar" className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 md:opacity-0 transition-opacity touch-manipulation">
+                    <Trash2 size={16} className="text-white" />
+                  </button>
+                  <button type="button" onClick={() => removeQueuedPhoto(item.id)} title="Eliminar" className="absolute top-1 right-1 md:hidden bg-black/70 rounded-full p-1 text-white">
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2.5">
+              <button type="button" onClick={() => cameraInputRef.current?.click()} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-dashed border-border-subtle bg-well hover:border-blue-500 hover:bg-well-strong transition-all text-left touch-manipulation">
+                <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0"><Camera size={22} /></div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-black uppercase italic text-sm text-fg">📸 Hacer Otra Foto</div>
+                  <div className="text-[10px] font-bold text-fg-muted mt-0.5">Sigue fotografiando jugadores antes de escanear.</div>
+                </div>
+              </button>
+              <button type="button" onClick={startScanningQueuedPhotos} className="w-full py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-2 hover:bg-green-400 transition-all touch-manipulation">
+                <Zap size={16} className="shrink-0" /> Escanear Fotos ({cameraQueue.length})
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!isBusy && status !== 'duplicate' && status !== 'capturing' && (
           <div className="space-y-4">
             <div className="p-3 rounded-2xl bg-well border border-border-subtle">
               <p className="text-[10px] font-bold text-fg-muted leading-relaxed">
                 {mode === 'academia'
-                  ? <>Enfoca bien la tarjeta del canterano en la sección <span className="text-fg font-black">Academia</span> de tu Modo Carrera (media, potencial, posición...) y haz la foto con buena luz. Puedes subir varias fotos a la vez desde la galería para dar de alta a toda la remesa.</>
-                  : <>Enfoca bien la tarjeta del jugador en la sección <span className="text-fg font-black">Plantilla</span> o <span className="text-fg font-black">Finanzas</span> de tu Modo Carrera (media, posición, sueldo, valor de mercado...) y haz la foto con buena luz, sin recortar los datos. Puedes subir varias fotos a la vez desde la galería.</>}
+                  ? <>Enfoca bien la tarjeta del canterano en la sección <span className="text-fg font-black">Academia</span> de tu Modo Carrera (media, potencial, posición...) y haz la foto con buena luz. Puedes encadenar varias fotos seguidas con la cámara, o subir varias a la vez desde la galería.</>
+                  : <>Enfoca bien la tarjeta del jugador en la sección <span className="text-fg font-black">Plantilla</span> o <span className="text-fg font-black">Finanzas</span> de tu Modo Carrera (media, posición, sueldo, valor de mercado...) y haz la foto con buena luz, sin recortar los datos. Puedes encadenar varias fotos seguidas con la cámara, o subir varias a la vez desde la galería.</>}
               </p>
             </div>
 
@@ -270,11 +363,14 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
                 </div>
               </button>
             </div>
-
-            <input ref={cameraInputRef} type="file" accept="image/*,.heic,.heif" capture="environment" className="hidden" onChange={handleFileChange} />
-            <input ref={galleryInputRef} type="file" accept="image/*,.heic,.heif" multiple className="hidden" onChange={handleFileChange} />
           </div>
         )}
+
+        {/* Únicos en todo el componente (nunca duplicados por rama de estado): "Hacer Otra
+            Foto" durante 'capturing' reutiliza este mismo cameraInputRef con un simple
+            .click(), así que basta con que el <input> exista siempre en el DOM. */}
+        <input ref={cameraInputRef} type="file" accept="image/*,.heic,.heif" capture="environment" className="hidden" onChange={handleCameraChange} />
+        <input ref={galleryInputRef} type="file" accept="image/*,.heic,.heif" multiple className="hidden" onChange={handleGalleryChange} />
       </div>
     </div>
   );

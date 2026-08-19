@@ -18,13 +18,17 @@ const isHeic = (file) => {
   return HEIC_MIME_TYPES.includes(type) || name.endsWith('.heic') || name.endsWith('.heif');
 };
 
-// Redimensiona a un máximo de 1200px de lado y comprime a calidad ~0.8, igual que ya hacía
-// handleClubLogoUpload para los logos — aquí se reutiliza el mismo umbral para las fotos de
-// tarjetas de jugador, que no necesitan más resolución que esa para que Gemini lea el texto.
+// Compresión obligatoria en cliente antes de subir cualquier foto a la API: redimensiona a un
+// máximo de 1280px de lado y comprime a JPEG con calidad ~0.8, apuntando a un tamaño objetivo
+// de 300 KB por foto (maxSizeMB, vía reducción iterativa de calidad de browser-image-
+// compression — que ya trabaja internamente sobre un <canvas>, igual que cualquier compresión
+// en el navegador). Esto evita los bloqueos de payload de las funciones Serverless de Vercel
+// con las fotos de 12-48 MP que hacen los móviles actuales, y acelera mucho la subida en lotes
+// grandes (24 fotos de 300 KB pesan una fracción de 24 fotos de varios MB cada una).
 const COMPRESSION_OPTIONS = {
-  maxWidthOrHeight: 1200,
+  maxWidthOrHeight: 1280,
   initialQuality: 0.8,
-  maxSizeMB: 3,
+  maxSizeMB: 0.3,
   useWebWorker: true,
   fileType: 'image/jpeg',
 };

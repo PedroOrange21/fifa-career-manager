@@ -19,15 +19,11 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
-// Analiza la foto de una tarjeta de jugador vía api/scan-player.js y devuelve el JSON
-// extraído (mismas claves que describe ese endpoint). "mode" ('primerEquipo' por defecto o
-// 'academia') decide qué esquema/prompt usa el servidor (ver api/scan-player.js) — un
-// canterano de la Academia nunca trae términos económicos de primer equipo, así que su
-// extracción es deliberadamente más reducida. Lanza un Error con mensaje legible en español si
-// algo falla (sin conexión, servidor sin clave configurada, respuesta inválida...), para que la
-// UI que llama a esta función pueda mostrarlo directamente al usuario.
-export async function scanPlayerCard(file, mode = 'primerEquipo') {
-  if (!file) throw new Error('No se ha seleccionado ninguna imagen.');
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Llamada única (sin reintentos) a api/scan-player.js — usada solo internamente por
+// scanPlayerCard, que es quien añade la resiliencia frente a límites de cuota (ver más abajo).
+async function scanPlayerCardOnce(file, mode) {
   const imageBase64 = await fileToBase64(file);
 
   let response;
@@ -52,15 +48,56 @@ export async function scanPlayerCard(file, mode = 'primerEquipo') {
   if (!response.ok) {
     // "details" (si el servidor lo envía, ver api/scan-player.js) recoge el motivo real
     // devuelto por Gemini o el error de parseo — se muestra junto al mensaje genérico para
-    // que el usuario pueda copiarlo directamente en un reporte de fallo.
+    // que el usuario pueda copiarlo directamente en un reporte de fallo. "status" queda
+    // colgado del propio Error para que scanPlayerCard sepa si merece la pena reintentar
+    // (429/503, límite de cuota temporal) o si es un fallo definitivo.
     console.error('Error de /api/scan-player:', payload?.error, payload?.details);
     const base = payload?.error || 'No se pudo analizar la imagen. Inténtalo de nuevo.';
-    throw new Error(payload?.details ? `${base} (${payload.details})` : base);
+    const err = new Error(payload?.details ? `${base} (${payload.details})` : base);
+    err.status = response.status;
+    throw err;
   }
   if (!payload?.data) {
     throw new Error('El servidor no devolvió ningún dato de la imagen.');
   }
   return payload.data;
+}
+
+// Códigos que indican un límite de cuota TEMPORAL de Gemini (demasiadas peticiones por minuto,
+// o el modelo saturado un instante) — merece la pena reintentar tras una espera. Cualquier otro
+// error (imagen ilegible, red caída, 4xx de validación...) es definitivo y no se reintenta.
+const RETRYABLE_STATUSES = new Set([429, 503]);
+const MAX_SCAN_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 4000;
+
+// Analiza la foto de una tarjeta de jugador vía api/scan-player.js y devuelve el JSON
+// extraído (mismas claves que describe ese endpoint). "mode" ('primerEquipo' por defecto o
+// 'academia') decide qué esquema/prompt usa el servidor (ver api/scan-player.js) — un
+// canterano de la Academia nunca trae términos económicos de primer equipo, así que su
+// extracción es deliberadamente más reducida. Lanza un Error con mensaje legible en español si
+// algo falla (sin conexión, servidor sin clave configurada, respuesta inválida...), para que la
+// UI que llama a esta función pueda mostrarlo directamente al usuario.
+// Backoff exponencial automático ante un 429/503 (límite de peticiones por minuto de Gemini,
+// muy real en lotes grandes): reintenta hasta MAX_SCAN_RETRIES veces con esperas crecientes
+// (4s, 8s, 16s) antes de dar la imagen por fallida de verdad. "onRetry(attempt, delayMs)" es
+// opcional, para que la UI pueda avisar de que se está reintentando en vez de quedarse muda.
+export async function scanPlayerCard(file, mode = 'primerEquipo', onRetry) {
+  if (!file) throw new Error('No se ha seleccionado ninguna imagen.');
+  let lastErr;
+  for (let attempt = 0; attempt <= MAX_SCAN_RETRIES; attempt++) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      return await scanPlayerCardOnce(file, mode);
+    } catch (err) {
+      lastErr = err;
+      if (attempt >= MAX_SCAN_RETRIES || !RETRYABLE_STATUSES.has(err.status)) throw err;
+      const delayMs = RETRY_BASE_DELAY_MS * (2 ** attempt);
+      onRetry?.(attempt + 1, delayMs);
+      // eslint-disable-next-line no-await-in-loop
+      await sleep(delayMs);
+    }
+  }
+  throw lastErr;
 }
 
 // Diccionario de códigos de 3-4 letras -> nombre completo del club, para resolver el "Club de
@@ -176,25 +213,27 @@ export function mapAcademyScanResultToPrefill(extracted) {
   };
 }
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Escanea varias fotos EN SECUENCIA (nunca en paralelo: Gemini aplica límites de peticiones
-// por segundo, y una cola secuencial da además un progreso real y predecible) — usado tanto por
-// la carga masiva con IA de PlayerList/AcademyTab como por los dos bloques de OnboardingWizard.
-// Cada foto pasa por el mismo pipeline que un escaneo individual (prepareImageForScan para
-// HEIC/compresión, scanPlayerCard, y el mapeo correspondiente al modo), con una espera de
-// seguridad entre llamadas sucesivas a la API (DELAY_BETWEEN_CALLS_MS, 2-3s) para no
-// encadenarlas pegadas y arriesgarnos a un 429 de cuota de la API de Gemini en lotes grandes.
+// Escanea varias fotos EN SECUENCIA (nunca en paralelo, concurrency = 1: Gemini aplica límites
+// de peticiones por minuto, y una cola secuencial da además un progreso real y predecible) —
+// usado tanto por la carga masiva con IA de PlayerList/AcademyTab como por los dos bloques de
+// OnboardingWizard. Cada foto pasa por el mismo pipeline que un escaneo individual
+// (prepareImageForScan para HEIC/compresión, scanPlayerCard con sus reintentos automáticos
+// ante 429/503, y el mapeo correspondiente al modo), con una espera de seguridad de 3 segundos
+// entre la finalización de un jugador y la llamada del siguiente para respetar la cuota de
+// peticiones por minuto (RPM) de Gemini en lotes grandes.
 // onProgress(info) se invoca en cada cambio de fase de la foto en curso — { index (0-based),
-// total, fileName, phase } — para que la UI pueda mostrar "Procesando jugador/canterano X de
-// N..." con su propia sub-fase.
+// total, fileName, phase, attempt?, delayMs? } — phase es 'preparing' (comprimiendo),
+// 'scanning' (llamando a Gemini) o 'retrying' (esperando tras un 429/503 antes de reintentar,
+// con attempt/delayMs del intento en curso) — para que la UI pueda mostrar un texto y un
+// porcentaje específicos de cada sub-fase en vez de un "procesando..." genérico.
 // Tolerancia a fallos por imagen (cola con try/catch, nunca Promise.all: una imagen que
 // truena no debe tirar abajo el resto del lote): cada resultado logrado, incluso si viene
 // incompleto (p. ej. sin nombre legible), se añade a "succeeded" con su fileName — es la propia
 // UI de revisión (BulkScanReviewModal) la que decide si mostrarlo como "lectura parcial" y
 // dejar que el usuario lo complete a mano o lo descarte, en vez de perderlo aquí en silencio.
-// Solo una excepción real (red caída, respuesta inválida...) va a "failed": { fileName, error }.
-const DELAY_BETWEEN_CALLS_MS = 2500;
+// Solo una excepción real ya sin reintentos posibles (red caída, respuesta inválida, o un
+// 429/503 persistente tras MAX_SCAN_RETRIES) va a "failed": { fileName, error }.
+const DELAY_BETWEEN_CALLS_MS = 3000;
 export async function scanPlayerCardsQueue(files, mode, onProgress) {
   const mapper = mode === 'academia' ? mapAcademyScanResultToPrefill : mapScanResultToPrefill;
   const succeeded = [];
@@ -202,7 +241,7 @@ export async function scanPlayerCardsQueue(files, mode, onProgress) {
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    const report = (phase) => onProgress?.({ index: i, total: files.length, fileName: file.name, phase });
+    const report = (phase, extra) => onProgress?.({ index: i, total: files.length, fileName: file.name, phase, ...extra });
 
     try {
       report('preparing');
@@ -215,7 +254,7 @@ export async function scanPlayerCardsQueue(files, mode, onProgress) {
       }
 
       report('scanning');
-      const extracted = await scanPlayerCard(preparedFile, mode);
+      const extracted = await scanPlayerCard(preparedFile, mode, (attempt, delayMs) => report('retrying', { attempt, delayMs }));
       succeeded.push({ ...mapper(extracted), fileName: file.name });
     } catch (err) {
       console.error('Error escaneando la imagen:', file.name, err);
