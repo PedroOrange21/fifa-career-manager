@@ -119,6 +119,11 @@ const toFormState = (p) => {
     // (dato antiguo) en vez de outboundLoan.duration (el campo real que rellena cedePlayer),
     // igual que ya contempla la lista de Plantilla al mostrar este mismo dato.
     outboundLoan: p?.outboundLoan || (p?.loanDuration ? { duration: p.loanDuration } : null),
+    // "Plantilla Inicial" (ver hidePurchasePrice/hideSourceClub más abajo): tampoco editable
+    // desde este asistente en sí — se fija solo al crear el jugador (Paso 2 de "Fichar
+    // Jugador" en PlayerList, o el propio OnboardingWizard) y debe conservarse en cualquier
+    // edición posterior, igual que transferStatus.
+    isInitialSquad: !!p?.isInitialSquad,
   };
 };
 
@@ -473,6 +478,13 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
         // jugador cedido fuera de esa lista con solo editarlo desde el Paso 4.
         transferStatus: form.transferStatus,
         outboundLoan: form.transferStatus === 'CedidoFuera' ? form.outboundLoan : null,
+        // Al EDITAR se conserva tal cual (form.isInitialSquad, cargado por toFormState desde el
+        // jugador ya guardado) — este asistente no ofrece forma de cambiarlo después de creado.
+        // Al CREAR (sin editingPlayer) se deriva de hidePurchasePrice && hideSourceClub: hoy la
+        // única combinación que activa ambos a la vez es "Plantilla Inicial" (ver PlayerList) y
+        // el "Empieza desde Cero" de OnboardingWizard — exactamente los dos casos de un jugador
+        // ya en el club sin una compra real que registrar.
+        isInitialSquad: editingPlayer ? form.isInitialSquad : (hidePurchasePrice && hideSourceClub),
         wage: form.type === 'Cantera' ? 0 : parseValue(form.wage),
         // Años de contrato y cláusula de rescisión son exclusivos de "Comprado": Cantera nunca
         // los tuvo y Cedido los pierde a partir de ahora (sustituidos por duración de cesión,

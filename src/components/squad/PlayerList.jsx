@@ -55,10 +55,19 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [formInitialStep, setFormInitialStep] = useState(1);
   const [formLockedType, setFormLockedType] = useState(null);
   const [formPostScanReview, setFormPostScanReview] = useState(false);
-  // Comprado/Cedido elegido en el Paso 2 (AddPlayerOperationTypeModal): se guarda aparte de
-  // formLockedType porque hace falta ANTES de que exista un PlayerForm al que pasárselo —
-  // tanto openFirstTeamManualForm como el ScanPlayerCardModal del Paso 4 lo consumen al vuelo.
+  // hidePurchasePrice/hideSourceClub/skipInitialTransaction: activados juntos únicamente por
+  // "Plantilla Inicial / Ya en el Club" (Paso 2) — mismo mecanismo que ya usa OnboardingWizard
+  // para "Empieza desde Cero" (ver PlayerForm, que deriva isInitialSquad de esta combinación).
+  const [formHidePurchasePrice, setFormHidePurchasePrice] = useState(false);
+  const [formHideSourceClub, setFormHideSourceClub] = useState(false);
+  const [formSkipInitialTransaction, setFormSkipInitialTransaction] = useState(false);
+  // Comprado/Cedido/Inicial elegido en el Paso 2 (AddPlayerOperationTypeModal): se guarda
+  // aparte de formLockedType porque hace falta ANTES de que exista un PlayerForm al que
+  // pasárselo — tanto openFirstTeamManualForm como el ScanPlayerCardModal del Paso 4 lo
+  // consumen al vuelo. pendingIsInitialSquad distingue "Inicial" (type sigue siendo Comprado,
+  // pero sin club de procedencia ni precio) de un "Comprado" normal.
   const [pendingOperationType, setPendingOperationType] = useState(null);
+  const [pendingIsInitialSquad, setPendingIsInitialSquad] = useState(false);
   const [sellingPlayer, setSellingPlayer] = useState(null);
   const [loaningPlayer, setLoaningPlayer] = useState(null);
   const [endingLoanPlayer, setEndingLoanPlayer] = useState(null);
@@ -94,6 +103,9 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       setFormInitialStep(4);
       setFormLockedType(null);
       setFormPostScanReview(false);
+      setFormHidePurchasePrice(false);
+      setFormHideSourceClub(false);
+      setFormSkipInitialTransaction(false);
       setShowForm(true);
       onConsumePendingEdit();
     }
@@ -111,6 +123,9 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       setFormInitialStep(1);
       setFormLockedType(null);
       setFormPostScanReview(false);
+      setFormHidePurchasePrice(false);
+      setFormHideSourceClub(false);
+      setFormSkipInitialTransaction(false);
       setShowForm(true);
       onConsumePendingPrefill();
     }
@@ -165,7 +180,18 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
 
   // Editar desde la lista (activos o cedidos) abre directamente el Paso 4 con los datos
   // precargados, sin pasar por el asistente paso a paso.
-  const openEditForm = (p) => { setEditingPlayer(p); setFormPrefill(null); setFormSourceTargetId(null); setFormInitialStep(4); setFormLockedType(null); setFormPostScanReview(false); setShowForm(true); };
+  const openEditForm = (p) => {
+    setEditingPlayer(p);
+    setFormPrefill(null);
+    setFormSourceTargetId(null);
+    setFormInitialStep(4);
+    setFormLockedType(null);
+    setFormPostScanReview(false);
+    setFormHidePurchasePrice(false);
+    setFormHideSourceClub(false);
+    setFormSkipInitialTransaction(false);
+    setShowForm(true);
+  };
 
   const handleFicharClick = () => {
     if (HAS_HOVER) { setAddStep('destination'); return; }
@@ -174,31 +200,42 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   };
 
   // Paso 2 (Tipo de Operación) resuelto: se guarda la elección y se continúa al Paso 3
-  // (Método) — Comprado/Cedido hace falta fijarlo antes de saber qué pedir en el resto del
-  // flujo (ver pendingOperationType, consumido por openFirstTeamManualForm y el
-  // ScanPlayerCardModal del Paso 4).
-  const selectOperationType = (type) => {
-    setPendingOperationType(type);
+  // (Método) — hace falta fijarla antes de saber qué pedir en el resto del flujo (ver
+  // pendingOperationType/pendingIsInitialSquad, consumidos por openFirstTeamManualForm y el
+  // ScanPlayerCardModal del Paso 4). "Inicial" (Plantilla Inicial/Ya en el Club) sigue siendo
+  // tipo "Comprado" por debajo (juega y se guarda igual, en propiedad del club), pero sin
+  // compra real que registrar.
+  const selectOperationType = (choice) => {
+    setPendingOperationType(choice === 'Inicial' ? 'Comprado' : choice);
+    setPendingIsInitialSquad(choice === 'Inicial');
     setAddStep('method');
   };
 
-  // Paso 3 (Método) elegido "Manual" tras fijar Comprado/Cedido en el Paso 2: asistente
+  // Paso 3 (Método) elegido "Manual" tras fijar el Tipo de Operación en el Paso 2: asistente
   // clásico desde el Paso 1, con el tipo ya bloqueado (sin selector, igual que Academia) —
   // determina de entrada qué campos económicos/contractuales pedir en el Paso 3 del wizard.
+  // "Plantilla Inicial" reutiliza el mismo mecanismo que ya usa OnboardingWizard para "Empieza
+  // desde Cero": oculta Club de Procedencia/Precio de Compra (hidePurchasePrice/hideSourceClub,
+  // de los que PlayerForm deriva isInitialSquad) y fija el mismo texto de Club de Procedencia
+  // por si en algún sitio se llega a leer/mostrar tal cual, y no registra transacción de compra
+  // (skipInitialTransaction) al no ser un fichaje real.
   const openFirstTeamManualForm = () => {
     setAddStep(null);
     setEditingPlayer(null);
-    setFormPrefill(null);
+    setFormPrefill(pendingIsInitialSquad ? { sourceClub: 'En el club desde el inicio' } : null);
     setFormSourceTargetId(null);
     setFormInitialStep(1);
     setFormLockedType(pendingOperationType);
     setFormPostScanReview(false);
+    setFormHidePurchasePrice(pendingIsInitialSquad);
+    setFormHideSourceClub(pendingIsInitialSquad);
+    setFormSkipInitialTransaction(pendingIsInitialSquad);
     setShowForm(true);
   };
 
   // Paso 1 (Destino) = Academia/Cantera: sin pasos de Tipo de Operación ni Método (no aplica
-  // Comprado/Cedido ni escaneo por IA a los canteranos), directo al asistente manual con el
-  // tipo fijado, igual que el alta propia de AcademyTab.
+  // Comprado/Cedido/Inicial ni escaneo por IA a los canteranos), directo al asistente manual
+  // con el tipo fijado, igual que el alta propia de AcademyTab.
   const openAcademyForm = () => {
     setAddStep(null);
     setEditingPlayer(null);
@@ -207,22 +244,29 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
     setFormInitialStep(1);
     setFormLockedType('Cantera');
     setFormPostScanReview(false);
+    setFormHidePurchasePrice(false);
+    setFormHideSourceClub(false);
+    setFormSkipInitialTransaction(false);
     setShowForm(true);
   };
 
   // Al terminar el escaneo por IA, se abre PlayerForm directamente en el Paso 4 (Revisión,
   // única pantalla, ver postScanReview) con todo prerrellenado según el tipo fijado en el
   // Paso 2 — así el usuario solo tiene que repasar y confirmar los datos leídos de la tarjeta,
-  // completando a mano los que la IA nunca puede traer (Club de Procedencia siempre; Precio de
-  // Compra si es Comprado; Club de Origen si es Cedido).
+  // completando a mano los que la IA nunca puede traer (Club de Procedencia si es Comprado;
+  // Precio de Compra si es Comprado; Club de Origen si es Cedido; ninguno de los dos en
+  // Plantilla Inicial, que los omite igual que el alta manual).
   const handleScanExtracted = (prefillData) => {
     setAddStep(null);
     setEditingPlayer(null);
-    setFormPrefill(prefillData);
+    setFormPrefill(pendingIsInitialSquad ? { ...prefillData, sourceClub: 'En el club desde el inicio' } : prefillData);
     setFormSourceTargetId(null);
     setFormInitialStep(4);
     setFormLockedType(pendingOperationType);
     setFormPostScanReview(true);
+    setFormHidePurchasePrice(pendingIsInitialSquad);
+    setFormHideSourceClub(pendingIsInitialSquad);
+    setFormSkipInitialTransaction(pendingIsInitialSquad);
     setShowForm(true);
   };
 
@@ -350,6 +394,9 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
           initialStep={formInitialStep}
           lockedType={formLockedType}
           postScanReview={formPostScanReview}
+          hidePurchasePrice={formHidePurchasePrice}
+          hideSourceClub={formHideSourceClub}
+          skipInitialTransaction={formSkipInitialTransaction}
           onClose={() => setShowForm(false)}
         />
       )}
@@ -617,6 +664,7 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
                 <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{p.age} Años</span>
                 {p.marketValue ? <span className="text-[8px] md:text-[9px] text-fg-muted font-black uppercase tracking-widest bg-well px-2 py-0.5 rounded">{abbreviateValue(p.marketValue)}</span> : null}
                 {p.type === 'Cedido' && p.loanDuration && (<span className="text-[7px] md:text-[8px] font-black uppercase tracking-widest bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded">Ced. {formatLoanDuration(p.loanDuration)}</span>)}
+                {p.isInitialSquad && (<span className="text-[7px] md:text-[8px] font-black uppercase tracking-widest bg-zinc-500/20 text-zinc-400 border border-zinc-500/30 px-2 py-0.5 rounded">Plantilla Inicial</span>)}
               </div>
             </div>
           </div>

@@ -1,14 +1,18 @@
-import { X, ChevronLeft, DollarSign, Handshake, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, DollarSign, Handshake, Shirt, ChevronRight } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
 // Segundo paso de "Fichar Jugador" (tras elegir Primer Equipo en AddPlayerDestinationModal,
-// antes de AddPlayerChoiceModal): ¿Comprado o Cedido? Se decide aquí, antes del método de
-// alta, para que tanto el formulario manual como el resultado del escaneo con IA sepan de
-// entrada qué campos económicos/contractuales pedir (precio de compra y cláusula de rescisión
-// en Comprado; club de origen, duración de cesión y opción de compra en Cedido) — mismos
-// colores que ya usa el resto de la app para distinguir un tipo del otro (azul Comprado,
-// ámbar Cedido, ver PlayerForm y las insignias "Cedible"/"Ced." de PlayerList).
+// antes de AddPlayerChoiceModal): ¿Comprado, Cedido o ya estaba en la plantilla desde el
+// inicio? Se decide aquí, antes del método de alta, para que tanto el formulario manual como
+// el resultado del escaneo con IA sepan de entrada qué campos económicos/contractuales pedir
+// (precio de compra y cláusula de rescisión en Comprado; club de origen, duración de cesión y
+// opción de compra en Cedido; ninguno de los dos en Plantilla Inicial, que sigue siendo un
+// jugador en propiedad —type "Comprado"— pero sin una compra real que registrar, igual que ya
+// hace OnboardingWizard para la partida "Empieza desde Cero") — mismos colores que ya usa el
+// resto de la app para distinguir un tipo del otro (azul Comprado, ámbar Cedido, ver
+// PlayerForm y las insignias "Cedible"/"Ced." de PlayerList); Plantilla Inicial usa un tono
+// neutro (zinc) al no ser en sí un tipo de adquisición nuevo, solo una variante sin traspaso.
 export default function AddPlayerOperationTypeModal({ onClose, onBack, onSelect }) {
   useBodyScrollLock();
   useAutoHideChrome();
@@ -30,7 +34,7 @@ export default function AddPlayerOperationTypeModal({ onClose, onBack, onSelect 
           <button type="button" onClick={() => onSelect('Comprado')} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border-subtle bg-well hover:border-blue-500 hover:bg-well-strong transition-all text-left touch-manipulation">
             <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0"><DollarSign size={22} /></div>
             <div className="flex-1 min-w-0">
-              <div className="font-black uppercase italic text-sm text-fg">Comprado / Traspaso Definitivo</div>
+              <div className="font-black uppercase italic text-sm text-fg">Comprado / Traspaso</div>
               <div className="text-[10px] font-bold text-fg-muted mt-0.5">Pasa a ser propiedad del club, con precio de compra y contrato.</div>
             </div>
             <ChevronRight size={18} className="text-fg-faint shrink-0" />
@@ -40,6 +44,14 @@ export default function AddPlayerOperationTypeModal({ onClose, onBack, onSelect 
             <div className="flex-1 min-w-0">
               <div className="font-black uppercase italic text-sm text-fg">Cedido</div>
               <div className="text-[10px] font-bold text-fg-muted mt-0.5">Llega prestado desde otro club, con duración y condiciones.</div>
+            </div>
+            <ChevronRight size={18} className="text-fg-faint shrink-0" />
+          </button>
+          <button type="button" onClick={() => onSelect('Inicial')} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border-subtle bg-well hover:border-zinc-400 hover:bg-well-strong transition-all text-left touch-manipulation">
+            <div className="w-12 h-12 rounded-xl bg-zinc-500/10 text-zinc-400 flex items-center justify-center shrink-0"><Shirt size={22} /></div>
+            <div className="flex-1 min-w-0">
+              <div className="font-black uppercase italic text-sm text-fg">Plantilla Inicial / Ya en el Club</div>
+              <div className="text-[10px] font-bold text-fg-muted mt-0.5">Ya estaba en el equipo desde el inicio, sin club de procedencia ni precio.</div>
             </div>
             <ChevronRight size={18} className="text-fg-faint shrink-0" />
           </button>
