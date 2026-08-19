@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ShieldAlert, Camera, RefreshCcw, User, ChevronLeft, ChevronRight, Check, Globe2, Pencil } from 'lucide-react';
+import { X, ShieldAlert, Camera, RefreshCcw, User, ChevronLeft, ChevronRight, Check, Globe2, Pencil, Shirt } from 'lucide-react';
 import { ALL_POSITIONS } from '../../constants/positions';
 import { flagEmoji, detectCountry } from '../../constants/countries';
 import { formatValueInput, parseValue, formatCurrency, isValidPotentialInput } from '../../utils/format';
@@ -810,6 +810,19 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                   <div className="w-full mx-auto text-center mt-4 mb-1 px-1">
                     <span className="text-[8px] font-bold uppercase tracking-widest text-fg-faint">Toca un dato para editarlo</span>
                   </div>
+
+                  {/* Constancia visual explícita de "Ya en el Club" (ver isInitialSquad) antes
+                      de confirmar: la fila "Adquisición" del Paso Economía queda oculta cuando
+                      lockedType está fijado (como aquí), así que sin este aviso no quedaría
+                      rastro alguno en la Revisión Final de que el jugador no tuvo una compra
+                      real que registrar. */}
+                  {form.isInitialSquad && (
+                    <div className="w-full mt-2 mb-1 px-1">
+                      <div className="flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-400 bg-zinc-500/10 border border-zinc-500/20 rounded-lg py-2 px-3">
+                        <Shirt size={12} className="shrink-0" /> Estado: Ya en el Club desde el Inicio
+                      </div>
+                    </div>
+                  )}
 
                   <SectionHeader emoji="👤" title="Datos Personales" />
                   <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">

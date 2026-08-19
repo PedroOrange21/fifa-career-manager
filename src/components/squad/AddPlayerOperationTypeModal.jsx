@@ -34,7 +34,7 @@ export default function AddPlayerOperationTypeModal({ onClose, onBack, onSelect 
           <button type="button" onClick={() => onSelect('Comprado')} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border-subtle bg-well hover:border-blue-500 hover:bg-well-strong transition-all text-left touch-manipulation">
             <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0"><DollarSign size={22} /></div>
             <div className="flex-1 min-w-0">
-              <div className="font-black uppercase italic text-sm text-fg">Comprado / Traspaso</div>
+              <div className="font-black uppercase italic text-sm text-fg">Comprado</div>
               <div className="text-[10px] font-bold text-fg-muted mt-0.5">Pasa a ser propiedad del club, con precio de compra y contrato.</div>
             </div>
             <ChevronRight size={18} className="text-fg-faint shrink-0" />
@@ -50,7 +50,7 @@ export default function AddPlayerOperationTypeModal({ onClose, onBack, onSelect 
           <button type="button" onClick={() => onSelect('Inicial')} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border-subtle bg-well hover:border-zinc-400 hover:bg-well-strong transition-all text-left touch-manipulation">
             <div className="w-12 h-12 rounded-xl bg-zinc-500/10 text-zinc-400 flex items-center justify-center shrink-0"><Shirt size={22} /></div>
             <div className="flex-1 min-w-0">
-              <div className="font-black uppercase italic text-sm text-fg">Plantilla Inicial / Ya en el Club</div>
+              <div className="font-black uppercase italic text-sm text-fg">Ya en el Club</div>
               <div className="text-[10px] font-bold text-fg-muted mt-0.5">Ya estaba en el equipo desde el inicio, sin club de procedencia ni precio.</div>
             </div>
             <ChevronRight size={18} className="text-fg-faint shrink-0" />
