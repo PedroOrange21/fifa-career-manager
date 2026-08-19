@@ -58,9 +58,12 @@ const batchLabelFor = (info, scanNoun) => {
 // acumulando en "cameraQueue" (con miniatura) — el usuario puede seguir pulsando "Hacer otra
 // foto" para encadenar varias antes de lanzar el escaneo de todas juntas con "Escanear fotos".
 // La galería no necesita esto: ya admite selección múltiple nativa en un solo picker.
+// initialFiles: fotogramas ya extraídos de un vídeo (ver VideoScanModal/extractFramesFromVideo)
+// — si se pasan, el escaneo arranca directamente al montar, sin mostrar la pantalla de
+// selección de origen (el usuario ya eligió "vídeo" en el paso anterior).
 // onBack (oculto durante el escaneo, igual que el cierre) vuelve al paso anterior sin perder el
 // flujo de alta.
-export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtracted, onBack, mode = 'primerEquipo', forceBatch = false }) {
+export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtracted, onBack, mode = 'primerEquipo', forceBatch = false, initialFiles = null }) {
   useBodyScrollLock();
   useAutoHideChrome();
   const { players } = useClubData();
@@ -188,6 +191,16 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
     if (files.length === 1 && !forceBatch) processSingleFile(files[0]);
     else processBatch(files);
   };
+
+  // "initialFiles" (fotogramas ya extraídos de un vídeo por VideoScanModal, ver
+  // extractFramesFromVideo): si vienen dados de antemano, se arranca el escaneo directamente al
+  // montar el modal, sin pasar por la pantalla de "Tomar Foto"/"Subir desde Galería" — el
+  // usuario ya eligió el vídeo como origen en el paso anterior. Solo una vez por montaje
+  // (mismo modal nunca reutiliza otro juego de initialFiles sin desmontarse primero).
+  useEffect(() => {
+    if (initialFiles?.length) processFiles(initialFiles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Selección desde galería: admite varias a la vez en un único picker nativo, así que se
   // procesan de inmediato tal cual las entrega el input — no pasa por la cola de captura.

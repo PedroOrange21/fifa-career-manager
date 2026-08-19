@@ -12,6 +12,8 @@ import AddPlayerDestinationModal from './AddPlayerDestinationModal';
 import AddPlayerOperationTypeModal from './AddPlayerOperationTypeModal';
 import AddPlayerPreDataModal from './AddPlayerPreDataModal';
 import AddPlayerChoiceModal from './AddPlayerChoiceModal';
+import BulkScanEntryModal from './BulkScanEntryModal';
+import VideoScanModal from './VideoScanModal';
 import ScanPlayerCardModal from './ScanPlayerCardModal';
 import BulkScanReviewModal from './BulkScanReviewModal';
 import ConfirmModal from '../common/ConfirmModal';
@@ -116,7 +118,18 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   //       (Revisión) para repasar, corregir si hace falta y confirmar; con VARIAS fotos entrega
   //       { succeeded, failed } a handleBatchScanExtracted, que abre BulkScanReviewModal con la
   //       tabla de revisión y guardado en lote (ver también scanPlayerCardsQueue).
-  const [addStep, setAddStep] = useState(null); // null | 'destination' | 'operationType' | 'preData' | 'method' | 'scan'
+  //   4b. Enlace sutil "¿Quieres añadir varios a la vez?" del propio Paso 4 -> 'bulkEntry'
+  //       (BulkScanEntryModal, elegir Vídeo o Lote de Fotos) -> 'video' (VideoScanModal, solo si
+  //       eligió Vídeo: extrae fotogramas EN LOCAL) -> 'scan' de nuevo, pero con
+  //       scanForceBatch=true y, si vino de vídeo, initialFiles=pendingVideoFrames (arranca el
+  //       escaneo directo sin mostrar la pantalla de cámara/galería) — mismo BulkScanReviewModal
+  //       de destino que la vía normal de varias fotos.
+  const [addStep, setAddStep] = useState(null); // null | 'destination' | 'operationType' | 'preData' | 'method' | 'bulkEntry' | 'video' | 'scan'
+  // scanForceBatch/pendingVideoFrames: solo relevantes para el Paso 'scan' cuando se llega desde
+  // el enlace de "varios a la vez" — la vía normal ("Escanear Foto de Jugador") nunca los toca,
+  // así que ScanPlayerCardModal sigue con su propio comportamiento de una sola foto por defecto.
+  const [scanForceBatch, setScanForceBatch] = useState(false);
+  const [pendingVideoFrames, setPendingVideoFrames] = useState(null);
 
   useEffect(() => {
     if (pendingEditPlayer) {
@@ -512,19 +525,40 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
       )}
       {addStep === 'method' && (
         <AddPlayerChoiceModal
+          scanNoun={pendingDestination === 'academia' ? 'canterano' : 'jugador'}
           onClose={() => setAddStep(null)}
           onBack={() => setAddStep(pendingDestination === 'academia' ? 'destination' : (pendingIsInitialSquad ? 'operationType' : 'preData'))}
           onManual={pendingDestination === 'academia' ? openAcademyForm : openFirstTeamManualForm}
-          onScan={() => setAddStep('scan')}
+          onScan={() => { setScanForceBatch(false); setPendingVideoFrames(null); setAddStep('scan'); }}
+          onBulk={() => setAddStep('bulkEntry')}
+        />
+      )}
+      {addStep === 'bulkEntry' && (
+        <BulkScanEntryModal
+          scanNoun={pendingDestination === 'academia' ? 'canterano' : 'jugador'}
+          onClose={() => setAddStep(null)}
+          onBack={() => setAddStep('method')}
+          onVideo={() => setAddStep('video')}
+          onPhotos={() => { setScanForceBatch(true); setPendingVideoFrames(null); setAddStep('scan'); }}
+        />
+      )}
+      {addStep === 'video' && (
+        <VideoScanModal
+          scanNoun={pendingDestination === 'academia' ? 'canterano' : 'jugador'}
+          onClose={() => setAddStep(null)}
+          onBack={() => setAddStep('bulkEntry')}
+          onFramesExtracted={(frames) => { setPendingVideoFrames(frames); setScanForceBatch(true); setAddStep('scan'); }}
         />
       )}
       {addStep === 'scan' && (
         <ScanPlayerCardModal
           mode={pendingDestination === 'academia' ? 'academia' : 'primerEquipo'}
-          onClose={() => setAddStep(null)}
-          onBack={() => setAddStep('method')}
+          forceBatch={scanForceBatch}
+          initialFiles={pendingVideoFrames}
+          onClose={() => { setAddStep(null); setPendingVideoFrames(null); }}
+          onBack={() => setAddStep(scanForceBatch ? 'bulkEntry' : 'method')}
           onExtracted={handleScanExtracted}
-          onBatchExtracted={handleBatchScanExtracted}
+          onBatchExtracted={(results) => { setPendingVideoFrames(null); handleBatchScanExtracted(results); }}
         />
       )}
       {bulkReview && (
