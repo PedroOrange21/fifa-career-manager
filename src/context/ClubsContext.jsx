@@ -47,27 +47,33 @@ export function ClubsProvider({ children }) {
     return () => unsubClubs();
   }, [user, loadingApp]);
 
-  // El Presupuesto Semanal (salarios) ya no se pide ni se guarda: se calcula siempre al vuelo
-  // como Presupuesto de Traspasos / 52 (ver weeklyWageBudgetFromTransfer en utils/format.js),
-  // fórmula verificada empíricamente contra el propio EA Sports FC (1.000.000.000 € de
-  // presupuesto -> 19.230.769 €/sem exactos en el juego real).
-  const createClub = async (name, logo, initialBudget = 0) => {
+  // El Presupuesto Semanal (salarios) se calcula por defecto al vuelo como Presupuesto de
+  // Traspasos / 52 (ver weeklyWageBudgetFromTransfer en utils/format.js), fórmula verificada
+  // empíricamente contra el propio EA Sports FC (1.000.000.000 € de presupuesto -> 19.230.769
+  // €/sem exactos en el juego real) — pero ese reparto no siempre coincide exactamente con lo
+  // que muestra una partida real ya avanzada, así que "weeklyWageBudgetOverride" permite
+  // guardar la cifra EXACTA que el usuario introduce a mano en el Paso 3 del asistente ("Modo
+  // Carrera ya Empezado"); null significa "sin override, usar la fórmula" (ver
+  // effectiveWeeklyWageBudget en utils/format.js, que decide cuál de las dos usar).
+  const createClub = async (name, logo, initialBudget = 0, weeklyWageBudgetOverride = null) => {
     if (!user || !name.trim()) return null;
     const isFirstClub = clubs.length === 0;
     const clubId = crypto.randomUUID();
     const budget = Number(initialBudget) || 0;
+    const weeklyOverride = weeklyWageBudgetOverride != null ? Number(weeklyWageBudgetOverride) || null : null;
     await setDoc(clubDoc(user.uid, clubId), {
       name: name.trim(),
       logo: logo || null,
       createdAt: Date.now(),
       transferBudget: budget,
+      weeklyWageBudgetOverride: weeklyOverride,
       currentSeasonNumber: 1,
       // Los clubes creados a partir de aquí ya registran los sueldos de jugadores/objetivos
       // directamente en semanal (ver ClubDataContext, migración "wageMigrationV1"): se marcan
       // como ya migrados desde el origen para que ese efecto nunca los reconvierta.
       wageMigrationV1: true,
     });
-    setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: budget, currentSeasonNumber: 1, wageMigrationV1: true }]));
+    setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: budget, weeklyWageBudgetOverride: weeklyOverride, currentSeasonNumber: 1, wageMigrationV1: true }]));
     // No cierra showClubModal aquí: el asistente de creación (OnboardingWizardModal) sigue
     // abierto tras crear el club para encadenar el registro de jugadores, y es él quien decide
     // cuándo cerrarse (Omitir o Entrar a mi Club).

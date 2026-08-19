@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Check, ChevronLeft, ChevronRight, ChevronDown, Plus, Wallet, Users, Sparkles, RotateCcw, Shield, Camera, RefreshCcw, ShieldAlert, ScanLine } from 'lucide-react';
+import { X, Check, ChevronLeft, ChevronRight, ChevronDown, Plus, Wallet, Users, Sparkles, RotateCcw, Shield, Camera, RefreshCcw, ShieldAlert, ScanLine, Trash2, Pencil } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency, formatValueInput, parseValue, weeklyWageBudgetFromTransfer } from '../../utils/format';
@@ -9,6 +9,7 @@ import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import PlayerForm from '../squad/PlayerForm';
 import ScanPlayerCardModal from '../squad/ScanPlayerCardModal';
 import BulkScanReviewModal from '../squad/BulkScanReviewModal';
+import ConfirmModal from '../common/ConfirmModal';
 
 const BUDGET_PRESETS = [1000000, 5000000, 10000000, 50000000, 100000000, 200000000, 500000000, 1000000000];
 
@@ -54,7 +55,7 @@ const FIELD = 'w-full h-[52px] bg-well-strong px-3 rounded-xl outline-none borde
 export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClubCreated }) {
   useAutoHideChrome();
   const { clubs, activeClubId, activeClub, createClub, completeOnboarding } = useClubs();
-  const { players } = useClubData();
+  const { players, playerToDelete, setPlayerToDelete, confirmDeletePlayer } = useClubData();
 
   // "status" (Tipo de Inicio de Partida) va ANTES que "budget" (Fondos): así, al llegar a
   // Fondos, ya se sabe si el club empieza desde cero (selector de presupuesto habitual) o es
@@ -82,6 +83,13 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   // volver atrás y cambiar de tipo de inicio no arrastre un valor del otro modo por error.
   const [continueBudgetInput, setContinueBudgetInput] = useState('');
   const [createdClubId, setCreatedClubId] = useState(null);
+  // Presupuesto Semanal de Salarios: se sugiere automáticamente (Presup. Traspasos / 52, igual
+  // que EA Sports FC) pero queda totalmente editable, porque el reparto real del juego no
+  // siempre coincide exactamente con esa fórmula en una partida ya avanzada. Se resincroniza
+  // con la sugerencia mientras el usuario no la haya tocado a mano (weeklyWageTouched); en
+  // cuanto edita el campo, deja de seguir los cambios de presupuesto automáticamente.
+  const [weeklyWageInput, setWeeklyWageInput] = useState('');
+  const [weeklyWageTouched, setWeeklyWageTouched] = useState(false);
 
   // --- Paso Estado de la Partida ---
   const [startType, setStartType] = useState(null); // 'scratch' | 'continue'
@@ -102,8 +110,12 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const [bulkScanMode, setBulkScanMode] = useState(null); // 'active' | 'academy' | null
   const [bulkReview, setBulkReview] = useState(null);
 
-  // --- Paso Resumen: desglose desplegable de las dos listas ("Jugadores"/"Canteranos") ---
+  // --- Paso Resumen: desglose desplegable de las dos listas ("Jugadores"/"Canteranos"), con
+  // edición en línea (reutiliza PlayerForm en modo edición, igual que Plantilla/Academia/
+  // Táctica) y borrado (reutiliza playerToDelete/confirmDeletePlayer de ClubDataContext, mismo
+  // flujo con "Deshacer" que el resto de la app) ---
   const [expandedGroup, setExpandedGroup] = useState(null); // 'active' | 'academy' | null
+  const [editingSummaryPlayer, setEditingSummaryPlayer] = useState(null);
 
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -132,6 +144,18 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
     setBudget(parseValue(formatted));
   };
 
+  // Mientras el usuario no haya editado a mano el Presup. Sem., se mantiene sincronizado con la
+  // sugerencia automática (Presupuesto de Traspasos / 52) cada vez que cambia el presupuesto.
+  useEffect(() => {
+    if (weeklyWageTouched) return;
+    setWeeklyWageInput(formatValueInput(String(weeklyWageBudgetFromTransfer(budget))));
+  }, [budget, weeklyWageTouched]);
+
+  const onWeeklyWageChange = (raw) => {
+    setWeeklyWageTouched(true);
+    setWeeklyWageInput(formatValueInput(raw));
+  };
+
   const activeRosterPlayers = players.filter((p) => p.type !== 'Cantera');
   const academyRosterPlayers = players.filter((p) => p.type === 'Cantera');
 
@@ -141,7 +165,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
     // falta que el usuario haya introducido una cantidad mayor que cero.
     if (currentStepId === 'budget') return startType === 'continue' ? parseValue(continueBudgetInput) > 0 : (!customMode || parseValue(customBudget) > 0);
     if (currentStepId === 'status') return !!startType;
-    if (currentStepId === 'academy') return hasAcademy !== null;
+    if (currentStepId === 'academy') return hasAcademy !== null || academyRosterPlayers.length > 0;
     return true;
   };
 
@@ -158,7 +182,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
       if (isSaving) return;
       setIsSaving(true);
       try {
-        const result = await createClub(name, logo, budget);
+        const result = await createClub(name, logo, budget, parseValue(weeklyWageInput) || null);
         setCreatedClubId(result?.clubId || null);
         setIsSaving(false);
         setStep((s) => s + 1);
@@ -303,7 +327,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                           muestra el propio juego. */}
                       <div className="flex items-start gap-2 p-3 rounded-2xl bg-well border border-border-subtle">
                         <Wallet size={16} className="text-green-500 shrink-0 mt-0.5" />
-                        <span className="text-xs font-bold text-fg-muted leading-relaxed">Ve en tu juego a la pestaña <span className="text-fg font-black">Finanzas &gt; Resumen del presupuesto</span> e introduce los datos actuales de tu club.</span>
+                        <span className="text-xs font-bold text-fg-muted leading-relaxed">Ve en tu juego a la pestaña <span className="text-fg font-black">Oficina &gt; Resumen del presupuesto</span> e introduce los datos actuales de tu club.</span>
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Presupuesto para Traspasos Actual (€)</label>
@@ -335,15 +359,17 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                     </>
                   )}
 
-                  {/* El Presupuesto Semanal (salarios) ya no se pide: se calcula solo como
-                      Presupuesto de Traspasos / 52, igual que hace EA Sports FC — se muestra
-                      aquí en modo lectura para que quede claro con qué margen arrancará el
-                      club, sin que el usuario tenga que copiarlo a mano desde el juego. */}
-                  <div className="pt-2 border-t border-border-subtle">
-                    <div className="flex items-center justify-between gap-2 p-3 rounded-2xl bg-well border border-border-subtle">
-                      <span className="flex items-center gap-2 text-xs font-bold text-fg-muted"><Wallet size={16} className="text-green-500 shrink-0" /> Presup. Sem. (Salarios)</span>
-                      <span className="text-sm font-black text-green-500 shrink-0">{formatCurrency(weeklyWageBudgetFromTransfer(budget))}/sem</span>
+                  {/* Sugerido automáticamente como Presupuesto de Traspasos / 52 (igual que EA
+                      Sports FC), pero totalmente editable: ese reparto no siempre coincide con
+                      la cifra exacta que muestra una partida real ya avanzada. */}
+                  <div className="pt-2 border-t border-border-subtle space-y-2">
+                    <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Presupuesto Semanal de Salarios (€)</label>
+                    <div className="flex items-center gap-2 p-3 rounded-2xl bg-well border border-border-subtle focus-within:border-green-500">
+                      <Wallet size={16} className="text-green-500 shrink-0" />
+                      <input type="text" inputMode="numeric" placeholder="Ej: 16.257.000" className="flex-1 min-w-0 bg-transparent outline-none font-black text-green-500 text-sm placeholder:text-fg-faint placeholder:font-bold" value={weeklyWageInput} onChange={(e) => onWeeklyWageChange(e.target.value)} />
+                      <span className="text-[10px] font-black text-fg-faint shrink-0">/sem</span>
                     </div>
+                    <p className="text-[9px] font-bold text-fg-faint ml-1">Sugerido automáticamente; edítalo si tu juego muestra una cifra distinta.</p>
                   </div>
                 </div>
               )}
@@ -388,12 +414,22 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
 
               {currentStepId === 'academy' && (
                 <div className="space-y-3">
-                  <p className="text-xs font-bold text-fg-muted">¿Tu club tiene canteranos en la Academia?</p>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => setHasAcademy(true)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${hasAcademy === true ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Sí</button>
-                    <button type="button" onClick={() => setHasAcademy(false)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${hasAcademy === false ? 'bg-well-strong text-fg' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>No</button>
-                  </div>
-                  {hasAcademy && (
+                  {/* Si ya llegaron canteranos a la Academia por redirección automática desde
+                      un escaneo de Primer Equipo (esCanterano, ver BulkScanReviewModal), se da
+                      por hecho que la respuesta es "Sí" y se salta directamente a la lista —
+                      preguntar de nuevo sería redundante con lo que el usuario ya hizo. */}
+                  {academyRosterPlayers.length > 0 ? (
+                    <p className="text-xs font-bold text-fg-muted">Ya tienes <span className="text-fg font-black">{academyRosterPlayers.length}</span> canterano{academyRosterPlayers.length === 1 ? '' : 's'} registrado{academyRosterPlayers.length === 1 ? '' : 's'} en tu Academia. ¿Quieres añadir más o continuar?</p>
+                  ) : (
+                    <>
+                      <p className="text-xs font-bold text-fg-muted">¿Tu club tiene canteranos en la Academia?</p>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setHasAcademy(true)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${hasAcademy === true ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Sí</button>
+                        <button type="button" onClick={() => setHasAcademy(false)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${hasAcademy === false ? 'bg-well-strong text-fg' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>No</button>
+                      </div>
+                    </>
+                  )}
+                  {(hasAcademy || academyRosterPlayers.length > 0) && (
                     <>
                       <div className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
                         {academyRosterPlayers.length === 0 ? (
@@ -443,18 +479,22 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                   </div>
 
                   {/* Desglose desplegable: datos clave de cada jugador ya registrado, para
-                      revisar todo el equipo de un vistazo antes de confirmar. */}
+                      revisar todo el equipo de un vistazo antes de confirmar — editable en
+                      línea (lápiz, abre PlayerForm en modo edición) y con borrado (papelera,
+                      mismo flujo con "Deshacer" que Plantilla/Academia). */}
                   {expandedGroup === 'active' && (
                     <div className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                       {activeRosterPlayers.length === 0 ? (
                         <div className="p-4 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Sin jugadores todavía</div>
                       ) : activeRosterPlayers.map((p) => (
-                        <div key={p.id} className="px-3 py-2.5 flex items-center gap-3">
+                        <div key={p.id} className="px-3 py-2.5 flex items-center gap-2">
                           <div className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[6px] opacity-70 font-bold">{p.positions?.[0]}</span><span className="text-[11px]">{p.rating}</span></div>
-                          <div className="min-w-0 flex-1">
+                          <button type="button" onClick={() => setEditingSummaryPlayer(p)} className="min-w-0 flex-1 text-left touch-manipulation">
                             <div className="text-xs font-black text-fg truncate">{p.name}</div>
                             <div className="text-[9px] font-bold text-fg-faint uppercase tracking-wide truncate">{p.positions?.[0] || '—'} · {p.rating} OVR · {p.age} Años</div>
-                          </div>
+                          </button>
+                          <button type="button" onClick={() => setEditingSummaryPlayer(p)} title="Editar" className="shrink-0 p-1.5 text-fg-faint hover:text-green-500 transition-colors touch-manipulation"><Pencil size={13} /></button>
+                          <button type="button" onClick={() => setPlayerToDelete(p.id)} title="Eliminar" className="shrink-0 p-1.5 text-fg-faint hover:text-red-400 transition-colors touch-manipulation"><Trash2 size={13} /></button>
                         </div>
                       ))}
                     </div>
@@ -464,13 +504,15 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                       {academyRosterPlayers.length === 0 ? (
                         <div className="p-4 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Sin canteranos todavía</div>
                       ) : academyRosterPlayers.map((p) => (
-                        <div key={p.id} className="px-3 py-2.5 flex items-center gap-3">
+                        <div key={p.id} className="px-3 py-2.5 flex items-center gap-2">
                           <div className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(p.rating)}`}><span className="text-[6px] opacity-70 font-bold">{p.positions?.[0]}</span><span className="text-[11px]">{p.rating}</span></div>
-                          <div className="min-w-0 flex-1">
+                          <button type="button" onClick={() => setEditingSummaryPlayer(p)} className="min-w-0 flex-1 text-left touch-manipulation">
                             <div className="text-xs font-black text-fg truncate">{p.name}</div>
                             <div className="text-[9px] font-bold text-fg-faint uppercase tracking-wide truncate">{p.positions?.[0] || '—'} · {p.rating} OVR · {p.age} Años</div>
-                          </div>
-                          <div className="text-[10px] font-black text-emerald-500 shrink-0 text-right">Pot. {p.potential || '—'}</div>
+                          </button>
+                          <span className="text-[10px] font-black text-emerald-500 shrink-0">Pot. {p.potential || '—'}</span>
+                          <button type="button" onClick={() => setEditingSummaryPlayer(p)} title="Editar" className="shrink-0 p-1.5 text-fg-faint hover:text-green-500 transition-colors touch-manipulation"><Pencil size={13} /></button>
+                          <button type="button" onClick={() => setPlayerToDelete(p.id)} title="Eliminar" className="shrink-0 p-1.5 text-fg-faint hover:text-red-400 transition-colors touch-manipulation"><Trash2 size={13} /></button>
                         </div>
                       ))}
                     </div>
@@ -522,7 +564,22 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
           results={bulkReview.results}
           propertyDefault={bulkReview.propertyDefault}
           skipInitialTransaction={bulkReview.skipInitialTransaction}
+          academyStepHint="podrás revisarlo en el Paso 5"
           onClose={() => setBulkReview(null)}
+        />
+      )}
+
+      {editingSummaryPlayer && (
+        <PlayerForm editingPlayer={editingSummaryPlayer} initialStep={4} onClose={() => setEditingSummaryPlayer(null)} />
+      )}
+      {playerToDelete && (
+        <ConfirmModal
+          icon={ShieldAlert}
+          title="Eliminar Jugador"
+          message="¿Estás seguro de que deseas eliminar este jugador?"
+          confirmLabel="Eliminar"
+          onCancel={() => setPlayerToDelete(null)}
+          onConfirm={confirmDeletePlayer}
         />
       )}
     </>

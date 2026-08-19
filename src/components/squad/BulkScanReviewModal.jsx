@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Check, ShieldAlert, RefreshCcw, GraduationCap, CopyX, Trash2, Pencil, ChevronDown, AlertTriangle } from 'lucide-react';
+import { X, Check, ShieldAlert, RefreshCcw, GraduationCap, CopyX, Trash2, Pencil, ChevronDown, AlertTriangle, ScanLine, Info } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
@@ -9,12 +9,8 @@ import { findDuplicatePlayer } from '../../utils/duplicatePlayer';
 import { formatValueInput, formatMoneyLiveWithCursor, parseValue } from '../../utils/format';
 import { ALL_POSITIONS } from '../../constants/positions';
 import Dropdown from '../common/Dropdown';
+import ScanPlayerCardModal from './ScanPlayerCardModal';
 
-const LOAN_DURATION_OPTIONS = [
-  { value: '6 Meses', label: '6 Meses' },
-  { value: '1 Temporada', label: '1 Temporada' },
-  { value: '2 Temporadas', label: '2 Temporadas' },
-];
 const POSITION_OPTIONS = ALL_POSITIONS.map((p) => ({ value: p, label: p }));
 const TYPE_OPTIONS = [
   { value: 'Inicial', label: 'Ya en el Club' },
@@ -86,7 +82,7 @@ const getRowErrors = (r) => {
 // la IA, completar una lectura parcial/fallida a mano, o cambiar el tipo de operación con sus
 // campos correspondientes. Definida fuera del componente principal (identidad estable entre
 // renders) para no perder el foco de los inputs en cada pulsación de tecla.
-function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, onToggleExclude, onToggleExpand, onUpdate, onRemove }) {
+function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, onToggleExclude, onToggleExpand, onUpdate, onRemove, onRetry }) {
   const errors = getRowErrors(r);
   const hasErrors = Object.keys(errors).length > 0;
   const primaryPosition = r.positions?.[0] || '';
@@ -130,6 +126,11 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, onToggleEx
             <div className="bg-yellow-500/10 border border-yellow-500/30 p-2 rounded-lg flex gap-1.5 text-yellow-500 text-[9px] font-bold items-start">
               <CopyX size={12} className="shrink-0 mt-0.5" /><span>Coincide con «{existingMatch.name}», ya en tu plantilla ({existingMatch.positions?.[0] || '—'}{existingMatch.age ? `, ${existingMatch.age} años` : ''}). Se dejará sin marcar salvo que la incluyas a propósito.</span>
             </div>
+          )}
+          {r.scanStatus === 'failed' && (
+            <button type="button" onClick={() => onRetry(r.id)} className="w-full py-2.5 rounded-lg border border-dashed border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest touch-manipulation">
+              <RefreshCcw size={12} /> Reintentar Escaneo
+            </button>
           )}
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-0.5">
@@ -205,7 +206,7 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, onToggleEx
                   </div>
                   <div className="space-y-0.5">
                     <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Duración Cesión</label>
-                    <Dropdown value={r.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => onUpdate(r.id, { loanDuration: v })} labelClassName="text-[10px]" />
+                    <input type="text" className={FIELD_CLASS} value={r.loanDuration} onChange={(e) => onUpdate(r.id, { loanDuration: e.target.value })} placeholder="Ej: 11 Meses" />
                   </div>
                 </div>
               )}
@@ -222,7 +223,7 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, onToggleEx
 
 // Grupo de filas con cabecera opcional (usado para separar Primer Equipo / Academia cuando un
 // lote sale mixto — ver requisito de "organiza la revisión por secciones").
-function ReviewSection({ title, icon: Icon, rows, mode, duplicateOf, existingMatches, excluded, onToggleExclude, onToggleExpand, onUpdate, onRemove }) {
+function ReviewSection({ title, icon: Icon, rows, mode, duplicateOf, existingMatches, excluded, onToggleExclude, onToggleExpand, onUpdate, onRemove, onRetry }) {
   if (rows.length === 0) return null;
   return (
     <div className="space-y-2">
@@ -244,6 +245,7 @@ function ReviewSection({ title, icon: Icon, rows, mode, duplicateOf, existingMat
             onToggleExpand={onToggleExpand}
             onUpdate={onUpdate}
             onRemove={onRemove}
+            onRetry={onRetry}
           />
         ))}
       </div>
@@ -264,10 +266,17 @@ function ReviewSection({ title, icon: Icon, rows, mode, duplicateOf, existingMat
 // - propertyDefault: 'Inicial' (Ya en el Club) o 'Comprado' — clasificación inicial de las
 //   filas de Primer Equipo que la IA detectó como "en propiedad" (ni cesión ni Academia).
 // - skipInitialTransaction: idéntico al de PlayerForm, pasado tal cual a addOrUpdatePlayer.
-export default function BulkScanReviewModal({ mode = 'primerEquipo', results, propertyDefault = 'Comprado', skipInitialTransaction = false, onClose, onSaved }) {
+// - academyStepHint: texto opcional añadido entre paréntesis al aviso de canteranos
+//   redirigidos a Academia (ej. "podrás revisarlo en el Paso 5"), usado por OnboardingWizard
+//   para referenciar su propio paso — el resto de puntos de entrada lo dejan sin definir.
+export default function BulkScanReviewModal({ mode = 'primerEquipo', results, propertyDefault = 'Comprado', skipInitialTransaction = false, academyStepHint = '', onClose, onSaved }) {
   useBodyScrollLock();
   useAutoHideChrome();
   const { players, addOrUpdatePlayer } = useClubData();
+  // 'addMore' (seguir escaneando más fotos, se anexan como filas nuevas) o { retryRowId } (re-
+  // escanear UNA foto que falló, sustituye esa fila concreta manteniendo su id) — nunca ambos a
+  // la vez, así que basta un único slot en vez de dos banderas independientes.
+  const [rescanTarget, setRescanTarget] = useState(null);
 
   // Un único cálculo inicial (rows + duplicados detectados de entrada) para que ambos estados
   // arranquen sincronizados con los mismos ids de fila — construir "rows" dos veces por
@@ -291,6 +300,40 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
   const toggleExpand = (id) => setRows((prev) => prev.map((r) => (r.id === id ? { ...r, expanded: !r.expanded } : r)));
   const toggleExclude = (id) => setExcluded((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const removeRow = (id) => { setRows((prev) => prev.filter((r) => r.id !== id)); setExcluded((prev) => { const next = new Set(prev); next.delete(id); return next; }); };
+
+  // "Añadir más fotos/jugadores": anexa las filas del nuevo escaneo a las ya existentes (nunca
+  // las sustituye) para poder seguir cargando capturas antes de confirmar todo junto. Los
+  // duplicados del nuevo lote (contra la plantilla real y contra TODAS las filas ya en la
+  // tabla, incluida la recién añadida) se excluyen automáticamente, igual que en la carga
+  // inicial.
+  const handleAddMoreExtracted = (batchResults) => {
+    setRescanTarget(null);
+    const newRows = buildRowsFromResults(batchResults, mode, propertyDefault);
+    const dupIds = new Set();
+    newRows.forEach((r, i) => {
+      if (r.scanStatus === 'failed') return;
+      if (findDuplicatePlayer(r, [...players, ...rows, ...newRows.slice(0, i)])) dupIds.add(r.id);
+    });
+    setRows((prev) => [...prev, ...newRows]);
+    if (dupIds.size) setExcluded((prev) => new Set([...prev, ...dupIds]));
+  };
+
+  // "Reintentar Escaneo" en una fila fallida: re-escanea UNA foto y sustituye esa fila en su
+  // sitio (mismo id, así conserva su posición y su estado de exclusión) en vez de añadir una
+  // fila nueva. Si el reintento también falla, la fila se deja tal cual (sigue en 'failed', se
+  // puede reintentar de nuevo o completar a mano).
+  const handleRetryExtracted = (rowId, batchResults) => {
+    setRescanTarget(null);
+    const succeededRow = batchResults.succeeded?.[0];
+    if (!succeededRow) return;
+    const fresh = buildRow(succeededRow, { status: succeededRow.name?.trim() ? 'ok' : 'partial', fileName: succeededRow.fileName, propertyDefault });
+    setRows((prev) => prev.map((r) => (r.id === rowId ? { ...fresh, id: rowId } : r)));
+  };
+
+  const retryModeFor = (rowId) => {
+    const row = rows.find((r) => r.id === rowId);
+    return mode === 'academia' || row?.reviewType === 'Cantera' ? 'academia' : 'primerEquipo';
+  };
 
   // Duplicados recalculados en cada render (cola dinámica: el usuario puede editar un nombre y
   // convertirlo en duplicado, o al revés) — barato para los lotes de decenas de fotos típicos
@@ -358,6 +401,7 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
   const title = mode === 'academia' ? 'Canteranos Detectados' : 'Jugadores Detectados';
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={saving ? undefined : onClose}>
       <div className="bg-surface border border-border rounded-[32px] w-full max-w-md shadow-2xl max-h-[90dvh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="shrink-0 flex justify-between items-center px-5 pt-5 pb-3 border-b border-border-subtle">
@@ -391,7 +435,7 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
           )}
           {reclassifiedCount > 0 && (
             <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl flex gap-2 text-emerald-400 text-[10px] font-black items-center">
-              <GraduationCap size={14} className="shrink-0" /><span>{reclassifiedCount} canterano{reclassifiedCount === 1 ? '' : 's'} detectado{reclassifiedCount === 1 ? '' : 's'} (se guardará{reclassifiedCount === 1 ? '' : 'n'} directamente en Academia).</span>
+              <Info size={14} className="shrink-0" /><span>Se ha{reclassifiedCount === 1 ? '' : 'n'} detectado {reclassifiedCount} canterano{reclassifiedCount === 1 ? '' : 's'} que se ha{reclassifiedCount === 1 ? '' : 'n'} añadido automáticamente a tu Academia{academyStepHint ? ` (${academyStepHint})` : ''}.</span>
             </div>
           )}
           {blockingRows.length > 0 && (
@@ -409,12 +453,16 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
             <div className="p-8 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Sin resultados aprovechables</div>
           ) : isMixedBatch ? (
             <>
-              <ReviewSection title="Primer Equipo" rows={primerEquipoRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} />
-              <ReviewSection title="Academia" icon={GraduationCap} rows={academiaRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} />
+              <ReviewSection title="Primer Equipo" rows={primerEquipoRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
+              <ReviewSection title="Academia" icon={GraduationCap} rows={academiaRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
             </>
           ) : (
-            <ReviewSection rows={rows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} />
+            <ReviewSection rows={rows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
           )}
+
+          <button type="button" onClick={() => setRescanTarget('addMore')} className="w-full py-3 rounded-2xl border border-dashed border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest touch-manipulation">
+            <ScanLine size={13} /> Añadir Más Fotos / Jugadores
+          </button>
         </div>
 
         <footer className="shrink-0 bg-surface border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
@@ -424,5 +472,15 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
         </footer>
       </div>
     </div>
+
+    {rescanTarget && (
+      <ScanPlayerCardModal
+        mode={rescanTarget === 'addMore' ? mode : retryModeFor(rescanTarget.retryRowId)}
+        forceBatch
+        onClose={() => setRescanTarget(null)}
+        onBatchExtracted={rescanTarget === 'addMore' ? handleAddMoreExtracted : (batchResults) => handleRetryExtracted(rescanTarget.retryRowId, batchResults)}
+      />
+    )}
+    </>
   );
 }

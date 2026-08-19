@@ -83,7 +83,7 @@ const RESPONSE_SCHEMA = {
     // los datos de contrato/cláusula habituales de un jugador en propiedad.
     esCesion: { type: Type.BOOLEAN, nullable: true, description: 'true si la tarjeta indica que el jugador está cedido de otro club (texto tipo "En cesión del...", "Cedido por...", o un escudo de club de origen distinto del propio), false o null si no hay ningún indicio de cesión.' },
     clubCesion: { type: Type.STRING, nullable: true, description: 'Solo si esCesion es true: nombre del club que cede al jugador (el dueño real), identificado por el texto o el escudo junto a él.' },
-    duracionCesion: { type: Type.STRING, enum: ['6 Meses', '1 Temporada', '2 Temporadas'], nullable: true, description: 'Solo si esCesion es true y la tarjeta indica una duración de cesión: la opción de este enum más cercana a lo que muestra la tarjeta.' },
+    duracionCesion: { type: Type.STRING, nullable: true, description: 'Solo si esCesion es true y la tarjeta indica una duración/tiempo restante de cesión: transcribe el texto EXACTO tal como aparece (ej. "11 Meses", "5 Meses", "1 Año"), sin redondear ni encajarlo en ninguna categoría fija — es el tiempo real restante de una cesión en curso.' },
     // Autodetección de tarjeta de Academia colada por error en un lote de Primer Equipo: si la
     // imagen en realidad muestra un RANGO de potencial (ej. "75-94") o viene de la pantalla de
     // Academia/Jóvenes Promesas, márcalo aquí en vez de forzar los datos de primer equipo.
@@ -112,10 +112,13 @@ Detección de cesión (muy importante, revísalo con cuidado antes de rellenar d
   "En cesión del [Club]", "Cedido por [Club]", "Cesión de [Club]", o un escudo de un club
   distinto del tuyo junto a esa mención.
 - Si encuentras ese indicio: esCesion = true, clubCesion = el nombre del club que lo cede (el
-  dueño real, identificado por el texto o el escudo), y duracionCesion = la opción del enum
-  (6 Meses / 1 Temporada / 2 Temporadas) más parecida a la duración de cesión que muestre la
-  tarjeta si aparece. En este caso NO rellenes duracionContrato ni clausulaRescision (van a
-  null): un jugador cedido no tiene esos datos como propietario, son del club de origen.
+  dueño real, identificado por el texto o el escudo), y duracionCesion = el texto EXACTO de la
+  duración o tiempo restante de cesión que muestre la tarjeta, sin normalizar ni redondear a
+  una categoría (ej. si pone "11 Meses" devuelve "11 Meses", no "1 Temporada"; si pone "5
+  Meses" devuelve "5 Meses", no "6 Meses") — en una carrera ya avanzada ese tiempo restante
+  exacto es el dato real que importa, no una duración inicial aproximada. En este caso NO
+  rellenes duracionContrato ni clausulaRescision (van a null): un jugador cedido no tiene esos
+  datos como propietario, son del club de origen.
   Si el club de origen aparece solo como una abreviatura de 3-4 letras junto al escudo (p. ej.
   "VAL", "RMA", "ATM", "BAR"/"FCB", "SEV", "BET", "RSO", "VIL", "ATH"), intenta devolver el
   nombre completo del club en vez de la abreviatura (ej. "Valencia CF" en vez de "VAL") si lo

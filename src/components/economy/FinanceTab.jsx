@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Wallet, TrendingUp, TrendingDown, ArrowRightLeft, ArrowDownToLine, Users2, Edit2, Check, X, List, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
-import { formatCurrency, formatValueInput, parseValue, weeklyWageBudgetFromTransfer } from '../../utils/format';
+import { formatCurrency, formatValueInput, parseValue, weeklyWageBudgetFromTransfer, effectiveWeeklyWageBudget } from '../../utils/format';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import WageBreakdownModal from './WageBreakdownModal';
@@ -81,10 +81,11 @@ export default function FinanceTab({ onRequestEditPlayerWage, reopenWageBreakdow
     .sort((a, b) => b.effectiveWage - a.effectiveWage);
   const transferBudget = activeClub?.transferBudget || 0;
 
-  // El Presup. Sem. ya no se guarda ni se pide a mano: se deriva siempre de transferBudget / 52
-  // (ver weeklyWageBudgetFromTransfer en utils/format.js), así que nunca hay un estado "sin
-  // definir" — cualquier club, nuevo o antiguo, tiene siempre un margen salarial calculable.
-  const weeklyWageBudget = weeklyWageBudgetFromTransfer(transferBudget);
+  // Por defecto se deriva de transferBudget / 52 (ver weeklyWageBudgetFromTransfer en
+  // utils/format.js), así que nunca hay un estado "sin definir" — pero si el club tiene un
+  // margen semanal exacto guardado a mano (ver Paso 3 del asistente de creación),
+  // effectiveWeeklyWageBudget respeta esa cifra en vez de recalcularla.
+  const weeklyWageBudget = effectiveWeeklyWageBudget(activeClub);
 
   const startEditingBudget = () => {
     setBudgetInput(formatValueInput(String(transferBudget)));

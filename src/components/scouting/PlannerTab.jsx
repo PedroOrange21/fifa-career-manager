@@ -3,7 +3,7 @@ import { Wallet, TrendingDown, TrendingUp, Scale, CheckCircle2, AlertTriangle, C
 import { useClubData } from '../../context/ClubDataContext';
 import { useClubs } from '../../context/ClubsContext';
 import { getCardStyle } from '../../utils/cardStyle';
-import { formatCurrency, formatValueInput, parseValue, weeklyWageBudgetFromTransfer } from '../../utils/format';
+import { formatCurrency, formatValueInput, parseValue, weeklyWageBudgetFromTransfer, effectiveWeeklyWageBudget } from '../../utils/format';
 
 // Idéntico a FinanceTab.jsx/FinanceStatsTab.jsx/MarketTab.jsx (duplicado a propósito, mismo
 // patrón ya usado en el resto de la app): sueldo semanal que realmente carga al club, salvo
@@ -175,7 +175,10 @@ export default function PlannerTab() {
   // en el otro — por eso el margen PROYECTADO no es un simple ajuste aparte, sino que se
   // recalcula sobre el presupuesto de traspasos ya proyectado (ver más abajo).
   const transferBudget = activeClub?.transferBudget || 0;
-  const weeklyWageBudget = weeklyWageBudgetFromTransfer(transferBudget);
+  // effectiveWeeklyWageBudget respeta el margen semanal exacto guardado a mano (ver Paso 3 del
+  // asistente de creación) en vez de recalcularlo siempre a partir del presupuesto de
+  // traspasos — ver comentario junto a la propia función en utils/format.js.
+  const weeklyWageBudget = effectiveWeeklyWageBudget(activeClub);
   const currentWageBillWeekly = players.reduce((sum, p) => sum + getEffectiveWage(p), 0);
   const wageMarginWeekly = weeklyWageBudget - currentWageBillWeekly;
 

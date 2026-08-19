@@ -716,7 +716,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">Duración Cesión</label>
-                        <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => set({ loanDuration: v })} labelClassName="text-xs" />
+                        <input type="text" placeholder="Ej: 11 Meses" onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.loanDuration} onChange={(e) => set({ loanDuration: e.target.value })} />
                       </div>
                       <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">Club de Origen *</label>
@@ -970,7 +970,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                           <input autoFocus type="text" placeholder="Ej: Real Madrid" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={scanOriginClubMissing ? REVIEW_INPUT_ERROR_CLASS : REVIEW_INPUT_CLASS} value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} />
                         </ReviewRow>
                         <ReviewRow label="Duración Cesión" active={editField === 'loanDuration'} onOpen={() => setEditField('loanDuration')} display={form.loanDuration}>
-                          <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => { set({ loanDuration: v }); setEditField(null); }} />
+                          <input autoFocus type="text" placeholder="Ej: 11 Meses" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.loanDuration} onChange={(e) => set({ loanDuration: e.target.value })} />
                         </ReviewRow>
                         <div ref={wageRowRef}>
                           <ReviewRow label="Sueldo Semanal Total (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>

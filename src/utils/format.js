@@ -50,6 +50,18 @@ export const formatMoneyLiveWithCursor = (input, onFormatted) => {
 // proyección tras aplicar compras/ventas/premios) para no duplicar la fórmula.
 export const weeklyWageBudgetFromTransfer = (transferBudget) => Math.round((transferBudget || 0) / 52);
 
+// El reparto real de EA Sports FC entre Presupuesto de Traspasos y Presup. Sem. no siempre es
+// exactamente Traspasos/52 (se ha observado en partidas reales, ej. 829.150 € de traspaso con
+// solo 16.257 €/sem, muy por debajo de la fórmula): si el club tiene un margen semanal
+// introducido a mano (ver Paso 3 del asistente de creación, "Modo Carrera ya Empezado"), se
+// respeta esa cifra exacta tal cual; si no hay override guardado, se sigue derivando de
+// transferBudget / 52 como hasta ahora.
+export const effectiveWeeklyWageBudget = (club) => {
+  const override = club?.weeklyWageBudgetOverride;
+  if (override != null && override > 0) return override;
+  return weeklyWageBudgetFromTransfer(club?.transferBudget);
+};
+
 // "val" normalmente es un número ya calculado (suma de sueldos, presupuesto, importe*% ...),
 // no una cadena formateada con puntos de miles — por eso NO debe pasar por parseValue()
 // (pensada para leer cadenas "1.234.567" de un <input>, donde el punto es separador de miles).
