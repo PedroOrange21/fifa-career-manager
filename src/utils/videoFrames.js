@@ -4,6 +4,14 @@
 // VideoScanModal.jsx). El vídeo en sí nunca se sube a ningún sitio: todo el trabajo (decodificar,
 // buscar por tiempo, pintar en <canvas>, exportar JPEG) ocurre en el propio dispositivo del
 // usuario, exactamente igual que el redimensionado de fotos normales en imagePrep.js.
+//
+// Notas de compatibilidad con iOS Safari (motivo de la mayoría de las protecciones de este
+// archivo): Safari puede tardar mucho en decodificar metadata de vídeos HEVC/4K/HDR, o no
+// disparar nunca el evento "seeked" tras mover currentTime en según qué versión — sin los
+// timeouts de seguridad de abajo, cualquiera de los dos casos deja el bucle esperando para
+// siempre y la pantalla de "Procesando vídeo..." nunca avanza. También hay versiones de Safari
+// que no decodifican de forma fiable un <video> que nunca se adjuntó al DOM, así que aquí se
+// mantiene oculto pero dentro del documento mientras dura la extracción.
 
 const MAX_DIMENSION = 1080;
 const INTERVAL_SECONDS = 1.5;
@@ -12,33 +20,104 @@ const JPEG_QUALITY = 0.75;
 // forma uniforme en toda su duración en vez de generar cientos de llamadas a Gemini — así se
 // sigue cubriendo el vídeo entero, solo que con menos densidad de fotogramas.
 const MAX_FRAMES = 80;
+// Si "loadedmetadata" no llega en este plazo (vídeo corrupto, formato no soportado, o Safari
+// atascado decodificando), se rinde con un mensaje claro en vez de colgar la pantalla para
+// siempre.
+const METADATA_TIMEOUT_MS = 15000;
+// Red de seguridad por fotograma: si "seeked" no llega a tiempo (visto en algunas versiones de
+// iOS Safari), se sigue adelante igualmente con el frame que haya en pantalla en ese instante
+// en vez de bloquear el resto del vídeo por un solo fotograma problemático.
+const SEEK_TIMEOUT_MS = 2500;
+
+// Marca especial (no un fallo real) para que el llamador distinga "el usuario canceló" de un
+// error genuino y no le muestre un aviso rojo de "no se pudo procesar el vídeo".
+export class VideoScanCancelledError extends Error {
+  constructor() {
+    super('Escaneo de vídeo cancelado.');
+    this.name = 'VideoScanCancelledError';
+  }
+}
 
 const loadVideoElement = (file) => new Promise((resolve, reject) => {
   const url = URL.createObjectURL(file);
   const video = document.createElement('video');
-  video.preload = 'auto';
   video.muted = true;
+  video.defaultMuted = true;
   video.playsInline = true;
-  video.onloadedmetadata = () => resolve({ video, url });
-  video.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer el vídeo. Prueba con otro archivo (.mp4 o .mov).')); };
+  video.autoplay = false;
+  video.preload = 'auto';
+  // Atributos HTML explícitos, no solo propiedades JS: algunas versiones de iOS Safari solo
+  // respetan playsinline/webkit-playsinline/muted como atributos del propio elemento.
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.setAttribute('muted', '');
+  // Oculto pero dentro del documento (ver nota de compatibilidad arriba); se retira del DOM en
+  // el finally de extractFramesFromVideo o en el propio error de esta función.
+  video.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;';
+  document.body.appendChild(video);
+
+  let settled = false;
+  const finish = (fn) => {
+    if (settled) return;
+    settled = true;
+    video.removeEventListener('loadedmetadata', handleLoaded);
+    video.removeEventListener('error', handleError);
+    clearTimeout(timer);
+    fn();
+  };
+  const handleLoaded = () => finish(() => resolve({ video, url }));
+  const handleError = () => finish(() => {
+    video.remove();
+    URL.revokeObjectURL(url);
+    reject(new Error('No se pudo leer el vídeo. Prueba con otro archivo (.mp4 o .mov).'));
+  });
+  const timer = setTimeout(() => finish(() => {
+    video.remove();
+    URL.revokeObjectURL(url);
+    reject(new Error('El vídeo tardó demasiado en cargar. Prueba con un archivo más corto o en otro formato.'));
+  }), METADATA_TIMEOUT_MS);
+
+  video.addEventListener('loadedmetadata', handleLoaded);
+  video.addEventListener('error', handleError);
   video.src = url;
+  video.load();
 });
 
+// Resuelve en cuanto llega "seeked" tras mover currentTime, o tras SEEK_TIMEOUT_MS como red de
+// seguridad — nunca rechaza, para que un solo fotograma problemático no tire abajo el resto del
+// vídeo (se sigue adelante con el frame que haya en pantalla en ese instante).
 const seekTo = (video, time) => new Promise((resolve) => {
-  const handleSeeked = () => { video.removeEventListener('seeked', handleSeeked); resolve(); };
+  let settled = false;
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    video.removeEventListener('seeked', handleSeeked);
+    clearTimeout(timer);
+    resolve();
+  };
+  const handleSeeked = () => finish();
   video.addEventListener('seeked', handleSeeked);
-  video.currentTime = time;
+  const timer = setTimeout(finish, SEEK_TIMEOUT_MS);
+  try {
+    video.currentTime = time;
+  } catch (err) {
+    finish();
+  }
 });
 
-// onProgress({ index, total }) se invoca antes de procesar cada fotograma. Devuelve un array de
-// File JPEG (uno por fotograma), listos para entrar directamente en scanPlayerCardsQueue igual
-// que si vinieran de la galería.
-export async function extractFramesFromVideo(file, { onProgress } = {}) {
+// onProgress({ index, total }) se invoca antes de procesar cada fotograma. "isCancelled" es una
+// función opcional que, si devuelve true, aborta la extracción en el siguiente punto de control
+// (lanzando VideoScanCancelledError) — usada por el botón "Cancelar Escaneo" del modal. Devuelve
+// un array de File JPEG (uno por fotograma), listos para entrar directamente en
+// scanPlayerCardsQueue igual que si vinieran de la galería.
+export async function extractFramesFromVideo(file, { onProgress, isCancelled } = {}) {
   const { video, url } = await loadVideoElement(file);
   try {
+    if (isCancelled?.()) throw new VideoScanCancelledError();
+
     const duration = video.duration;
     if (!isFinite(duration) || duration <= 0) {
-      throw new Error('No se pudo determinar la duración del vídeo.');
+      throw new Error('No se pudo determinar la duración del vídeo. Prueba con otro archivo.');
     }
 
     const srcWidth = video.videoWidth;
@@ -61,9 +140,11 @@ export async function extractFramesFromVideo(file, { onProgress } = {}) {
 
     const frames = [];
     for (let i = 0; i < timestamps.length; i++) {
+      if (isCancelled?.()) throw new VideoScanCancelledError();
       onProgress?.({ index: i, total: timestamps.length });
       // eslint-disable-next-line no-await-in-loop
       await seekTo(video, timestamps[i]);
+      if (isCancelled?.()) throw new VideoScanCancelledError();
       ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
       // eslint-disable-next-line no-await-in-loop
       const blob = await new Promise((resolve, reject) => {
@@ -76,5 +157,6 @@ export async function extractFramesFromVideo(file, { onProgress } = {}) {
     URL.revokeObjectURL(url);
     video.removeAttribute('src');
     video.load();
+    video.remove();
   }
 }

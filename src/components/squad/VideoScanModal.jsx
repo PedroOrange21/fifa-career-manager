@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { X, ChevronLeft, Video, ShieldAlert } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
-import { extractFramesFromVideo } from '../../utils/videoFrames';
+import { extractFramesFromVideo, VideoScanCancelledError } from '../../utils/videoFrames';
 
 // Paso "Escanear con Vídeo": el usuario graba o sube un vídeo corto pasando el joystick por
 // toda la plantilla/Academia (unos 20-30 segundos bastan para 20-30 jugadores), y se extraen
@@ -18,23 +18,42 @@ export default function VideoScanModal({ onClose, onBack, onFramesExtracted, sca
   const [progress, setProgress] = useState({ index: 0, total: 0 });
   const [error, setError] = useState('');
   const videoInputRef = useRef(null);
+  // Botón "Cancelar Escaneo": extractFramesFromVideo comprueba este flag entre cada paso (antes
+  // de cada fotograma, tras cada seek) y aborta con VideoScanCancelledError en el siguiente
+  // punto de control — así el usuario nunca queda atrapado en "Procesando vídeo..." si un
+  // archivo va lento o Safari se atasca, sin tener que recargar toda la web.
+  const cancelledRef = useRef(false);
 
   const handleVideoChange = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
     setError('');
+    cancelledRef.current = false;
     setStatus('extracting');
     setProgress({ index: 0, total: 0 });
     try {
-      const frames = await extractFramesFromVideo(file, { onProgress: (info) => setProgress(info) });
+      const frames = await extractFramesFromVideo(file, {
+        onProgress: (info) => setProgress(info),
+        isCancelled: () => cancelledRef.current,
+      });
       if (frames.length === 0) throw new Error('No se pudo extraer ningún fotograma de ese vídeo.');
       onFramesExtracted(frames);
     } catch (err) {
+      if (err instanceof VideoScanCancelledError) {
+        // Cancelado a propósito por el usuario: vuelve a la pantalla de selección sin mostrar
+        // ningún aviso de error, no es un fallo real.
+        setStatus('idle');
+        return;
+      }
       console.error('Error extrayendo fotogramas del vídeo:', err);
       setError(err.message || 'No se pudo procesar el vídeo. Prueba con otro archivo.');
       setStatus('error');
     }
+  };
+
+  const handleCancel = () => {
+    cancelledRef.current = true;
   };
 
   const isBusy = status === 'extracting';
@@ -61,14 +80,18 @@ export default function VideoScanModal({ onClose, onBack, onFramesExtracted, sca
             <Video size={28} className="text-blue-400 animate-pulse" />
             <div className="w-full space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-fg-muted">Extrayendo fotogramas del vídeo...</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-fg-muted">
+                  {progress.total > 0 ? `Extrayendo fotograma ${progress.index + 1} de ${progress.total}...` : 'Preparando vídeo...'}
+                </p>
                 <span className="text-xs font-black text-blue-400 tabular-nums shrink-0">{percent}%</span>
               </div>
               <div className="w-full h-2 rounded-full bg-well-strong overflow-hidden">
                 <div className="h-full bg-blue-500 rounded-full transition-[width] duration-300 ease-out" style={{ width: `${percent}%` }} />
               </div>
-              {progress.total > 0 && <p className="text-[9px] font-bold text-fg-faint text-center">Fotograma {progress.index + 1} de {progress.total}</p>}
             </div>
+            <button type="button" onClick={handleCancel} className="w-full py-3 rounded-xl bg-well-strong text-fg-muted hover:text-red-400 hover:bg-red-500/10 transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest touch-manipulation">
+              <X size={14} /> Cancelar Escaneo
+            </button>
           </div>
         ) : (
           <div className="space-y-4">
