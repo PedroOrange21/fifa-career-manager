@@ -1,18 +1,15 @@
-import { X, ChevronLeft, DollarSign, Handshake, Shirt, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, Handshake, Shirt, ChevronRight } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
 // Segundo paso de "Fichar Jugador" (tras elegir Primer Equipo en AddPlayerDestinationModal,
-// antes de AddPlayerChoiceModal): ¿Comprado, Cedido o ya estaba en la plantilla desde el
-// inicio? Se decide aquí, antes del método de alta, para que tanto el formulario manual como
-// el resultado del escaneo con IA sepan de entrada qué campos económicos/contractuales pedir
-// (precio de compra y cláusula de rescisión en Comprado; club de origen, duración de cesión y
-// opción de compra en Cedido; ninguno de los dos en Plantilla Inicial, que sigue siendo un
-// jugador en propiedad —type "Comprado"— pero sin una compra real que registrar, igual que ya
-// hace OnboardingWizard para la partida "Empieza desde Cero") — mismos colores que ya usa el
-// resto de la app para distinguir un tipo del otro (azul Comprado, ámbar Cedido, ver
-// PlayerForm y las insignias "Cedible"/"Ced." de PlayerList); Plantilla Inicial usa un tono
-// neutro (zinc) al no ser en sí un tipo de adquisición nuevo, solo una variante sin traspaso.
+// antes de AddPlayerChoiceModal): solo dos vías. "Nuevo Fichaje" cubre tanto Comprado como
+// Cedido sin que el usuario tenga que distinguirlos aquí — si escanea con IA, Gemini detecta
+// por sí sola si la tarjeta indica una cesión (ver esCesion en api/scan-player.js); si rellena
+// a mano, elige Comprado o Cedido dentro del propio asistente (Paso 3). "Ya en el Club" es la
+// variante sin traspaso real (jugador ya presente en la plantilla desde el inicio, igual que ya
+// hace OnboardingWizard para la partida "Empieza desde Cero"), que salta directa al Paso de
+// Método sin pedir ningún dato de fichaje.
 export default function AddPlayerOperationTypeModal({ onClose, onBack, onSelect }) {
   useBodyScrollLock();
   useAutoHideChrome();
@@ -31,19 +28,11 @@ export default function AddPlayerOperationTypeModal({ onClose, onBack, onSelect 
         </div>
         <p className="text-[10px] font-black uppercase tracking-widest text-fg-muted text-center mb-3">¿Qué tipo de operación es?</p>
         <div className="space-y-2.5">
-          <button type="button" onClick={() => onSelect('Comprado')} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border-subtle bg-well hover:border-blue-500 hover:bg-well-strong transition-all text-left touch-manipulation">
-            <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0"><DollarSign size={22} /></div>
+          <button type="button" onClick={() => onSelect('Nuevo')} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border-subtle bg-well hover:border-blue-500 hover:bg-well-strong transition-all text-left touch-manipulation">
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0"><Handshake size={22} /></div>
             <div className="flex-1 min-w-0">
-              <div className="font-black uppercase italic text-sm text-fg">Comprado</div>
-              <div className="text-[10px] font-bold text-fg-muted mt-0.5">Pasa a ser propiedad del club, con precio de compra y contrato.</div>
-            </div>
-            <ChevronRight size={18} className="text-fg-faint shrink-0" />
-          </button>
-          <button type="button" onClick={() => onSelect('Cedido')} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border-subtle bg-well hover:border-yellow-500 hover:bg-well-strong transition-all text-left touch-manipulation">
-            <div className="w-12 h-12 rounded-xl bg-yellow-500/10 text-yellow-500 flex items-center justify-center shrink-0"><Handshake size={22} /></div>
-            <div className="flex-1 min-w-0">
-              <div className="font-black uppercase italic text-sm text-fg">Cedido</div>
-              <div className="text-[10px] font-bold text-fg-muted mt-0.5">Llega prestado desde otro club, con duración y condiciones.</div>
+              <div className="font-black uppercase italic text-sm text-fg">Nuevo Fichaje</div>
+              <div className="text-[10px] font-bold text-fg-muted mt-0.5">Comprado o cedido — la IA o tú decidís los detalles.</div>
             </div>
             <ChevronRight size={18} className="text-fg-faint shrink-0" />
           </button>

@@ -76,8 +76,14 @@ const RESPONSE_SCHEMA = {
     relevancia: { type: Type.STRING, enum: ['Clave', 'Importante', 'Rotación', 'Esporádico', 'Promesa'], nullable: true, description: 'Rol/relevancia en la plantilla si la tarjeta lo indica.' },
     sueldoSemanal: { type: Type.INTEGER, nullable: true, description: 'Sueldo SEMANAL en euros, solo el número (sin puntos, comas ni símbolo de moneda).' },
     valorMercado: { type: Type.INTEGER, nullable: true, description: 'Valor de mercado en euros, solo el número.' },
-    duracionContrato: { type: Type.STRING, nullable: true, description: 'Duración de contrato tal como aparece (años restantes o fecha de finalización).' },
-    clausulaRescision: { type: Type.INTEGER, nullable: true, description: 'Cláusula de rescisión en euros, solo el número.' },
+    duracionContrato: { type: Type.STRING, nullable: true, description: 'Duración de contrato tal como aparece (años restantes o fecha de finalización). Solo aplica si NO es una cesión.' },
+    clausulaRescision: { type: Type.INTEGER, nullable: true, description: 'Cláusula de rescisión en euros, solo el número. Solo aplica si NO es una cesión.' },
+    // Detección de cesión: EA Sports FC suele marcar a un jugador cedido con un texto tipo "En
+    // cesión del [Club]" o "Cedido por [Club]" junto al escudo del club de origen, en vez de
+    // los datos de contrato/cláusula habituales de un jugador en propiedad.
+    esCesion: { type: Type.BOOLEAN, nullable: true, description: 'true si la tarjeta indica que el jugador está cedido de otro club (texto tipo "En cesión del...", "Cedido por...", o un escudo de club de origen distinto del propio), false o null si no hay ningún indicio de cesión.' },
+    clubCesion: { type: Type.STRING, nullable: true, description: 'Solo si esCesion es true: nombre del club que cede al jugador (el dueño real), identificado por el texto o el escudo junto a él.' },
+    duracionCesion: { type: Type.STRING, enum: ['6 Meses', '1 Temporada', '2 Temporadas'], nullable: true, description: 'Solo si esCesion es true y la tarjeta indica una duración de cesión: la opción de este enum más cercana a lo que muestra la tarjeta.' },
   },
 };
 
@@ -95,12 +101,25 @@ Analiza la imagen adjunta y extrae ÚNICAMENTE los datos que aparezcan visibles 
 - relevancia o rol en la plantilla (Clave, Importante, Rotación, Esporádico o Promesa), si aparece
 - sueldo SEMANAL en euros (el que EA Sports FC llama "Sueldo sem." — si solo ves un sueldo mensual o anual, conviértelo tú mismo a semanal antes de responder)
 - valor de mercado en euros
-- duración de contrato (años restantes o fecha)
-- cláusula de rescisión en euros
+
+Detección de cesión (muy importante, revísalo con cuidado antes de rellenar duración/cláusula):
+- Busca en la tarjeta cualquier indicio de que el jugador está CEDIDO de otro club: texto como
+  "En cesión del [Club]", "Cedido por [Club]", "Cesión de [Club]", o un escudo de un club
+  distinto del tuyo junto a esa mención.
+- Si encuentras ese indicio: esCesion = true, clubCesion = el nombre del club que lo cede (el
+  dueño real, identificado por el texto o el escudo), y duracionCesion = la opción del enum
+  (6 Meses / 1 Temporada / 2 Temporadas) más parecida a la duración de cesión que muestre la
+  tarjeta si aparece. En este caso NO rellenes duracionContrato ni clausulaRescision (van a
+  null): un jugador cedido no tiene esos datos como propietario, son del club de origen.
+- Si NO encuentras ningún indicio de cesión: esCesion = false (o null), clubCesion = null,
+  duracionCesion = null, y en su lugar sí rellena duración de contrato (años restantes o fecha
+  de finalización) y cláusula de rescisión en euros si la tarjeta las muestra — es un jugador
+  en propiedad (traspaso), no cedido.
 
 Reglas importantes:
 - Todos los importes en euros deben ir como número entero puro, SIN puntos de miles, SIN comas, SIN el símbolo "€" y sin abreviar (ej. escribe 45000000, nunca "45M" ni "45.000.000 €").
 - Si un dato no aparece visible en la imagen o no puedes leerlo con confianza, devuelve null en ese campo — no inventes ni adivines valores.
+- No incluyas en la respuesta ningún dato fuera del esquema indicado (nada de altura, peso, cláusula de reventa, primas extra o prima de fichaje): esos campos ya no existen en la ficha de la aplicación.
 - Responde exclusivamente con el JSON que cumpla el esquema indicado, sin texto adicional.`;
 
 // Nota: el límite de tamaño de petición de las funciones Serverless de Vercel (~4.5 MB por

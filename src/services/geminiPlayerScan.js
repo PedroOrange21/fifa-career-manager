@@ -63,24 +63,20 @@ export async function scanPlayerCard(file) {
 // PlayerForm. Importante: PlayerForm (toFormState) deriva primaryPosition/secondaryPositions
 // únicamente a partir de un array "positions" (principal primero) — pasarlas como claves
 // sueltas no tendría ningún efecto.
-// operationType ('Comprado' o 'Cedido'): decidido por el usuario en el paso previo al propio
-// escaneo (ver AddPlayerOperationTypeModal), no algo que la IA pueda inferir de la tarjeta. Los
-// campos exclusivos de Cedido (club de origen, duración de cesión, opción de compra) no están
-// en absoluto en el esquema de extracción — la tarjeta no los muestra — así que quedan a cargo
-// del usuario en la Revisión Final, igual que "value" (Precio de Compra, lo que el club paga
-// por el traspaso en Comprado) se deja vacío a propósito: no es un dato de la tarjeta, sino la
-// cifra que el usuario negocia al ficharlo, igual que ya hace "Fichar desde Objetivos" en
-// MarketTab.jsx.
-export function mapScanResultToPrefill(extracted, operationType = 'Comprado') {
+// El tipo (Comprado o Cedido) ya NO se decide antes de escanear: lo determina la propia IA a
+// partir de "esCesion" (ver api/scan-player.js, que busca en la tarjeta un texto tipo "En
+// cesión del..."/"Cedido por..." junto al escudo del club de origen). Si detecta cesión, usa
+// "clubCesion" y "duracionCesion" para Club de Origen y Duración de Cesión — datos que un
+// Comprado normal nunca trae en la tarjeta, así que ni se intentan extraer en ese caso. El
+// usuario sigue pudiendo corregir el tipo a mano en la Revisión Final si la IA se equivoca (ver
+// restrictTypes en PlayerList, que dependen de "Nuevo Fichaje" en vez de un tipo prefijado).
+// "value" (Precio de Compra, lo que el club paga por el traspaso en Comprado) se deja vacío a
+// propósito salvo que el usuario ya lo indicara en el paso previo al escaneo (ver
+// pendingPreData en PlayerList): no es un dato de la propia tarjeta, sino la cifra que el
+// usuario negocia al ficharlo, igual que ya hace "Fichar desde Objetivos" en MarketTab.jsx.
+export function mapScanResultToPrefill(extracted) {
   const positions = [extracted.posicionPrincipal, ...(extracted.posicionesSecundarias || [])].filter(Boolean);
-  // "duracionContrato" puede venir como "3 años", "3", o una fecha — solo nos interesa un
-  // número de años entre 1 y 5 (el rango que admite el desplegable de Años de Contrato de
-  // "Comprado"; en "Cedido" este dato no se usa, ver Duración de Cesión más abajo).
-  const contractYearsMatch = String(extracted.duracionContrato || '').match(/\d+/);
-  const contractYears = contractYearsMatch ? Math.min(5, Math.max(1, parseInt(contractYearsMatch[0], 10))) : '';
-
-  return {
-    type: operationType,
+  const common = {
     name: extracted.nombre || '',
     rating: extracted.media || '',
     potential: extracted.potencial || '',
@@ -91,6 +87,25 @@ export function mapScanResultToPrefill(extracted, operationType = 'Comprado') {
     agreedRole: extracted.relevancia || '',
     wage: extracted.sueldoSemanal || '',
     marketValue: extracted.valorMercado || '',
+  };
+
+  if (extracted.esCesion) {
+    return {
+      ...common,
+      type: 'Cedido',
+      sourceClub: extracted.clubCesion || '',
+      originClub: extracted.clubCesion || '',
+      loanDuration: extracted.duracionCesion || '1 Temporada',
+    };
+  }
+
+  // "duracionContrato" puede venir como "3 años", "3", o una fecha — solo nos interesa un
+  // número de años entre 1 y 5 (el rango que admite el desplegable de Años de Contrato).
+  const contractYearsMatch = String(extracted.duracionContrato || '').match(/\d+/);
+  const contractYears = contractYearsMatch ? Math.min(5, Math.max(1, parseInt(contractYearsMatch[0], 10))) : '';
+  return {
+    ...common,
+    type: 'Comprado',
     value: '',
     contractYears,
     releaseClause: extracted.clausulaRescision || '',
