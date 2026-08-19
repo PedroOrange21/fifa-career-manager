@@ -15,4 +15,7 @@ export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getA
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
+// Fuerza que Google muestre siempre el selector de cuentas (en vez de reautenticar en
+// silencio con la última usada), para poder cambiar de cuenta sin pasar antes por sesión.
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 export const appId = 'fifa-manager-main';
