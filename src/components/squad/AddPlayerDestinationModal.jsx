@@ -31,7 +31,7 @@ export default function AddPlayerDestinationModal({ onClose, onSelectFirstTeam, 
           <button type="button" onClick={onSelectAcademy} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border-subtle bg-well hover:border-emerald-500 hover:bg-well-strong transition-all text-left touch-manipulation">
             <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0"><GraduationCap size={22} /></div>
             <div className="flex-1 min-w-0">
-              <div className="font-black uppercase italic text-sm text-fg">Academia / Cantera</div>
+              <div className="font-black uppercase italic text-sm text-fg">Academia</div>
               <div className="text-[10px] font-bold text-fg-muted mt-0.5">Jugador en desarrollo, sin términos económicos</div>
             </div>
             <ChevronRight size={18} className="text-fg-faint shrink-0" />

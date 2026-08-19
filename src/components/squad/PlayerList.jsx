@@ -10,6 +10,7 @@ import SwipeableRow from '../common/SwipeableRow';
 import PlayerForm from './PlayerForm';
 import AddPlayerDestinationModal from './AddPlayerDestinationModal';
 import AddPlayerOperationTypeModal from './AddPlayerOperationTypeModal';
+import AddPlayerPreDataModal from './AddPlayerPreDataModal';
 import AddPlayerChoiceModal from './AddPlayerChoiceModal';
 import ScanPlayerCardModal from './ScanPlayerCardModal';
 import ConfirmModal from '../common/ConfirmModal';
@@ -68,6 +69,10 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   // pero sin club de procedencia ni precio) de un "Comprado" normal.
   const [pendingOperationType, setPendingOperationType] = useState(null);
   const [pendingIsInitialSquad, setPendingIsInitialSquad] = useState(false);
+  // Datos del Paso 3 (AddPlayerPreDataModal, solo Comprado/Cedido): club de procedencia/origen,
+  // precio de compra o duración de cesión/salario cubierto — lo que la IA nunca puede leer de
+  // la tarjeta, capturado ANTES de escanear o rellenar a mano para que llegue ya integrado.
+  const [pendingPreData, setPendingPreData] = useState(null);
   const [sellingPlayer, setSellingPlayer] = useState(null);
   const [loaningPlayer, setLoaningPlayer] = useState(null);
   const [endingLoanPlayer, setEndingLoanPlayer] = useState(null);
@@ -79,21 +84,24 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
   const [ficharConfirming, setFicharConfirming] = useState(false);
   const ficharRef = useRef(null);
   useOnClickOutside(ficharRef, () => setFicharConfirming(false), ficharConfirming);
-  // "Fichar Jugador" abre un asistente de 4 pasos, cada uno pudiendo volver al anterior con
-  // "Atrás" (ver onBack de cada modal) sin cerrar el flujo entero:
-  //   1. Destino (AddPlayerDestinationModal) — Primer Equipo o Academia/Cantera.
-  //   2. Tipo de Operación (AddPlayerOperationTypeModal, solo si Primer Equipo) — Comprado o
-  //      Cedido, para que el resto del flujo sepa de entrada qué campos económicos/
-  //      contractuales pedir.
-  //   3. Método (AddPlayerChoiceModal) — Manual o Escanear con IA.
-  //   4a. Manual -> PlayerForm clásico, con el tipo ya fijado (lockedType) según lo elegido en
-  //       el Paso 2.
-  //   4b. Escanear con IA (ScanPlayerCardModal) -> al terminar entrega un "prefill" ya
-  //       traducido con ese mismo tipo y abre PlayerForm en el Paso 4 (Revisión) para repasar
-  //       y confirmar.
-  // Academia/Cantera no pasa por Tipo de Operación ni ofrece escaneo por IA (igual que el
+  // "Fichar Jugador" abre un asistente de hasta 5 pasos, cada uno pudiendo volver al anterior
+  // con "Atrás" (ver onBack de cada modal) sin cerrar el flujo entero:
+  //   1. Destino (AddPlayerDestinationModal) — Primer Equipo o Academia.
+  //   2. Tipo de Operación (AddPlayerOperationTypeModal, solo si Primer Equipo) — Comprado,
+  //      Cedido o Plantilla Inicial/Ya en el Club.
+  //   3. Datos Previos (AddPlayerPreDataModal, solo Comprado/Cedido) — club de procedencia y
+  //      precio de compra, o club de origen/duración de cesión/salario cubierto: lo que la IA
+  //      nunca puede leer de la tarjeta, capturado ANTES de elegir el método (ver
+  //      pendingPreData). Plantilla Inicial se salta este paso entero.
+  //   4. Método (AddPlayerChoiceModal) — Manual o Escanear con IA.
+  //   5a. Manual -> PlayerForm clásico, con el tipo ya fijado (lockedType) y los Datos Previos
+  //       ya integrados como prefill.
+  //   5b. Escanear con IA (ScanPlayerCardModal) -> al terminar entrega un "prefill" ya
+  //       traducido y fusionado con los Datos Previos, y abre PlayerForm en el Paso 4
+  //       (Revisión) para repasar y confirmar.
+  // Academia no pasa por Tipo de Operación, Datos Previos ni escaneo por IA (igual que el
   // propio alta directa de AcademyTab): va directa al asistente manual con lockedType="Cantera".
-  const [addStep, setAddStep] = useState(null); // null | 'destination' | 'operationType' | 'method' | 'scan'
+  const [addStep, setAddStep] = useState(null); // null | 'destination' | 'operationType' | 'preData' | 'method' | 'scan'
 
   useEffect(() => {
     if (pendingEditPlayer) {
@@ -199,30 +207,49 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
     else { setFicharConfirming(true); }
   };
 
-  // Paso 2 (Tipo de Operación) resuelto: se guarda la elección y se continúa al Paso 3
-  // (Método) — hace falta fijarla antes de saber qué pedir en el resto del flujo (ver
-  // pendingOperationType/pendingIsInitialSquad, consumidos por openFirstTeamManualForm y el
-  // ScanPlayerCardModal del Paso 4). "Inicial" (Plantilla Inicial/Ya en el Club) sigue siendo
-  // tipo "Comprado" por debajo (juega y se guarda igual, en propiedad del club), pero sin
-  // compra real que registrar.
+  // Paso 2 (Tipo de Operación) resuelto: se guarda la elección y se continúa al Paso 3 —
+  // Datos Previos en Comprado/Cedido (hace falta fijar el tipo antes de saber cuál de los dos
+  // formularios mostrar), o directo al Paso de Método en "Inicial" (Plantilla Inicial/Ya en el
+  // Club, que no pide club de procedencia ni precio). "Inicial" sigue siendo tipo "Comprado"
+  // por debajo (juega y se guarda igual, en propiedad del club), pero sin compra real que
+  // registrar.
   const selectOperationType = (choice) => {
     setPendingOperationType(choice === 'Inicial' ? 'Comprado' : choice);
     setPendingIsInitialSquad(choice === 'Inicial');
+    setPendingPreData(null);
+    setAddStep(choice === 'Inicial' ? 'method' : 'preData');
+  };
+
+  // Paso 3 (Datos Previos) completado con "Continuar": se guarda lo introducido (club de
+  // procedencia/origen, precio de compra o duración de cesión/salario cubierto — ver
+  // AddPlayerPreDataModal) y se continúa al Paso de Método.
+  const handlePreDataContinue = (preData) => {
+    setPendingPreData(preData);
     setAddStep('method');
   };
 
-  // Paso 3 (Método) elegido "Manual" tras fijar el Tipo de Operación en el Paso 2: asistente
-  // clásico desde el Paso 1, con el tipo ya bloqueado (sin selector, igual que Academia) —
-  // determina de entrada qué campos económicos/contractuales pedir en el Paso 3 del wizard.
+  // Construye el prefill con lo recogido en el Paso 3 (Datos Previos) o, en "Plantilla
+  // Inicial" (que se salta ese paso), el mismo texto fijo que ya usa OnboardingWizard para
+  // "Empieza desde Cero" — consumido tanto por el alta manual como por el resultado del
+  // escaneo con IA, para que estos datos lleguen siempre ya integrados sin pedirlos dos veces.
+  const buildPreDataPrefill = () => {
+    if (pendingIsInitialSquad) return { sourceClub: 'En el club desde el inicio' };
+    if (!pendingPreData) return {};
+    return { ...pendingPreData };
+  };
+
+  // Paso de Método elegido "Manual" tras el Paso 2 (y, si aplica, el Paso 3): asistente
+  // clásico desde el Paso 1, con el tipo ya bloqueado (sin selector, igual que Academia) y los
+  // Datos Previos ya precargados en Club de Procedencia/Precio de Compra o Club de Origen/
+  // Duración de Cesión/Salario Cubierto, listos para revisar en el Paso 3 del propio wizard.
   // "Plantilla Inicial" reutiliza el mismo mecanismo que ya usa OnboardingWizard para "Empieza
   // desde Cero": oculta Club de Procedencia/Precio de Compra (hidePurchasePrice/hideSourceClub,
-  // de los que PlayerForm deriva isInitialSquad) y fija el mismo texto de Club de Procedencia
-  // por si en algún sitio se llega a leer/mostrar tal cual, y no registra transacción de compra
+  // de los que PlayerForm deriva isInitialSquad) y no registra transacción de compra
   // (skipInitialTransaction) al no ser un fichaje real.
   const openFirstTeamManualForm = () => {
     setAddStep(null);
     setEditingPlayer(null);
-    setFormPrefill(pendingIsInitialSquad ? { sourceClub: 'En el club desde el inicio' } : null);
+    setFormPrefill(buildPreDataPrefill());
     setFormSourceTargetId(null);
     setFormInitialStep(1);
     setFormLockedType(pendingOperationType);
@@ -233,9 +260,9 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
     setShowForm(true);
   };
 
-  // Paso 1 (Destino) = Academia/Cantera: sin pasos de Tipo de Operación ni Método (no aplica
-  // Comprado/Cedido/Inicial ni escaneo por IA a los canteranos), directo al asistente manual
-  // con el tipo fijado, igual que el alta propia de AcademyTab.
+  // Paso 1 (Destino) = Academia: sin pasos de Tipo de Operación, Datos Previos ni Método (no
+  // aplica Comprado/Cedido/Inicial ni escaneo por IA a los canteranos), directo al asistente
+  // manual con el tipo fijado, igual que el alta propia de AcademyTab.
   const openAcademyForm = () => {
     setAddStep(null);
     setEditingPlayer(null);
@@ -252,14 +279,14 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
 
   // Al terminar el escaneo por IA, se abre PlayerForm directamente en el Paso 4 (Revisión,
   // única pantalla, ver postScanReview) con todo prerrellenado según el tipo fijado en el
-  // Paso 2 — así el usuario solo tiene que repasar y confirmar los datos leídos de la tarjeta,
-  // completando a mano los que la IA nunca puede traer (Club de Procedencia si es Comprado;
-  // Precio de Compra si es Comprado; Club de Origen si es Cedido; ninguno de los dos en
-  // Plantilla Inicial, que los omite igual que el alta manual).
+  // Paso 2, fusionado con los Datos Previos del Paso 3 (Club de Procedencia y Precio de Compra
+  // en Comprado; Club de Origen, Duración de Cesión y Salario Cubierto en Cedido) — así el
+  // usuario solo tiene que repasar y confirmar los datos leídos de la tarjeta, sin tener que
+  // volver a escribir lo que ya indicó antes de escanear.
   const handleScanExtracted = (prefillData) => {
     setAddStep(null);
     setEditingPlayer(null);
-    setFormPrefill(pendingIsInitialSquad ? { ...prefillData, sourceClub: 'En el club desde el inicio' } : prefillData);
+    setFormPrefill({ ...prefillData, ...buildPreDataPrefill() });
     setFormSourceTargetId(null);
     setFormInitialStep(4);
     setFormLockedType(pendingOperationType);
@@ -415,10 +442,18 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
           onSelect={selectOperationType}
         />
       )}
+      {addStep === 'preData' && (
+        <AddPlayerPreDataModal
+          operationType={pendingOperationType}
+          onClose={() => setAddStep(null)}
+          onBack={() => setAddStep('operationType')}
+          onContinue={handlePreDataContinue}
+        />
+      )}
       {addStep === 'method' && (
         <AddPlayerChoiceModal
           onClose={() => setAddStep(null)}
-          onBack={() => setAddStep('operationType')}
+          onBack={() => setAddStep(pendingIsInitialSquad ? 'operationType' : 'preData')}
           onManual={openFirstTeamManualForm}
           onScan={() => setAddStep('scan')}
         />
