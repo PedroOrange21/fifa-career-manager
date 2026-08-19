@@ -118,9 +118,21 @@ export function ClubsProvider({ children }) {
     await updateDoc(clubDoc(user.uid, activeClubId), { transferBudget: increment(delta) });
   };
 
-  const setBudget = async (amount) => {
+  // weeklyWageBudgetOverride es opcional y de tres estados: undefined (por defecto) no lo
+  // toca en absoluto — así, editar solo el Presupuesto de Traspasos (p. ej. desde el atajo del
+  // Planificador) nunca congela accidentalmente un override ya guardado a la fórmula del
+  // instante; null lo borra explícitamente (vuelve a derivarse de transferBudget/52); un
+  // número lo fija a esa cifra exacta. Usado tanto por el editor de Oficina/Finanzas como por
+  // el atajo "⚙️ Actualizar Presupuesto y Salarios" del Planificador — un único write aquí
+  // basta para que todas las vistas que leen activeClub (Finanzas, Planificador, Cabecera,
+  // Estadísticas...) se sincronicen solas en cuanto llega el snapshot de Firestore.
+  const setBudget = async (amount, weeklyWageBudgetOverride) => {
     if (!user || !activeClubId) return;
-    await updateDoc(clubDoc(user.uid, activeClubId), { transferBudget: amount });
+    const updates = { transferBudget: Number(amount) || 0 };
+    if (weeklyWageBudgetOverride !== undefined) {
+      updates.weeklyWageBudgetOverride = weeklyWageBudgetOverride != null ? (Number(weeklyWageBudgetOverride) || null) : null;
+    }
+    await updateDoc(clubDoc(user.uid, activeClubId), updates);
   };
 
   const incrementSeasonNumber = async () => {

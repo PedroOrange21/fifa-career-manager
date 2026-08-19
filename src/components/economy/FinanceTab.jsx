@@ -58,6 +58,14 @@ export default function FinanceTab({ onRequestEditPlayerWage, reopenWageBreakdow
 
   const [editingBudget, setEditingBudget] = useState(false);
   const [budgetInput, setBudgetInput] = useState('');
+  // Presup. Sem. de Salarios: se sugiere automáticamente (Traspasos/52) mientras el usuario no
+  // lo toque a mano en ESTA edición — igual que en el Paso 3 del asistente de creación (ver
+  // OnboardingWizard). Solo se envía a Firestore como override si de verdad se editó aquí
+  // (weeklyWageTouched); si el usuario solo cambia el Presupuesto de Traspasos sin tocar este
+  // campo, un override ya guardado antes se deja intacto en vez de congelarlo al valor de la
+  // fórmula en este instante.
+  const [weeklyWageInput, setWeeklyWageInput] = useState('');
+  const [weeklyWageTouched, setWeeklyWageTouched] = useState(false);
   const [showBudgetInfo, setShowBudgetInfo] = useState(false);
   const [showWageBreakdown, setShowWageBreakdown] = useState(false);
   const [expandedTx, setExpandedTx] = useState(null);
@@ -89,11 +97,28 @@ export default function FinanceTab({ onRequestEditPlayerWage, reopenWageBreakdow
 
   const startEditingBudget = () => {
     setBudgetInput(formatValueInput(String(transferBudget)));
+    setWeeklyWageInput(formatValueInput(String(weeklyWageBudget)));
+    setWeeklyWageTouched(false);
     setEditingBudget(true);
+  };
+  // Mientras el usuario no haya editado a mano el Presup. Sem. EN ESTA sesión de edición, se
+  // mantiene sincronizado con la sugerencia automática cada vez que cambia el presupuesto que
+  // está escribiendo.
+  useEffect(() => {
+    if (!editingBudget || weeklyWageTouched) return;
+    setWeeklyWageInput(formatValueInput(String(weeklyWageBudgetFromTransfer(parseValue(budgetInput)))));
+  }, [budgetInput, weeklyWageTouched, editingBudget]);
+  const onWeeklyWageChange = (raw) => {
+    setWeeklyWageTouched(true);
+    setWeeklyWageInput(formatValueInput(raw));
   };
   const confirmBudget = async (e) => {
     e.preventDefault();
-    await setBudget(parseValue(budgetInput));
+    // Sincronización global: un único write al documento del club (transferBudget +, si se
+    // tocó, weeklyWageBudgetOverride) — todas las vistas que leen activeClub vía ClubsContext
+    // (Finanzas, Planificador, Cabecera, Estadísticas...) se actualizan solas en cuanto llega
+    // el snapshot de Firestore, sin recargar nada.
+    await setBudget(parseValue(budgetInput), weeklyWageTouched ? (parseValue(weeklyWageInput) || null) : undefined);
     setEditingBudget(false);
   };
 
@@ -111,20 +136,22 @@ export default function FinanceTab({ onRequestEditPlayerWage, reopenWageBreakdow
         {showBudgetInfo && (
           <InfoModal title="Presupuesto del Club" onClose={() => setShowBudgetInfo(false)}>
             <p>Introduce el valor exacto que aparece en tu Modo Carrera (Menú Oficina &gt; Economía &gt; Presupuesto) como "Presupuesto actual".</p>
-            <p>El Presup. Sem. (margen salarial semanal) ya no se pide: la app lo calcula solo, dividiendo ese presupuesto entre las 52 semanas del año — la misma fórmula exacta que usa EA Sports FC para mostrar su propio "Presup. sem." en Oficina &gt; Economía.</p>
+            <p>El Presup. Sem. (margen salarial semanal) se sugiere automáticamente dividiendo ese presupuesto entre las 52 semanas del año — la misma fórmula que usa EA Sports FC — pero es totalmente editable, por si el reparto real de tu partida no coincide exactamente con esa fórmula.</p>
           </InfoModal>
         )}
         {editingBudget ? (
           <form onSubmit={confirmBudget} className="space-y-3 mt-2 relative">
             <div className="space-y-1.5">
-              <label className="text-[9px] font-black text-fg-faint uppercase tracking-wider ml-1">Presupuesto Actual</label>
-              <input autoFocus type="text" className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-center font-black text-lg text-fg" value={budgetInput} onChange={(e) => setBudgetInput(formatValueInput(e.target.value))} />
+              <label className="text-[9px] font-black text-fg-faint uppercase tracking-wider ml-1">Presupuesto para Traspasos Actual (€)</label>
+              <input autoFocus type="text" inputMode="numeric" className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-center font-black text-lg text-fg" value={budgetInput} onChange={(e) => setBudgetInput(formatValueInput(e.target.value))} />
             </div>
-            {/* Presup. Sem. ya no se pide: se muestra en modo lectura, recalculado en vivo
-                mientras se escribe el presupuesto de arriba. */}
-            <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-well border border-border-subtle">
-              <span className="text-[9px] font-black text-fg-faint uppercase tracking-wider">Presup. Sem. (Salarios)</span>
-              <span className="text-sm font-black text-green-500">{formatCurrency(weeklyWageBudgetFromTransfer(parseValue(budgetInput)))}/sem</span>
+            <div className="space-y-1.5">
+              <label className="text-[9px] font-black text-fg-faint uppercase tracking-wider ml-1">Presupuesto Semanal para Salarios (€)</label>
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-well border border-border-subtle focus-within:border-green-500">
+                <Wallet size={14} className="text-green-500 shrink-0" />
+                <input type="text" inputMode="numeric" className="flex-1 min-w-0 bg-transparent outline-none font-black text-green-500 text-sm" value={weeklyWageInput} onChange={(e) => onWeeklyWageChange(e.target.value)} />
+                <span className="text-[10px] font-black text-fg-faint shrink-0">/sem</span>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button type="submit" className="flex-1 p-3 bg-green-500 text-black rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-wide"><Check size={16} /> Guardar</button>

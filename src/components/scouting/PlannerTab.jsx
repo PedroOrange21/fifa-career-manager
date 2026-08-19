@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { Wallet, TrendingDown, TrendingUp, Scale, CheckCircle2, AlertTriangle, Check, Gift, ChevronDown, ChevronUp, ArrowRight, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Wallet, TrendingDown, TrendingUp, Scale, CheckCircle2, AlertTriangle, Check, X, Gift, ChevronDown, ChevronUp, ArrowRight, Plus, Trash2 } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useClubs } from '../../context/ClubsContext';
 import { getCardStyle } from '../../utils/cardStyle';
 import { formatCurrency, formatValueInput, parseValue, weeklyWageBudgetFromTransfer, effectiveWeeklyWageBudget } from '../../utils/format';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
 // Idéntico a FinanceTab.jsx/FinanceStatsTab.jsx/MarketTab.jsx (duplicado a propósito, mismo
 // patrón ya usado en el resto de la app): sueldo semanal que realmente carga al club, salvo
@@ -116,6 +118,70 @@ function BonusRow({ bonus, onLabelChange, onAmountChange, onRemove }) {
   );
 }
 
+// Modal rápido del atajo "⚙️ Actualizar Presupuesto y Salarios": mismos dos campos que el
+// editor de Oficina/Finanzas (ver FinanceTab.jsx), para poder introducir las cifras exactas que
+// el usuario ve en su partida de EA Sports FC en ese momento sin salir del Planificador. Al
+// guardar, el propio "onSave" (setBudget de ClubsContext) escribe en el documento del club;
+// como transferBudget/weeklyWageBudget del componente padre se derivan de activeClub, TODOS los
+// balances proyectados de la simulación se recalculan solos con el siguiente render, en cuanto
+// llega el snapshot de Firestore — no hace falta ningún recálculo manual aquí.
+function BudgetEditorModal({ transferBudget, weeklyWageBudget, onSave, onClose }) {
+  useBodyScrollLock();
+  useAutoHideChrome();
+  const [budgetInput, setBudgetInput] = useState(() => formatValueInput(String(transferBudget)));
+  const [weeklyWageInput, setWeeklyWageInput] = useState(() => formatValueInput(String(weeklyWageBudget)));
+  const [weeklyWageTouched, setWeeklyWageTouched] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Mientras el usuario no haya editado a mano el Presup. Sem. en este modal, se mantiene
+  // sincronizado con la sugerencia automática (Traspasos/52) cada vez que cambia el presupuesto
+  // que está escribiendo — mismo patrón que el editor de Oficina/Finanzas y el Paso 3 del
+  // asistente de creación de club.
+  useEffect(() => {
+    if (weeklyWageTouched) return;
+    setWeeklyWageInput(formatValueInput(String(weeklyWageBudgetFromTransfer(parseValue(budgetInput)))));
+  }, [budgetInput, weeklyWageTouched]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    // weeklyWageTouched decide si se envía el override: si el usuario solo tocó el
+    // Presupuesto de Traspasos, un override ya guardado antes se deja intacto (ver setBudget).
+    await onSave(parseValue(budgetInput), weeklyWageTouched ? (parseValue(weeklyWageInput) || null) : undefined);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={saving ? undefined : onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-surface border border-border w-full max-w-sm rounded-[28px] p-5 shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-black italic uppercase text-fg text-sm">⚙️ Actualizar Presupuesto y Salarios</h3>
+          {!saving && (
+            <button type="button" onClick={onClose} className="p-1 -mr-1 text-fg-faint hover:text-fg transition-colors touch-manipulation"><X size={18} /></button>
+          )}
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-black text-fg-faint uppercase tracking-wider ml-1">Presupuesto para Traspasos Actual (€)</label>
+            <input autoFocus type="text" inputMode="numeric" className="w-full bg-well p-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 text-center font-black text-lg text-fg" value={budgetInput} onChange={(e) => setBudgetInput(formatValueInput(e.target.value))} />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-black text-fg-faint uppercase tracking-wider ml-1">Presupuesto Semanal para Salarios (€)</label>
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-well border border-border-subtle focus-within:border-green-500">
+              <Wallet size={14} className="text-green-500 shrink-0" />
+              <input type="text" inputMode="numeric" className="flex-1 min-w-0 bg-transparent outline-none font-black text-green-500 text-sm" value={weeklyWageInput} onChange={(e) => { setWeeklyWageTouched(true); setWeeklyWageInput(formatValueInput(e.target.value)); }} />
+              <span className="text-[10px] font-black text-fg-faint shrink-0">/sem</span>
+            </div>
+          </div>
+          <button type="submit" disabled={saving} className="w-full p-3 bg-green-500 text-black rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-wide disabled:opacity-50 touch-manipulation">
+            <Check size={16} /> {saving ? 'Guardando...' : 'Guardar y Recalcular'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // Planificador de Fichajes: simulador de balance de mercado independiente de Objetivos, que
 // combina en un único cálculo las incorporaciones previstas (objetivos en seguimiento
 // marcados), las salidas previstas (jugadores en Transferibles/Cedibles marcados) y los
@@ -123,11 +189,17 @@ function BonusRow({ bonus, onLabelChange, onAmountChange, onRemove }) {
 // Traspasos y Margen Salarial Semanal de Finanzas), cerrando con un informe narrativo que
 // explica el impacto de cada elemento seleccionado y el veredicto final de viabilidad.
 export default function PlannerTab() {
-  const { activeClub } = useClubs();
+  const { activeClub, setBudget } = useClubs();
   const { targets, players } = useClubData();
   const [selectedTargetIds, setSelectedTargetIds] = useState(new Set());
   const [selectedPlayerIds, setSelectedPlayerIds] = useState(new Set());
   const [showBonus, setShowBonus] = useState(false);
+  // Atajo "⚙️ Actualizar Presupuesto y Salarios": mismo write que el editor de Oficina/
+  // Finanzas (ver setBudget en ClubsContext), pero sin salir del Planificador — en cuanto se
+  // guarda, transferBudget/weeklyWageBudget (derivados de activeClub más abajo) se actualizan
+  // solos con el snapshot de Firestore, y con ellos TODOS los balances proyectados de la
+  // simulación (compras, ventas, cesiones), sin ningún recálculo manual extra.
+  const [showBudgetEditor, setShowBudgetEditor] = useState(false);
   // Lista dinámica de premios/bonificaciones: cada entrada tiene su propio concepto libre e
   // importe estimado, sumados todos para el "Total de ingresos por premios" del balance.
   const [bonuses, setBonuses] = useState([]);
@@ -279,7 +351,12 @@ export default function PlannerTab() {
     <div className="space-y-4 animate-in fade-in">
       {/* Fondos actuales del club: siempre visibles, no dependen de la selección. */}
       <div className="bg-surface p-3 md:p-4 rounded-[20px] md:rounded-[24px] border border-border-subtle shadow-2xl">
-        <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-1.5 mb-2"><Wallet size={12} className="shrink-0" /> Fondos del Club</span>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted italic flex items-center gap-1.5"><Wallet size={12} className="shrink-0" /> Fondos del Club</span>
+          <button type="button" onClick={() => setShowBudgetEditor(true)} className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-well text-fg-faint hover:text-green-500 hover:bg-well-strong transition-colors text-[8px] font-black uppercase tracking-widest touch-manipulation">
+            ⚙️ Actualizar Presupuesto y Salarios
+          </button>
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <div className="min-w-0">
             <div className="text-xs md:text-sm font-black italic text-green-500 truncate">{formatCurrency(transferBudget)}</div>
@@ -430,6 +507,18 @@ export default function PlannerTab() {
         </div>
       ) : (
         <div className="p-10 text-center text-fg-faint font-bold italic text-xs">Selecciona al menos un objetivo o una venta para calcular y evaluar la viabilidad de la operación</div>
+      )}
+
+      {showBudgetEditor && (
+        <BudgetEditorModal
+          transferBudget={transferBudget}
+          weeklyWageBudget={weeklyWageBudget}
+          onClose={() => setShowBudgetEditor(false)}
+          onSave={async (amount, weekly) => {
+            await setBudget(amount, weekly);
+            setShowBudgetEditor(false);
+          }}
+        />
       )}
     </div>
   );
