@@ -31,7 +31,7 @@ const nextRowId = () => `row-${Date.now()}-${rowIdCounter++}`;
 // la preasigna a "Inicial" (Ya en el Club, nunca una compra real dentro de la app); Plantilla la
 // deja en "Comprado". Cedido y Cantera siempre respetan lo que ya determinó la IA, el usuario
 // puede cambiarlo de todas formas con el selector de tipo.
-function buildRow(prefill, { status = 'ok', fileName = '', propertyDefault = 'Comprado', file = null } = {}) {
+function buildRow(prefill, { status = 'ok', fileName = '', propertyDefault = 'Comprado', file = null, error = '' } = {}) {
   const isCantera = prefill.type === 'Cantera';
   const isCedido = prefill.type === 'Cedido';
   return {
@@ -40,8 +40,11 @@ function buildRow(prefill, { status = 'ok', fileName = '', propertyDefault = 'Co
     scanStatus: status, // 'ok' | 'partial' | 'failed'
     // Solo las filas 'failed' conservan el File original — es lo que permite mostrar la
     // miniatura de la foto que no se pudo leer, tanto en la tarjeta compacta de "Fotos No
-    // Reconocidas" como dentro del propio panel de edición al completarla a mano.
+    // Reconocidas" como dentro del propio panel de edición al completarla a mano. "error" es el
+    // motivo técnico exacto devuelto por el servidor (ver api/scan-player.js, diagnóstico
+    // transparente) — se muestra en pequeño bajo la tarjeta en vez de un "no leída" sin más.
     file,
+    error,
     previewUrl: file ? URL.createObjectURL(file) : '',
     // "Rellenar a mano" (ver FailedPhotoCard) promueve una fila 'failed' a la lista principal
     // de edición completa sin cambiar su scanStatus (sigue siendo "de origen fallido" a efectos
@@ -72,7 +75,7 @@ function buildRow(prefill, { status = 'ok', fileName = '', propertyDefault = 'Co
 
 const buildRowsFromResults = (results, mode, propertyDefault) => {
   const ok = (results?.succeeded || []).map((r) => buildRow(r, { status: r.name?.trim() ? 'ok' : 'partial', fileName: r.fileName, propertyDefault }));
-  const bad = (results?.failed || []).map((f) => buildRow({ type: mode === 'academia' ? 'Cantera' : 'Comprado', positions: [] }, { status: 'failed', fileName: f.fileName, propertyDefault, file: f.file || null }));
+  const bad = (results?.failed || []).map((f) => buildRow({ type: mode === 'academia' ? 'Cantera' : 'Comprado', positions: [] }, { status: 'failed', fileName: f.fileName, propertyDefault, file: f.file || null, error: f.error || '' }));
   return [...ok, ...bad];
 };
 
@@ -141,15 +144,19 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, onToggleEx
             </div>
           )}
           {r.scanStatus === 'failed' && (
-            <div className="flex items-center gap-2">
-              {r.previewUrl ? (
-                <img src={r.previewUrl} alt="Foto original no reconocida" className="w-14 h-14 rounded-lg object-cover border border-border-subtle shrink-0" />
-              ) : (
-                <div className="w-14 h-14 rounded-lg bg-well-strong border border-border-subtle flex items-center justify-center shrink-0 text-fg-faint"><ImageOff size={18} /></div>
-              )}
-              <button type="button" onClick={() => onRetry(r.id)} className="flex-1 h-14 rounded-lg border border-dashed border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest touch-manipulation">
-                <RefreshCcw size={12} /> Reintentar Escaneo
-              </button>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                {r.previewUrl ? (
+                  <img src={r.previewUrl} alt="Foto original no reconocida" className="w-14 h-14 rounded-lg object-cover border border-border-subtle shrink-0" />
+                ) : (
+                  <div className="w-14 h-14 rounded-lg bg-well-strong border border-border-subtle flex items-center justify-center shrink-0 text-fg-faint"><ImageOff size={18} /></div>
+                )}
+                <button type="button" onClick={() => onRetry(r.id)} className="flex-1 h-14 rounded-lg border border-dashed border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest touch-manipulation">
+                  <RefreshCcw size={12} /> Reintentar Escaneo
+                </button>
+              </div>
+              {/* Diagnóstico transparente: el motivo técnico exacto devuelto por el servidor. */}
+              {r.error && <p className="text-[8px] font-bold text-fg-faint ml-1">{r.error}</p>}
             </div>
           )}
           <div className="grid grid-cols-2 gap-2">
@@ -289,6 +296,10 @@ function FailedPhotoCard({ r, onRetry, onManualFill, onRemove }) {
       )}
       <div className="min-w-0 flex-1 space-y-1.5">
         <p className="text-[9px] font-black text-red-400 uppercase tracking-wide truncate">⚠️ Foto No Reconocida</p>
+        {/* Diagnóstico transparente: el motivo técnico exacto devuelto por el servidor (ver
+            api/scan-player.js), para saber qué respondió Google en vez de un "no leída" a
+            secas. */}
+        {r.error && <p className="text-[8px] font-bold text-fg-faint truncate">{r.error}</p>}
         <div className="flex items-center gap-1.5">
           <button type="button" onClick={() => onRetry(r.id)} title="Repetir foto" className="flex-1 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors flex items-center justify-center gap-1 text-[8px] font-black uppercase tracking-widest touch-manipulation">
             <Camera size={11} /> Repetir
@@ -409,16 +420,20 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
 
   // "Reintentar Escaneo" en una fila fallida: re-escanea UNA foto y sustituye esa fila en su
   // sitio (mismo id, así conserva su posición y su estado de exclusión) en vez de añadir una
-  // fila nueva. Si el reintento también falla, la fila se deja tal cual (sigue en 'failed', se
-  // puede reintentar de nuevo o completar a mano).
+  // fila nueva. Si el reintento TAMBIÉN falla, se actualiza igualmente con la foto y el motivo
+  // técnico nuevos (nunca se deja el mensaje de error obsoleto del intento anterior) — sigue en
+  // 'failed', se puede reintentar de nuevo o completar a mano.
   const handleRetryExtracted = (rowId, batchResults) => {
     setRescanTarget(null);
     const succeededRow = batchResults.succeeded?.[0];
-    if (!succeededRow) return;
-    const fresh = buildRow(succeededRow, { status: succeededRow.name?.trim() ? 'ok' : 'partial', fileName: succeededRow.fileName, propertyDefault });
+    const failedRow = batchResults.failed?.[0];
+    if (!succeededRow && !failedRow) return;
+    const fresh = succeededRow
+      ? buildRow(succeededRow, { status: succeededRow.name?.trim() ? 'ok' : 'partial', fileName: succeededRow.fileName, propertyDefault })
+      : buildRow({ type: mode === 'academia' ? 'Cantera' : 'Comprado', positions: [] }, { status: 'failed', fileName: failedRow.fileName, propertyDefault, file: failedRow.file || null, error: failedRow.error || '' });
     setRows((prev) => prev.map((r) => {
       if (r.id !== rowId) return r;
-      if (r.previewUrl) URL.revokeObjectURL(r.previewUrl); // La miniatura de la foto que falló ya no hace falta: el reintento trajo una nueva foto.
+      if (r.previewUrl) URL.revokeObjectURL(r.previewUrl); // La miniatura de la foto anterior ya no hace falta: el reintento trajo una nueva.
       return { ...fresh, id: rowId };
     }));
   };

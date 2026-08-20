@@ -21,18 +21,6 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Mensajes legibles para cada código de "error" que puede devolver api/scan-player.js (ver
-// contrato uniforme { success: true, data } / { success: false, error, details?, rateLimited? }
-// ahí mismo) — "rateLimited: true" se comprueba aparte (ver scanPlayerCardOnce), nunca por el
-// texto exacto de "error", que en ese caso viaja en inglés tal cual lo pide la cuota de Gemini.
-const FRIENDLY_ERROR_MESSAGES = {
-  unreadable: 'No se pudo leer ningún dato en esta foto. Prueba con una imagen más nítida y bien encuadrada.',
-  service_error: 'No se pudo analizar la imagen. Inténtalo de nuevo.',
-  missing_image: 'No se ha seleccionado ninguna imagen.',
-  missing_api_key: 'El servidor no tiene configurada la clave de Gemini. Contacta con el administrador.',
-  method_not_allowed: 'Petición no válida.',
-};
-
 // Llamada única (sin reintentos) a api/scan-player.js — usada solo internamente por
 // scanPlayerCard, que es quien añade la resiliencia frente a límites de cuota (ver más abajo).
 async function scanPlayerCardOnce(file, mode) {
@@ -47,7 +35,7 @@ async function scanPlayerCardOnce(file, mode) {
     });
   } catch (err) {
     console.error('Error de red llamando a /api/scan-player:', err);
-    throw new Error('No se pudo contactar con el servidor. Comprueba tu conexión e inténtalo de nuevo.');
+    throw new Error('Error: FETCH_FAILED');
   }
 
   let payload = null;
@@ -58,24 +46,29 @@ async function scanPlayerCardOnce(file, mode) {
   }
 
   // Contrato uniforme del endpoint: { success: true, data } o { success: false, error,
-  // details?, rateLimited? } — "status" y "rateLimited" quedan colgados del Error para que
-  // scanPlayerCard sepa si merece la pena reintentar la MISMA foto (cuota de Gemini
-  // temporalmente excedida) o si es un fallo definitivo (imagen ilegible, configuración del
-  // servidor...). "rateLimited" es una señal explícita en el propio cuerpo, independiente del
-  // código HTTP (que también se propaga como 429/503 reales) — doble comprobación por si algún
-  // proxy intermedio reescribiera el status. Antes de este contrato, un 429 real de Gemini se
-  // aplanaba siempre a un 502 genérico y el reintento nunca llegaba a dispararse — con lotes
-  // cerca de las 15 RPM de esta clave, eso hacía que TODO el lote acabara marcado "No leída".
+  // details?, rateLimited? }, con "error" siempre el código TÉCNICO exacto devuelto por Google
+  // (RESOURCE_EXHAUSTED, API_KEY_INVALID, PERMISSION_DENIED...) o por este propio endpoint
+  // (unreadable, EMPTY_RESPONSE_*, INVALID_JSON_RESPONSE) — diagnóstico transparente: nunca se
+  // enmascara detrás de un mensaje genérico, así "err.message" ya es directamente lo que se
+  // muestra bajo cada foto fallida ("⚠️ Error: RESOURCE_EXHAUSTED"). Si la respuesta ni
+  // siquiera llegó a ser JSON (p. ej. un 413 Payload Too Large del propio Vercel, antes de que
+  // el handler llegue a ejecutarse), se cae al código HTTP crudo como último recurso.
+  // "status" y "rateLimited" quedan colgados del Error para que scanPlayerCard sepa si merece
+  // la pena reintentar la MISMA foto (cuota de Gemini temporalmente excedida) o si es un fallo
+  // definitivo — antes de este contrato, un 429 real de Gemini se aplanaba siempre a un 502
+  // genérico y el reintento nunca llegaba a dispararse, con lotes cerca de las 15 RPM de esta
+  // clave eso hacía que TODO el lote acabara marcado "No leída".
   if (!response.ok || !payload?.success) {
-    console.error('Error de /api/scan-player:', payload?.error, payload?.details);
-    const rateLimited = payload?.rateLimited === true;
-    const err = new Error(rateLimited ? 'Límite de peticiones de Gemini alcanzado.' : (FRIENDLY_ERROR_MESSAGES[payload?.error] || payload?.details || 'No se pudo analizar la imagen. Inténtalo de nuevo.'));
+    const technicalCode = payload?.error || `HTTP_${response.status}`;
+    console.error('Error de /api/scan-player:', technicalCode, payload?.details);
+    const err = new Error(`Error: ${technicalCode}`);
     err.status = response.status;
-    err.rateLimited = rateLimited;
+    err.rateLimited = payload?.rateLimited === true;
+    err.technicalDetails = payload?.details || '';
     throw err;
   }
   if (!payload.data) {
-    throw new Error('El servidor no devolvió ningún dato de la imagen.');
+    throw new Error('Error: EMPTY_DATA');
   }
   return payload.data;
 }
@@ -85,10 +78,10 @@ async function scanPlayerCardOnce(file, mode) {
 // reintentar tras una espera. Cualquier otro error (imagen ilegible, red caída, 4xx de
 // validación...) es definitivo y no se reintenta.
 const RETRYABLE_STATUSES = new Set([429, 503]);
-const MAX_SCAN_RETRIES = 3;
-// Espera fija (no exponencial) entre reintentos: con 15 RPM de cuota, 6 segundos ya deja pasar
+const MAX_SCAN_RETRIES = 2;
+// Espera fija (no exponencial) entre reintentos: con 15 RPM de cuota, 8 segundos ya deja pasar
 // margen de sobra dentro de la misma ventana de un minuto sin necesidad de esperas crecientes.
-const RETRY_DELAY_MS = 6000;
+const RETRY_DELAY_MS = 8000;
 
 // Analiza la foto de una tarjeta de jugador vía api/scan-player.js y devuelve el JSON
 // extraído (mismas claves que describe ese endpoint). "mode" ('primerEquipo' por defecto o
@@ -238,8 +231,8 @@ export function mapAcademyScanResultToPrefill(extracted) {
 // usado tanto por la carga masiva con IA de PlayerList/AcademyTab como por los dos bloques de
 // OnboardingWizard. Cada foto pasa por el mismo pipeline que un escaneo individual
 // (prepareImageForScan para HEIC/compresión, scanPlayerCard con sus reintentos automáticos
-// ante 429/503, y el mapeo correspondiente al modo), con una espera de seguridad de 4,5
-// segundos entre la finalización de un jugador y la llamada del siguiente — con la cuota de 15
+// ante 429/503, y el mapeo correspondiente al modo), con una espera de seguridad de 4 segundos
+// entre la finalización de un jugador y la llamada del siguiente — con la cuota de 15
 // peticiones por minuto (RPM) del plan gratuito de Gemini (4 segundos exactos de margen teórico
 // entre llamadas), ir más rápido dispara 429 en cuanto el lote pasa de unas pocas fotos.
 // onProgress(info) se invoca en cada cambio de fase de la foto en curso — { index (0-based),
@@ -260,7 +253,7 @@ export function mapAcademyScanResultToPrefill(extracted) {
 // 429/503 persistente tras MAX_SCAN_RETRIES) va a "failed": { fileName, error, file } — "file"
 // es el File original (nunca el comprimido, por si prepareImageForScan fue justo lo que falló),
 // conservado para que la revisión pueda mostrar la miniatura de la foto que no se pudo leer.
-const DELAY_BETWEEN_CALLS_MS = 4500;
+const DELAY_BETWEEN_CALLS_MS = 4000;
 export async function scanPlayerCardsQueue(files, mode, onProgress) {
   const mapper = mode === 'academia' ? mapAcademyScanResultToPrefill : mapScanResultToPrefill;
   const succeeded = [];

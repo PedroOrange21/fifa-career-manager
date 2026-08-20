@@ -1,18 +1,18 @@
-// Prepara cualquier foto (incluidas las HEIC/HEIF que produce un iPhone por defecto) para el
-// escaneo con IA: la redimensiona/comprime a un <canvas> ANTES de que geminiPlayerScan.js la
-// pase a base64, tanto para evitar el 502 de Gemini con formatos que no entiende como para no
-// superar el límite de payload (~4.5 MB) de las funciones Serverless de Vercel con las fotos de
-// 12-48 MP que hacen los iPhone recientes.
+// Prepara cualquier foto para el escaneo con IA. Filosofía deliberadamente mínima: si el
+// archivo ya es lo bastante ligero (<= SIZE_THRESHOLD_BYTES), se envía TAL CUAL — sin Canvas,
+// sin redimensionar, sin volver a codificar nada — y es geminiPlayerScan.js quien lo convierte
+// a base64 directamente con FileReader justo antes de enviarlo. Manipular con Canvas una imagen
+// que no lo necesita es trabajo de más y, sobre todo en iOS Safari, una fuente de fallos: solo
+// se activa el redimensionado cuando el archivo realmente pesa demasiado.
 //
-// Decodificación vía FileReader().readAsDataURL() + <img>.onload, NUNCA createImageBitmap: se
-// detectó que en iOS Safari createImageBitmap puede "resolver" con éxito sobre según qué foto de
-// la galería sin haber terminado de decodificar el contenido real, produciendo un canvas en
-// blanco que luego Gemini reporta como imagen ilegible — un fallo silencioso, sin ninguna
-// excepción que capturar, que en un lote entero se veía como TODAS las fotos marcadas "No
-// leída" de golpe. FileReader().onload seguido de <img>.onload es la secuencia que garantiza
-// que el navegador ya decodificó los píxeles reales antes de pintar nada en el canvas; se
-// valida además que naturalWidth/naturalHeight sean mayores que 0 antes de continuar, como red
-// de seguridad adicional.
+// Cuando SÍ hace falta redimensionar, la decodificación es vía FileReader().readAsDataURL() +
+// <img>.onload — nunca createImageBitmap: se detectó que en iOS Safari createImageBitmap puede
+// "resolver" con éxito sobre según qué foto sin haber terminado de decodificar el contenido
+// real, produciendo un canvas en blanco que luego Gemini reporta como imagen ilegible, un fallo
+// silencioso sin ninguna excepción que capturar. FileReader().onload seguido de <img>.onload es
+// la secuencia que garantiza que el navegador ya decodificó los píxeles reales antes de pintar
+// nada en el canvas; se valida además que naturalWidth/naturalHeight sean mayores que 0 antes de
+// continuar, como red de seguridad adicional.
 const HEIC_MIME_TYPES = ['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence'];
 
 // iOS a veces no rellena file.type para HEIC (bug conocido de Safari/WebKit en algunas
@@ -23,10 +23,12 @@ const isHeic = (file) => {
   return HEIC_MIME_TYPES.includes(type) || name.endsWith('.heic') || name.endsWith('.heif');
 };
 
-// Redimensionado estricto antes de enviar a la API: ancho/alto máximo 1000px (conservando la
-// relación de aspecto) y JPEG a calidad 0.70 — cada foto enviada queda muy por debajo del
-// límite de payload, imprescindible para lotes de 20-30 fotos en modo ráfaga sobre una conexión
-// móvil.
+// Umbral a partir del cual sí merece la pena redimensionar: por debajo, la foto ya es
+// razonablemente ligera para el payload de la función Serverless y el límite de tamaño de
+// Gemini, así que se envía sin tocar.
+const SIZE_THRESHOLD_BYTES = 1.5 * 1024 * 1024; // 1,5 MB
+// Redimensionado estricto cuando sí hace falta: ancho/alto máximo 1000px (conservando la
+// relación de aspecto) y JPEG a calidad 0.70.
 const MAX_DIMENSION = 1000;
 const JPEG_QUALITY = 0.70;
 
@@ -78,6 +80,10 @@ async function resizeToCanvasBlob(file) {
 }
 
 export async function prepareImageForScan(file) {
+  if (file.size <= SIZE_THRESHOLD_BYTES) {
+    return file;
+  }
+
   try {
     const blob = await resizeToCanvasBlob(file);
     return new File([blob], (file.name || 'foto').replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' });

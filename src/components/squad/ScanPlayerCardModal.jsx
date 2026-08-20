@@ -347,13 +347,20 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
                 <p className="text-[9px] font-black uppercase tracking-widest text-fg-faint px-1">Detectados ({completedEntries.length})</p>
                 <div ref={scanListRef} className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle max-h-48 overflow-y-auto scroll-smooth">
                   {completedEntries.map((entry) => (
-                    <div key={entry.index} className="px-3 py-2 flex items-center gap-2">
-                      {entry.status === 'done' ? <Check size={13} className="text-green-500 shrink-0" /> : <AlertTriangle size={13} className="text-yellow-500 shrink-0" />}
-                      <span className={`text-[10px] font-bold truncate ${entry.status === 'done' ? 'text-fg' : 'text-yellow-500'}`}>
-                        {entry.status === 'done'
-                          ? `${entry.name || 'Sin nombre legible'}${entry.position ? ` · ${entry.position}` : ''}${entry.rating ? ` · ${entry.rating}` : ''}`
-                          : '⚠️ No leída'}
-                      </span>
+                    <div key={entry.index} className="px-3 py-2 flex items-start gap-2">
+                      {entry.status === 'done' ? <Check size={13} className="text-green-500 shrink-0 mt-0.5" /> : <AlertTriangle size={13} className="text-yellow-500 shrink-0 mt-0.5" />}
+                      <div className="min-w-0 flex-1">
+                        <span className={`text-[10px] font-bold truncate block ${entry.status === 'done' ? 'text-fg' : 'text-yellow-500'}`}>
+                          {entry.status === 'done'
+                            ? `${entry.name || 'Sin nombre legible'}${entry.position ? ` · ${entry.position}` : ''}${entry.rating ? ` · ${entry.rating}` : ''}`
+                            : '⚠️ No leída'}
+                        </span>
+                        {/* Diagnóstico transparente: el motivo técnico exacto devuelto por el
+                            servidor (ver api/scan-player.js), nunca un "no leída" sin más. */}
+                        {entry.status === 'failed' && entry.error && (
+                          <span className="text-[8px] font-bold text-fg-faint block truncate">{entry.error}</span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

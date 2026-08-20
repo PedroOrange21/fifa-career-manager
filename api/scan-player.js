@@ -59,6 +59,26 @@ const logGeminiError = (label, err) => {
   });
 };
 
+// Códigos de estado que la propia API de Google usa en sus errores (formato gRPC/REST estándar
+// de Google Cloud) — se buscan tal cual dentro del mensaje si no vienen ya en una propiedad
+// anidada, para poder devolver el código EXACTO al frontend en vez de enmascararlo detrás de un
+// "no leída" genérico que no dice nada de qué ha fallado realmente.
+const GOOGLE_STATUS_CODES = [
+  'API_KEY_INVALID', 'PERMISSION_DENIED', 'UNAUTHENTICATED', 'RESOURCE_EXHAUSTED',
+  'INVALID_ARGUMENT', 'FAILED_PRECONDITION', 'UNAVAILABLE', 'DEADLINE_EXCEEDED', 'INTERNAL',
+  'NOT_FOUND', 'ABORTED',
+];
+const extractTechnicalCode = (err) => {
+  const nestedStatus = err?.error?.status || err?.response?.data?.error?.status || err?.cause?.status;
+  if (nestedStatus) return String(nestedStatus).toUpperCase();
+  const message = String(err?.message || err || '');
+  const matchedCode = GOOGLE_STATUS_CODES.find((code) => message.toUpperCase().includes(code));
+  if (matchedCode) return matchedCode;
+  const httpCode = err?.status ?? err?.statusCode ?? err?.response?.status;
+  if (httpCode) return `HTTP_${httpCode}`;
+  return 'UNKNOWN_ERROR';
+};
+
 // Esquema de salida estructurada: obliga a Gemini a responder JSON con exactamente estos
 // campos (o null si el dato no es visible en la imagen), sin texto extra alrededor que haya
 // que parsear a mano.
@@ -253,22 +273,26 @@ export default async function handler(req, res) {
   }
 
   if (lastError) {
-    // Cuota excedida (429/RESOURCE_EXHAUSTED) o modelo saturado (503) en AMBOS modelos: se
-    // propaga el 429/503 real al cliente (nunca un 502 genérico) Y se marca "rateLimited: true"
-    // de forma explícita en el propio JSON — así scanPlayerCard puede distinguir sin ambigüedad
-    // "espera de cuota, merece la pena reintentar la MISMA foto" de "foto ilegible" o "fallo de
-    // servicio real", tanto por el código HTTP como por el propio cuerpo de la respuesta (doble
-    // señal, por si algún proxy intermedio reescribiera el status). Sin propagar el 429/503 de
-    // verdad, cualquier lote que rozara los 15 RPM de esta clave veía cómo el reintento nunca
-    // llegaba a dispararse y el lote entero acababa marcado "No leída" de principio a fin.
+    // Diagnóstico transparente: se propaga el código técnico EXACTO que devolvió Google
+    // (RESOURCE_EXHAUSTED, API_KEY_INVALID, PERMISSION_DENIED, UNAVAILABLE...) en vez de
+    // enmascararlo detrás de un "service_error" genérico — así el frontend puede mostrar el
+    // motivo real bajo cada foto fallida en lugar de un simple "no leída" sin explicación.
+    // "rateLimited: true" sigue siendo la señal explícita (independiente del texto del código)
+    // que usa scanPlayerCard para decidir si reintentar la MISMA foto: cuota excedida
+    // (RESOURCE_EXHAUSTED/429) o modelo saturado (UNAVAILABLE/503) en AMBOS modelos. El código
+    // HTTP real (429/503) se propaga también, nunca un 502 genérico — sin esto, cualquier lote
+    // que rozara los 15 RPM de esta clave veía cómo el reintento nunca llegaba a dispararse y
+    // el lote entero acababa marcado "No leída" de principio a fin.
+    const technicalCode = extractTechnicalCode(lastError);
     const upstreamStatus = lastError?.status ?? lastError?.statusCode ?? lastError?.response?.status;
-    const isRateLimited = upstreamStatus === 429 || upstreamStatus === 503
+    const isRateLimited = technicalCode === 'RESOURCE_EXHAUSTED' || technicalCode === 'UNAVAILABLE'
+      || upstreamStatus === 429 || upstreamStatus === 503
       || /429|503|quota|resource_exhausted|rate limit|too many requests/i.test(String(lastError?.message || ''));
-    const httpStatus = isRateLimited ? (upstreamStatus === 503 ? 503 : 429) : 502;
+    const httpStatus = isRateLimited ? (upstreamStatus === 503 || technicalCode === 'UNAVAILABLE' ? 503 : 429) : 502;
     res.status(httpStatus).json({
       success: false,
       rateLimited: isRateLimited,
-      error: isRateLimited ? 'Quota limit reached' : 'service_error',
+      error: technicalCode,
       details: lastError.message || String(lastError),
     });
     return;
@@ -280,9 +304,11 @@ export default async function handler(req, res) {
     // encontró nada legible en la imagen (foto borrosa, mal encuadrada, pantalla que no es una
     // tarjeta de jugador...) — un fallo del propio contenido de la foto, no del servicio, así
     // que nunca dispara el reintento (reservado para 429/503 reales) y la cola del frontend
-    // simplemente anota esta foto y sigue con la siguiente.
-    console.error('Gemini respondió sin texto utilizable. Respuesta completa:', JSON.stringify(response)?.slice(0, 2000));
-    res.status(200).json({ success: false, error: 'unreadable' });
+    // simplemente anota esta foto y sigue con la siguiente. "finishReason" (SAFETY, MAX_TOKENS,
+    // RECITATION...), si Gemini lo trae, es el motivo técnico exacto de por qué no hay texto.
+    const finishReason = response?.candidates?.[0]?.finishReason;
+    console.error('Gemini respondió sin texto utilizable. finishReason:', finishReason, 'Respuesta completa:', JSON.stringify(response)?.slice(0, 2000));
+    res.status(200).json({ success: false, error: finishReason ? `EMPTY_RESPONSE_${finishReason}` : 'EMPTY_RESPONSE', details: 'Gemini no devolvió texto aprovechable para esta imagen.' });
     return;
   }
 
@@ -294,7 +320,7 @@ export default async function handler(req, res) {
     // pudo parsear como JSON limpio (texto sobrante, valla de código sin cerrar...) — de nuevo
     // un problema de esta imagen concreta, no del servicio en sí.
     console.error('Respuesta de Gemini no es JSON válido:', text.slice(0, 2000), err);
-    res.status(200).json({ success: false, error: 'unreadable' });
+    res.status(200).json({ success: false, error: 'INVALID_JSON_RESPONSE', details: err.message });
     return;
   }
 
