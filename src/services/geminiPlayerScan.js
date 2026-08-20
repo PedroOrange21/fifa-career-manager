@@ -21,6 +21,17 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Mensajes legibles para cada código de "error" que puede devolver api/scan-player.js (ver
+// contrato uniforme { success: true, data } / { success: false, error, details? } ahí mismo).
+const FRIENDLY_ERROR_MESSAGES = {
+  unreadable: 'No se pudo leer ningún dato en esta foto. Prueba con una imagen más nítida y bien encuadrada.',
+  quota_exceeded: 'Límite de peticiones de Gemini alcanzado.',
+  service_error: 'No se pudo analizar la imagen. Inténtalo de nuevo.',
+  missing_image: 'No se ha seleccionado ninguna imagen.',
+  missing_api_key: 'El servidor no tiene configurada la clave de Gemini. Contacta con el administrador.',
+  method_not_allowed: 'Petición no válida.',
+};
+
 // Llamada única (sin reintentos) a api/scan-player.js — usada solo internamente por
 // scanPlayerCard, que es quien añade la resiliencia frente a límites de cuota (ver más abajo).
 async function scanPlayerCardOnce(file, mode) {
@@ -45,24 +56,21 @@ async function scanPlayerCardOnce(file, mode) {
     console.error('Respuesta de /api/scan-player no es JSON válido:', err);
   }
 
-  if (!response.ok) {
-    // "details" (si el servidor lo envía, ver api/scan-player.js) recoge el motivo real
-    // devuelto por Gemini o el error de parseo — se muestra junto al mensaje genérico para
-    // que el usuario pueda copiarlo directamente en un reporte de fallo. "status" queda
-    // colgado del propio Error para que scanPlayerCard sepa si merece la pena reintentar
-    // (429/503, límite de cuota temporal) o si es un fallo definitivo.
+  // Contrato uniforme del endpoint: { success: true, data } o { success: false, error,
+  // details? } — "status" queda colgado del Error para que scanPlayerCard sepa si merece la
+  // pena reintentar la MISMA foto (429/503 reales, cuota de Gemini temporalmente excedida) o si
+  // es un fallo definitivo (imagen ilegible, configuración del servidor...). Antes de este
+  // contrato, un 429 real de Gemini se aplanaba siempre a un 502 genérico y el reintento nunca
+  // llegaba a dispararse — con lotes cerca de las 15 RPM de esta clave, eso hacía que TODO el
+  // lote acabara marcado "No leída".
+  if (!response.ok || !payload?.success) {
     console.error('Error de /api/scan-player:', payload?.error, payload?.details);
-    const base = payload?.error || 'No se pudo analizar la imagen. Inténtalo de nuevo.';
-    const err = new Error(payload?.details ? `${base} (${payload.details})` : base);
+    const err = new Error(FRIENDLY_ERROR_MESSAGES[payload?.error] || payload?.details || 'No se pudo analizar la imagen. Inténtalo de nuevo.');
     err.status = response.status;
     throw err;
   }
-  if (!payload?.data) {
-    // Contrato "unreadable" (ver api/scan-player.js): Gemini respondió con HTTP 200 pero sin
-    // datos aprovechables (foto borrosa, mal encuadrada, o algo que no es una tarjeta de
-    // jugador) — un fallo del propio contenido de esta foto, no de la conexión ni de la cuota,
-    // así que nunca lleva "status" y por tanto scanPlayerCard nunca lo reintenta.
-    throw new Error(payload?.error === 'unreadable' ? 'No se pudo leer ningún dato en esta foto. Prueba con una imagen más nítida y bien encuadrada.' : 'El servidor no devolvió ningún dato de la imagen.');
+  if (!payload.data) {
+    throw new Error('El servidor no devolvió ningún dato de la imagen.');
   }
   return payload.data;
 }

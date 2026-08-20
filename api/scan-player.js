@@ -193,18 +193,18 @@ Reglas importantes:
 // en JPEG/base64 entra sobradamente dentro de ese margen.
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Método no permitido.' });
+    res.status(405).json({ success: false, error: 'method_not_allowed', details: 'Método no permitido.' });
     return;
   }
   if (!apiKey) {
     console.error('Falta GEMINI_API_KEY/VITE_GEMINI_API_KEY en las variables de entorno del proyecto.');
-    res.status(500).json({ error: 'El servidor no tiene configurada la clave de Gemini. Contacta con el administrador.' });
+    res.status(500).json({ success: false, error: 'missing_api_key', details: 'El servidor no tiene configurada la clave de Gemini. Contacta con el administrador.' });
     return;
   }
 
   const { imageBase64: rawImageBase64, mimeType: rawMimeType, mode: rawMode } = req.body || {};
   if (!rawImageBase64) {
-    res.status(400).json({ error: 'No se recibió ninguna imagen.' });
+    res.status(400).json({ success: false, error: 'missing_image', details: 'No se recibió ninguna imagen.' });
     return;
   }
   const imageBase64 = sanitizeBase64(rawImageBase64);
@@ -242,6 +242,7 @@ export default async function handler(req, res) {
   let lastError;
   for (const model of [PRIMARY_MODEL, FALLBACK_MODEL]) {
     try {
+      // eslint-disable-next-line no-await-in-loop
       response = await callModel(model);
       lastError = null;
       break;
@@ -252,20 +253,32 @@ export default async function handler(req, res) {
   }
 
   if (lastError) {
-    res.status(502).json({ error: 'No se pudo analizar la imagen. Inténtalo de nuevo.', details: lastError.message || String(lastError) });
+    // Cuota excedida (429) o modelo saturado (503) en AMBOS modelos: se propaga el 429/503 real
+    // al cliente (nunca un 502 genérico) para que scanPlayerCard detecte que merece la pena
+    // reintentar la MISMA foto en vez de darla por perdida a la primera — sin esto, cualquier
+    // lote que rozara los 15 RPM de esta clave veía cómo el reintento nunca llegaba a
+    // dispararse y el lote entero acababa marcado "No leída" de principio a fin.
+    const upstreamStatus = lastError?.status ?? lastError?.statusCode ?? lastError?.response?.status;
+    const looksLikeQuota = upstreamStatus === 429 || upstreamStatus === 503
+      || /429|503|quota|resource_exhausted|rate limit|too many requests/i.test(String(lastError?.message || ''));
+    const httpStatus = looksLikeQuota ? (upstreamStatus === 503 ? 503 : 429) : 502;
+    res.status(httpStatus).json({
+      success: false,
+      error: looksLikeQuota ? 'quota_exceeded' : 'service_error',
+      details: lastError.message || String(lastError),
+    });
     return;
   }
 
   const text = response?.text;
   if (!text) {
-    // "unreadable" a propósito con HTTP 200, no 502: esto significa que Gemini SÍ respondió
-    // pero no encontró nada legible en la imagen (foto borrosa, mal encuadrada, pantalla que no
-    // es una tarjeta de jugador...) — un fallo del propio contenido de la foto, no del servicio.
-    // Devolverlo como 200 evita que la cola del frontend lo confunda con un error de
-    // infraestructura (429/503, que sí dispara los reintentos con backoff) y dejar así que cada
-    // foto ilegible se anote y se continúe con la siguiente sin reventar el resto del lote.
+    // "unreadable" a propósito con HTTP 200: esto significa que Gemini SÍ respondió pero no
+    // encontró nada legible en la imagen (foto borrosa, mal encuadrada, pantalla que no es una
+    // tarjeta de jugador...) — un fallo del propio contenido de la foto, no del servicio, así
+    // que nunca dispara el reintento (reservado para 429/503 reales) y la cola del frontend
+    // simplemente anota esta foto y sigue con la siguiente.
     console.error('Gemini respondió sin texto utilizable. Respuesta completa:', JSON.stringify(response)?.slice(0, 2000));
-    res.status(200).json({ error: 'unreadable', data: null });
+    res.status(200).json({ success: false, error: 'unreadable' });
     return;
   }
 
@@ -277,9 +290,9 @@ export default async function handler(req, res) {
     // pudo parsear como JSON limpio (texto sobrante, valla de código sin cerrar...) — de nuevo
     // un problema de esta imagen concreta, no del servicio en sí.
     console.error('Respuesta de Gemini no es JSON válido:', text.slice(0, 2000), err);
-    res.status(200).json({ error: 'unreadable', data: null });
+    res.status(200).json({ success: false, error: 'unreadable' });
     return;
   }
 
-  res.status(200).json({ data });
+  res.status(200).json({ success: true, data });
 }

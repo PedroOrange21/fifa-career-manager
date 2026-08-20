@@ -2,18 +2,17 @@
 // escaneo con IA: la redimensiona/comprime a un <canvas> ANTES de que geminiPlayerScan.js la
 // pase a base64, tanto para evitar el 502 de Gemini con formatos que no entiende como para no
 // superar el límite de payload (~4.5 MB) de las funciones Serverless de Vercel con las fotos de
-// 12-48 MP que hacen los iPhone recientes — y, crítico en iOS Safari, para no saturar la
-// memoria del WebView decodificando esas fotos a resolución completa antes de reducirlas.
+// 12-48 MP que hacen los iPhone recientes.
 //
-// Estrategia de decodificación (por qué createImageBitmap/<img> primero, heic2any como
-// respaldo): HEIC es el formato nativo de Apple, así que Safari (iOS y macOS) lo decodifica de
-// forma nativa vía createImageBitmap/<img> sin pasar por ningún decodificador en JS — mucho más
-// ligero en memoria que heic2any, que carga un decodificador HEIF completo en WASM y mantiene
-// el bitmap sin comprimir en memoria de JS mientras dura la conversión (con una foto de 48 MP,
-// eso son varios cientos de MB solo para esa imagen, un problema real en el WebView de iOS).
-// Chrome/Firefox no decodifican HEIC de forma nativa, así que ahí el intento nativo falla y se
-// cae a heic2any como respaldo — igual que antes, solo que ya no se usa en Safari, donde no
-// hace falta.
+// Decodificación vía FileReader().readAsDataURL() + <img>.onload, NUNCA createImageBitmap: se
+// detectó que en iOS Safari createImageBitmap puede "resolver" con éxito sobre según qué foto de
+// la galería sin haber terminado de decodificar el contenido real, produciendo un canvas en
+// blanco que luego Gemini reporta como imagen ilegible — un fallo silencioso, sin ninguna
+// excepción que capturar, que en un lote entero se veía como TODAS las fotos marcadas "No
+// leída" de golpe. FileReader().onload seguido de <img>.onload es la secuencia que garantiza
+// que el navegador ya decodificó los píxeles reales antes de pintar nada en el canvas; se
+// valida además que naturalWidth/naturalHeight sean mayores que 0 antes de continuar, como red
+// de seguridad adicional.
 const HEIC_MIME_TYPES = ['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence'];
 
 // iOS a veces no rellena file.type para HEIC (bug conocido de Safari/WebKit en algunas
@@ -24,65 +23,58 @@ const isHeic = (file) => {
   return HEIC_MIME_TYPES.includes(type) || name.endsWith('.heic') || name.endsWith('.heif');
 };
 
-// Redimensionado estricto antes de enviar a la API: ancho/alto máximo 1000px (conservando la
-// relación de aspecto) y JPEG a calidad 0.70 — cada foto enviada queda por debajo de los
-// ~150 KB objetivo, imprescindible para lotes de 20-30 fotos en modo ráfaga sobre una conexión
-// móvil sin bloquear el payload de las funciones Serverless de Vercel.
-const MAX_DIMENSION = 1000;
-const JPEG_QUALITY = 0.70;
+// Redimensionado estricto antes de enviar a la API: ancho/alto máximo 1200px (conservando la
+// relación de aspecto) y JPEG a calidad 0.75 — cada foto enviada queda muy por debajo del
+// límite de payload, imprescindible para lotes de 20-30 fotos en modo ráfaga sobre una conexión
+// móvil.
+const MAX_DIMENSION = 1200;
+const JPEG_QUALITY = 0.75;
 
-// Carga el archivo como elemento <img> (respaldo cuando no hay createImageBitmap, o cuando
-// createImageBitmap del propio archivo falla — p. ej. Chrome/Firefox con un HEIC). El Object
-// URL se revoca en cuanto el navegador ya decodificó la imagen (onload/onerror), nunca se deja
-// colgado en memoria.
-const loadViaImageElement = (file) => new Promise((resolve, reject) => {
-  const url = URL.createObjectURL(file);
+// Lee el archivo como Data URL — FileReader es la vía más compatible en iOS Safari para
+// garantizar que el contenido real del archivo (no solo su cabecera) está disponible antes de
+// intentar decodificarlo como imagen.
+const readAsDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = (readerEvent) => resolve(readerEvent.target.result);
+  reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+  reader.readAsDataURL(file);
+});
+
+// Decodifica un Data URL como <img>, validando explícitamente que las dimensiones sean válidas
+// antes de darla por buena — si Safari devuelve un onload "exitoso" pero con 0x0, aquí se
+// atrapa como el error que realmente es, en vez de dejar pasar un canvas en blanco.
+const loadImage = (dataUrl) => new Promise((resolve, reject) => {
   const img = new Image();
-  img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-  img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo decodificar la imagen.')); };
-  img.src = url;
+  img.onload = () => {
+    if (!img.naturalWidth || !img.naturalHeight) {
+      reject(new Error('Dimensiones de imagen inválidas.'));
+      return;
+    }
+    resolve(img);
+  };
+  img.onerror = () => reject(new Error('No se pudo decodificar la imagen.'));
+  img.src = dataUrl;
 });
 
-const dimensionsOf = (source) => ({
-  width: source.naturalWidth || source.width,
-  height: source.naturalHeight || source.height,
-});
-
-// Decodifica "file" (con createImageBitmap si el navegador lo soporta, o si no con <img>),
-// lo pinta redimensionado en un <canvas> y exporta el resultado como Blob JPEG. Libera el
-// bitmap nativo (bitmap.close()) en cuanto termina de pintarlo en el canvas, para no retener el
-// decodificado a resolución completa más tiempo del imprescindible.
+// Decodifica "file" (FileReader + <img>), lo pinta redimensionado en un <canvas> y exporta el
+// resultado como Blob JPEG.
 async function resizeToCanvasBlob(file) {
-  const canDecodeNatively = typeof createImageBitmap === 'function';
-  let source;
-  try {
-    source = canDecodeNatively ? await createImageBitmap(file) : await loadViaImageElement(file);
-  } catch (err) {
-    // createImageBitmap puede fallar en un archivo HEIC en navegadores sin soporte nativo del
-    // formato (Chrome/Firefox) — se intenta una vez más con <img>, que en algún caso límite
-    // logra decodificar donde createImageBitmap no pudo, antes de rendirse del todo.
-    source = await loadViaImageElement(file);
-  }
+  const dataUrl = await readAsDataUrl(file);
+  const img = await loadImage(dataUrl);
 
-  try {
-    const { width, height } = dimensionsOf(source);
-    const scale = Math.min(1, MAX_DIMENSION / Math.max(width, height));
-    const targetWidth = Math.max(1, Math.round(width * scale));
-    const targetHeight = Math.max(1, Math.round(height * scale));
+  const scale = Math.min(1, MAX_DIMENSION / Math.max(img.naturalWidth, img.naturalHeight));
+  const targetWidth = Math.max(1, Math.round(img.naturalWidth * scale));
+  const targetHeight = Math.max(1, Math.round(img.naturalHeight * scale));
 
-    const canvas = document.createElement('canvas');
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(source, 0, 0, targetWidth, targetHeight);
+  const canvas = document.createElement('canvas');
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
-    const blob = await new Promise((resolve, reject) => {
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No se pudo comprimir la imagen.'))), 'image/jpeg', JPEG_QUALITY);
-    });
-    return blob;
-  } finally {
-    if (typeof source.close === 'function') source.close();
-  }
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No se pudo comprimir la imagen.'))), 'image/jpeg', JPEG_QUALITY);
+  });
 }
 
 export async function prepareImageForScan(file) {
@@ -94,8 +86,9 @@ export async function prepareImageForScan(file) {
     console.warn('Decodificación nativa de HEIC no disponible, usando heic2any como respaldo:', err);
   }
 
-  // Respaldo final solo para HEIC en navegadores sin soporte nativo (Chrome/Firefox): decodifica
-  // con el conversor WASM y vuelve a pasar por el mismo redimensionado/compresión de arriba.
+  // Respaldo final solo para HEIC en navegadores sin soporte nativo (Chrome/Firefox, que no
+  // decodifican HEIC ni siquiera vía <img>): decodifica con el conversor WASM y vuelve a pasar
+  // por el mismo redimensionado/compresión de arriba.
   const heic2any = (await import('heic2any')).default;
   const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
   const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
