@@ -12,11 +12,16 @@ import { GoogleGenAI, Type } from '@google/genai';
 // puede contener VARIAS claves separadas por comas (ej. "clave1,clave2,clave3") — se prueban en
 // orden y, si una se queda sin cuota diaria/RPM (RESOURCE_EXHAUSTED, 429/503) o resulta
 // inválida (API_KEY_INVALID, PERMISSION_DENIED, UNAUTHENTICATED), se rota automáticamente a la
-// siguiente sin fallar la petición hacia el frontend — ver el bucle de claves más abajo.
-const geminiKeys = (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '')
-  .split(',')
-  .map((k) => k.trim())
-  .filter(Boolean);
+// siguiente sin fallar la petición hacia el frontend — ver el bucle de claves más abajo. El
+// propio valor en Vercel ya se guarda deduplicado (ver el script de fusión usado al añadir
+// claves nuevas), pero el Set() de aquí es una red de seguridad adicional por si algún día se
+// añade una clave repetida a mano.
+const geminiKeys = [...new Set(
+  (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '')
+    .split(',')
+    .map((k) => k.trim())
+    .filter(Boolean),
+)];
 
 // gemini-3.6-flash es el modelo objetivo vigente para esta clave (gemini-2.5-flash y
 // gemini-1.5-flash ya no están disponibles para claves nuevas — Google los retiró); si algún
