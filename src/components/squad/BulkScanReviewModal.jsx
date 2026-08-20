@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { X, Check, ShieldAlert, RefreshCcw, GraduationCap, CopyX, Trash2, Pencil, ChevronDown, AlertTriangle, ScanLine, Info } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { X, Check, ShieldAlert, RefreshCcw, GraduationCap, CopyX, Trash2, Pencil, ChevronDown, AlertTriangle, ScanLine, Info, ImageOff, Camera, PenLine } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
@@ -31,13 +31,22 @@ const nextRowId = () => `row-${Date.now()}-${rowIdCounter++}`;
 // la preasigna a "Inicial" (Ya en el Club, nunca una compra real dentro de la app); Plantilla la
 // deja en "Comprado". Cedido y Cantera siempre respetan lo que ya determinó la IA, el usuario
 // puede cambiarlo de todas formas con el selector de tipo.
-function buildRow(prefill, { status = 'ok', fileName = '', propertyDefault = 'Comprado' } = {}) {
+function buildRow(prefill, { status = 'ok', fileName = '', propertyDefault = 'Comprado', file = null } = {}) {
   const isCantera = prefill.type === 'Cantera';
   const isCedido = prefill.type === 'Cedido';
   return {
     id: nextRowId(),
     fileName: fileName || prefill.fileName || '',
     scanStatus: status, // 'ok' | 'partial' | 'failed'
+    // Solo las filas 'failed' conservan el File original — es lo que permite mostrar la
+    // miniatura de la foto que no se pudo leer, tanto en la tarjeta compacta de "Fotos No
+    // Reconocidas" como dentro del propio panel de edición al completarla a mano.
+    file,
+    previewUrl: file ? URL.createObjectURL(file) : '',
+    // "Rellenar a mano" (ver FailedPhotoCard) promueve una fila 'failed' a la lista principal
+    // de edición completa sin cambiar su scanStatus (sigue siendo "de origen fallido" a efectos
+    // informativos) — mientras sea false, la fila vive en la sección de fotos no reconocidas.
+    manualFill: false,
     reclassified: !!prefill.reclassified,
     name: prefill.name || '',
     rating: prefill.rating != null ? String(prefill.rating) : '',
@@ -53,13 +62,17 @@ function buildRow(prefill, { status = 'ok', fileName = '', propertyDefault = 'Co
     value: formatValueInput(String(prefill.value || '')),
     originClub: prefill.originClub || '',
     loanDuration: prefill.loanDuration || '1 Temporada',
-    expanded: status !== 'ok',
+    // Las 'failed' arrancan colapsadas: viven como tarjeta compacta en "Fotos No Reconocidas"
+    // (ver FailedPhotoCard) hasta que "Rellenar a Mano" las promueve a la lista principal ya
+    // desplegadas — no tiene sentido mostrar de entrada un formulario vacío por cada foto que
+    // falló, solo abruma la pantalla.
+    expanded: status === 'partial',
   };
 }
 
 const buildRowsFromResults = (results, mode, propertyDefault) => {
   const ok = (results?.succeeded || []).map((r) => buildRow(r, { status: r.name?.trim() ? 'ok' : 'partial', fileName: r.fileName, propertyDefault }));
-  const bad = (results?.failed || []).map((f) => buildRow({ type: mode === 'academia' ? 'Cantera' : 'Comprado', positions: [] }, { status: 'failed', fileName: f.fileName, propertyDefault }));
+  const bad = (results?.failed || []).map((f) => buildRow({ type: mode === 'academia' ? 'Cantera' : 'Comprado', positions: [] }, { status: 'failed', fileName: f.fileName, propertyDefault, file: f.file || null }));
   return [...ok, ...bad];
 };
 
@@ -128,9 +141,16 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, onToggleEx
             </div>
           )}
           {r.scanStatus === 'failed' && (
-            <button type="button" onClick={() => onRetry(r.id)} className="w-full py-2.5 rounded-lg border border-dashed border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest touch-manipulation">
-              <RefreshCcw size={12} /> Reintentar Escaneo
-            </button>
+            <div className="flex items-center gap-2">
+              {r.previewUrl ? (
+                <img src={r.previewUrl} alt="Foto original no reconocida" className="w-14 h-14 rounded-lg object-cover border border-border-subtle shrink-0" />
+              ) : (
+                <div className="w-14 h-14 rounded-lg bg-well-strong border border-border-subtle flex items-center justify-center shrink-0 text-fg-faint"><ImageOff size={18} /></div>
+              )}
+              <button type="button" onClick={() => onRetry(r.id)} className="flex-1 h-14 rounded-lg border border-dashed border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest touch-manipulation">
+                <RefreshCcw size={12} /> Reintentar Escaneo
+              </button>
+            </div>
           )}
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-0.5">
@@ -253,6 +273,38 @@ function ReviewSection({ title, icon: Icon, rows, mode, duplicateOf, existingMat
   );
 }
 
+// Tarjeta compacta de una foto que la IA no pudo leer en absoluto: miniatura de la foto
+// original (para que el usuario identifique a qué jugador correspondía) + tres acciones — nunca
+// arranca con un formulario vacío desplegado, eso queda solo para cuando el usuario elige
+// "Rellenar a Mano" (que la promueve a la lista principal de edición completa, ver
+// handleManualFill). Vive en su propia sección "Fotos No Reconocidas" al fondo de la revisión,
+// separada de los jugadores ya leídos con éxito.
+function FailedPhotoCard({ r, onRetry, onManualFill, onRemove }) {
+  return (
+    <div className="bg-well rounded-2xl border border-red-500/20 p-3 flex items-center gap-3">
+      {r.previewUrl ? (
+        <img src={r.previewUrl} alt="Foto no reconocida" className="w-14 h-14 rounded-xl object-cover border border-border-subtle shrink-0" />
+      ) : (
+        <div className="w-14 h-14 rounded-xl bg-well-strong border border-border-subtle flex items-center justify-center shrink-0 text-fg-faint"><ImageOff size={20} /></div>
+      )}
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <p className="text-[9px] font-black text-red-400 uppercase tracking-wide truncate">⚠️ Foto No Reconocida</p>
+        <div className="flex items-center gap-1.5">
+          <button type="button" onClick={() => onRetry(r.id)} title="Repetir foto" className="flex-1 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors flex items-center justify-center gap-1 text-[8px] font-black uppercase tracking-widest touch-manipulation">
+            <Camera size={11} /> Repetir
+          </button>
+          <button type="button" onClick={() => onManualFill(r.id)} title="Rellenar a mano" className="flex-1 py-1.5 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors flex items-center justify-center gap-1 text-[8px] font-black uppercase tracking-widest touch-manipulation">
+            <PenLine size={11} /> A Mano
+          </button>
+          <button type="button" onClick={() => onRemove(r.id)} title="Descartar" className="shrink-0 p-2 rounded-lg text-fg-faint hover:text-red-400 hover:bg-red-500/10 transition-colors touch-manipulation">
+            <Trash2 size={13} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Paso final de la carga masiva con IA (varias fotos escaneadas en cola por
 // scanPlayerCardsQueue, ver ScanPlayerCardModal): tabla de revisión INTERACTIVA con lo que
 // Gemini extrajo de cada foto — reutilizada por PlayerList, AcademyTab y los dos bloques de
@@ -297,11 +349,46 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
   const [saving, setSaving] = useState(false);
   const [saveProgress, setSaveProgress] = useState({ done: 0, total: 0 });
   const [saveError, setSaveError] = useState('');
+  // Aviso de guardado parcial (ver handleSaveAll): { savedCount, remainingCount } cuando quedan
+  // fotos sin resolver tras confirmar, o null el resto del tiempo.
+  const [rescuePrompt, setRescuePrompt] = useState(null);
+
+  // Las miniaturas de las filas fallidas son Object URLs (ver buildRow): se liberan al
+  // desmontar el modal para no acumular memoria en una sesión con muchas fotos. rowsRef se
+  // mantiene sincronizado con el último "rows" en cada render para que el cleanup (que solo se
+  // registra una vez, al montar) libere siempre el estado real en el momento del desmontaje, no
+  // una foto fija del primer render.
+  const rowsRef = useRef(rows);
+  useEffect(() => { rowsRef.current = rows; }, [rows]);
+  useEffect(() => () => {
+    rowsRef.current.forEach((r) => { if (r.previewUrl) URL.revokeObjectURL(r.previewUrl); });
+  }, []);
 
   const updateRow = (id, patch) => setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   const toggleExpand = (id) => setRows((prev) => prev.map((r) => (r.id === id ? { ...r, expanded: !r.expanded } : r)));
   const toggleExclude = (id) => setExcluded((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
-  const removeRow = (id) => { setRows((prev) => prev.filter((r) => r.id !== id)); setExcluded((prev) => { const next = new Set(prev); next.delete(id); return next; }); };
+  const removeRow = (id) => {
+    setRows((prev) => {
+      const target = prev.find((r) => r.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((r) => r.id !== id);
+    });
+    setExcluded((prev) => { const next = new Set(prev); next.delete(id); return next; });
+  };
+  // Igual que removeRow, pero para varias filas de golpe tras un guardado (ver handleSaveAll):
+  // una fila "Rellenar a Mano" ya guardada puede seguir arrastrando su previewUrl original, hay
+  // que liberarlo aquí también para no dejarlo colgado en memoria.
+  const removeSavedRows = (ids) => {
+    setRows((prev) => {
+      prev.forEach((r) => { if (ids.includes(r.id) && r.previewUrl) URL.revokeObjectURL(r.previewUrl); });
+      return prev.filter((r) => !ids.includes(r.id));
+    });
+  };
+  // "Rellenar a Mano" (ver FailedPhotoCard): promueve la fila fallida a la lista principal, ya
+  // desplegada para escribir directamente — sigue siendo scanStatus 'failed' (para conservar el
+  // aviso "completa a mano" dentro de su propio panel), pero manualFill:true la saca de la
+  // sección de fotos no reconocidas y la deja participar en el guardado como cualquier otra.
+  const handleManualFill = (id) => updateRow(id, { manualFill: true, expanded: true });
 
   // "Añadir más fotos/jugadores": anexa las filas del nuevo escaneo a las ya existentes (nunca
   // las sustituye) para poder seguir cargando capturas antes de confirmar todo junto. Los
@@ -329,7 +416,11 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
     const succeededRow = batchResults.succeeded?.[0];
     if (!succeededRow) return;
     const fresh = buildRow(succeededRow, { status: succeededRow.name?.trim() ? 'ok' : 'partial', fileName: succeededRow.fileName, propertyDefault });
-    setRows((prev) => prev.map((r) => (r.id === rowId ? { ...fresh, id: rowId } : r)));
+    setRows((prev) => prev.map((r) => {
+      if (r.id !== rowId) return r;
+      if (r.previewUrl) URL.revokeObjectURL(r.previewUrl); // La miniatura de la foto que falló ya no hace falta: el reintento trajo una nueva foto.
+      return { ...fresh, id: rowId };
+    }));
   };
 
   const retryModeFor = (rowId) => {
@@ -348,13 +439,20 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
     if (match) { duplicateOf[r.id] = true; existingMatches[r.id] = match; }
   });
 
-  const primerEquipoRows = rows.filter((r) => r.reviewType !== 'Cantera');
-  const academiaRows = rows.filter((r) => r.reviewType === 'Cantera');
+  // Una fila 'failed' sin "Rellenar a Mano" todavía no tiene ningún dato aprovechable: vive en
+  // su propia tarjeta compacta al fondo (unresolvedFailedRows), fuera de las secciones
+  // editables normales y fuera del guardado — así nunca bloquea "Confirmar y Guardar" ni exige
+  // completarla antes de poder guardar el resto de la plantilla (ver requisito de guardado
+  // parcial en handleSaveAll).
+  const unresolvedFailedRows = rows.filter((r) => r.scanStatus === 'failed' && !r.manualFill);
+  const mainRows = rows.filter((r) => !(r.scanStatus === 'failed' && !r.manualFill));
+
+  const primerEquipoRows = mainRows.filter((r) => r.reviewType !== 'Cantera');
+  const academiaRows = mainRows.filter((r) => r.reviewType === 'Cantera');
   const isMixedBatch = mode === 'primerEquipo' && primerEquipoRows.length > 0 && academiaRows.length > 0;
 
-  const includedRows = rows.filter((r) => !excluded.has(r.id));
+  const includedRows = mainRows.filter((r) => !excluded.has(r.id));
   const blockingRows = includedRows.filter((r) => Object.keys(getRowErrors(r)).length > 0);
-  const failedCount = rows.filter((r) => r.scanStatus === 'failed').length;
   const partialCount = rows.filter((r) => r.scanStatus === 'partial').length;
   const duplicateCount = Object.keys(duplicateOf).length;
   const reclassifiedCount = rows.filter((r) => r.reclassified).length;
@@ -366,6 +464,7 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
     setSaveError('');
     setSaveProgress({ done: 0, total: includedRows.length });
     let saved = 0;
+    const savedIds = [];
     try {
       for (const r of includedRows) {
         const isInitial = r.reviewType === 'Inicial';
@@ -389,12 +488,24 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
         // eslint-disable-next-line no-await-in-loop
         await addOrUpdatePlayer(payload, undefined, { skipFinancialEffects: skipInitialTransaction });
         saved += 1;
+        savedIds.push(r.id);
         setSaveProgress({ done: saved, total: includedRows.length });
       }
       onSaved?.(saved);
+      // Guardado parcial y rescate: si quedan fotos sin resolver en "Fotos No Reconocidas", no
+      // se cierra el modal — se quitan de la tabla las filas YA guardadas (para que reintentar
+      // más tarde no vuelva a guardarlas ni las duplique) y se avisa, dejando elegir entre
+      // resolver el resto ahora mismo o terminar.
+      if (unresolvedFailedRows.length > 0) {
+        removeSavedRows(savedIds);
+        setSaving(false);
+        setRescuePrompt({ savedCount: saved, remainingCount: unresolvedFailedRows.length });
+        return;
+      }
       onClose();
     } catch (err) {
       console.error('Error guardando jugadores en lote:', err);
+      removeSavedRows(savedIds);
       setSaveError(`Se guardaron ${saved} de ${includedRows.length} antes de fallar. Puedes reintentar con los que falten.`);
       setSaving(false);
     }
@@ -420,9 +531,9 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
             Se detectaron <span className="text-fg font-black">{rows.length}</span> tarjeta{rows.length === 1 ? '' : 's'}. Edita cualquier dato con el lápiz, descarta filas con la papelera y confirma el resto en un solo paso.
           </p>
 
-          {failedCount > 0 && (
+          {unresolvedFailedRows.length > 0 && (
             <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl flex gap-2 text-red-400 text-[10px] font-black items-center">
-              <ShieldAlert size={14} className="shrink-0" /><span>{failedCount} imagen{failedCount === 1 ? '' : 'es'} no reconocida{failedCount === 1 ? '' : 's'} — complétala{failedCount === 1 ? '' : 's'} a mano o descártala{failedCount === 1 ? '' : 's'}.</span>
+              <ShieldAlert size={14} className="shrink-0" /><span>{unresolvedFailedRows.length} foto{unresolvedFailedRows.length === 1 ? '' : 's'} no reconocida{unresolvedFailedRows.length === 1 ? '' : 's'} al fondo — repítela{unresolvedFailedRows.length === 1 ? '' : 's'}, rellénala{unresolvedFailedRows.length === 1 ? '' : 's'} a mano o descártala{unresolvedFailedRows.length === 1 ? '' : 's'}. No bloquean el guardado del resto.</span>
             </div>
           )}
           {partialCount > 0 && (
@@ -453,13 +564,35 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
 
           {rows.length === 0 ? (
             <div className="p-8 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Sin resultados aprovechables</div>
-          ) : isMixedBatch ? (
-            <>
-              <ReviewSection title="Primer Equipo" rows={primerEquipoRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
-              <ReviewSection title="Academia" icon={GraduationCap} rows={academiaRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
-            </>
           ) : (
-            <ReviewSection rows={rows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
+            <>
+              {mainRows.length > 0 && (
+                isMixedBatch ? (
+                  <>
+                    <ReviewSection title="Primer Equipo" rows={primerEquipoRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
+                    <ReviewSection title="Academia" icon={GraduationCap} rows={academiaRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
+                  </>
+                ) : (
+                  <ReviewSection rows={mainRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
+                )
+              )}
+
+              {/* Bloque inferior, separado de los jugadores ya leídos: una tarjeta compacta por
+                  cada foto que la IA no pudo leer en absoluto, con su propia miniatura y las
+                  tres acciones (Repetir / A Mano / Descartar) — ver FailedPhotoCard. */}
+              {unresolvedFailedRows.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 px-1 text-[9px] font-black uppercase tracking-widest text-red-400">
+                    <ShieldAlert size={12} className="shrink-0" /> Fotos No Reconocidas ({unresolvedFailedRows.length})
+                  </div>
+                  <div className="space-y-2">
+                    {unresolvedFailedRows.map((r) => (
+                      <FailedPhotoCard key={r.id} r={r} onRetry={(id) => setRescanTarget({ retryRowId: id })} onManualFill={handleManualFill} onRemove={removeRow} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           <button type="button" onClick={() => setRescanTarget('addMore')} className="w-full py-3 rounded-2xl border border-dashed border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest touch-manipulation">
@@ -482,6 +615,24 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
         onClose={() => setRescanTarget(null)}
         onBatchExtracted={rescanTarget === 'addMore' ? handleAddMoreExtracted : (batchResults) => handleRetryExtracted(rescanTarget.retryRowId, batchResults)}
       />
+    )}
+
+    {/* Guardado parcial: los jugadores leídos ya se guardaron en Firebase antes de llegar aquí
+        (ver handleSaveAll) — este aviso solo decide si el usuario se queda a resolver las fotos
+        que faltan (el modal sigue abierto, con esas fotos ya fuera de la tabla) o termina ya. */}
+    {rescuePrompt && (
+      <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="bg-surface border border-border w-full max-w-sm rounded-[28px] p-5 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="flex items-center gap-2 text-green-500 font-black text-sm uppercase mb-2"><Check size={18} className="shrink-0" /> Guardado Parcial</div>
+          <p className="text-xs font-bold text-fg-muted leading-relaxed mb-4">
+            Se han guardado {rescuePrompt.savedCount} jugador{rescuePrompt.savedCount === 1 ? '' : 'es'}. Tienes {rescuePrompt.remainingCount} foto{rescuePrompt.remainingCount === 1 ? '' : 's'} pendiente{rescuePrompt.remainingCount === 1 ? '' : 's'}. ¿Quieres reintentarlas ahora o terminar?
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl bg-well-strong text-fg font-black uppercase text-[10px] hover:brightness-125 transition-all touch-manipulation">Terminar</button>
+            <button type="button" onClick={() => setRescuePrompt(null)} className="flex-1 py-3 rounded-xl bg-blue-500 text-white font-black uppercase text-[10px] hover:bg-blue-400 transition-all touch-manipulation">Reintentar Ahora</button>
+          </div>
+        </div>
+      </div>
     )}
     </>
   );

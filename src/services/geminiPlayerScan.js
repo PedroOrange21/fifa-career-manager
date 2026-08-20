@@ -240,7 +240,9 @@ export function mapAcademyScanResultToPrefill(extracted) {
 // UI de revisión (BulkScanReviewModal) la que decide si mostrarlo como "lectura parcial" y
 // dejar que el usuario lo complete a mano o lo descarte, en vez de perderlo aquí en silencio.
 // Solo una excepción real ya sin reintentos posibles (red caída, respuesta inválida, o un
-// 429/503 persistente tras MAX_SCAN_RETRIES) va a "failed": { fileName, error }.
+// 429/503 persistente tras MAX_SCAN_RETRIES) va a "failed": { fileName, error, file } — "file"
+// es el File original (nunca el comprimido, por si prepareImageForScan fue justo lo que falló),
+// conservado para que la revisión pueda mostrar la miniatura de la foto que no se pudo leer.
 const DELAY_BETWEEN_CALLS_MS = 3000;
 export async function scanPlayerCardsQueue(files, mode, onProgress) {
   const mapper = mode === 'academia' ? mapAcademyScanResultToPrefill : mapScanResultToPrefill;
@@ -268,7 +270,7 @@ export async function scanPlayerCardsQueue(files, mode, onProgress) {
       report('done', { name: mapped.name || '', position: mapped.positions?.[0] || '', rating: mapped.rating || '' });
     } catch (err) {
       console.error('Error escaneando la imagen:', file.name, err);
-      failed.push({ fileName: file.name, error: err.message || 'No se pudo analizar la imagen.' });
+      failed.push({ fileName: file.name, error: err.message || 'No se pudo analizar la imagen.', file });
       report('failed', { error: err.message || 'No se pudo analizar la imagen.' });
     }
 
