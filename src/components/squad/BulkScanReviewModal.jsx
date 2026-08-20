@@ -269,7 +269,9 @@ function ReviewSection({ title, icon: Icon, rows, mode, duplicateOf, existingMat
 // - academyStepHint: texto opcional añadido entre paréntesis al aviso de canteranos
 //   redirigidos a Academia (ej. "podrás revisarlo en el Paso 5"), usado por OnboardingWizard
 //   para referenciar su propio paso — el resto de puntos de entrada lo dejan sin definir.
-export default function BulkScanReviewModal({ mode = 'primerEquipo', results, propertyDefault = 'Comprado', skipInitialTransaction = false, academyStepHint = '', onClose, onSaved }) {
+// - confirmLabel: texto del botón final, "Confirmar y Guardar Todo" por defecto; OnboardingWizard
+//   pasa "Confirmar y Guardar Plantilla" para su propia carga inicial.
+export default function BulkScanReviewModal({ mode = 'primerEquipo', results, propertyDefault = 'Comprado', skipInitialTransaction = false, academyStepHint = '', confirmLabel = 'Confirmar y Guardar Todo', onClose, onSaved }) {
   useBodyScrollLock();
   useAutoHideChrome();
   const { players, addOrUpdatePlayer } = useClubData();
@@ -467,7 +469,7 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
 
         <footer className="shrink-0 bg-surface border-t border-border-subtle px-5 pt-3 flex gap-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
           <button type="button" disabled={!canSave} onClick={handleSaveAll} className="flex-1 w-full py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-2 text-center hover:bg-green-400 transition-all disabled:opacity-50 disabled:hover:bg-green-500 touch-manipulation">
-            {saving ? (<><RefreshCcw size={16} className="shrink-0 animate-spin" /> Guardando {saveProgress.done} de {saveProgress.total}...</>) : (<><Check size={16} className="shrink-0" /> Confirmar y Guardar Todo ({includedRows.length})</>)}
+            {saving ? (<><RefreshCcw size={16} className="shrink-0 animate-spin" /> Guardando {saveProgress.done} de {saveProgress.total}...</>) : (<><Check size={16} className="shrink-0" /> {confirmLabel} ({includedRows.length})</>)}
           </button>
         </footer>
       </div>

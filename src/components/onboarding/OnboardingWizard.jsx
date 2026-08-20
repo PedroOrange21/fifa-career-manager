@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Check, ChevronLeft, ChevronRight, ChevronDown, Plus, Wallet, Users, Sparkles, RotateCcw, Shield, Camera, RefreshCcw, ShieldAlert, Trash2, Pencil, Video, Images } from 'lucide-react';
+import { X, Check, ChevronLeft, ChevronRight, ChevronDown, Plus, Wallet, Users, Sparkles, RotateCcw, Shield, Camera, RefreshCcw, ShieldAlert, Trash2, Pencil, Images } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency, formatValueInput, parseValue, weeklyWageBudgetFromTransfer } from '../../utils/format';
@@ -8,7 +8,6 @@ import { getCardStyle } from '../../utils/cardStyle';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import PlayerForm from '../squad/PlayerForm';
 import ScanPlayerCardModal from '../squad/ScanPlayerCardModal';
-import VideoScanModal from '../squad/VideoScanModal';
 import BulkScanReviewModal from '../squad/BulkScanReviewModal';
 import ConfirmModal from '../common/ConfirmModal';
 
@@ -104,18 +103,14 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const [addingPlayerMode, setAddingPlayerMode] = useState(null); // 'active' | 'academy' | null
 
   // --- Carga masiva con IA: aquí el usuario típicamente mete 20-30 jugadores de golpe, así que
-  // el Vídeo es la opción destacada (pasar el joystick por la plantilla/Academia unos 20-30
-  // segundos) y el lote de fotos queda como alternativa — mismo ScanPlayerCardModal/
-  // BulkScanReviewModal que reutilizan PlayerList y AcademyTab. forceBatch=true en
-  // ScanPlayerCardModal para que incluso UNA sola foto pase por la tabla de revisión en vez de
-  // abrir PlayerForm directamente — aquí la intención es siempre "carga masiva", nunca una
-  // ficha individual paso a paso. Vídeo: VideoScanModal extrae los fotogramas EN LOCAL
-  // (extractFramesFromVideo) y los deja en pendingVideoFrames, que ScanPlayerCardModal consume
-  // vía "initialFiles" para arrancar el escaneo directo, sin mostrar su propio selector de
-  // cámara/galería. ---
+  // "Cargar Plantilla" es la opción destacada — abre ScanPlayerCardModal directamente en modo
+  // lote (forceBatch=true), que ya ofrece las dos vías de captura masiva por sí mismo: subir
+  // varias fotos a la vez desde la galería, o modo ráfaga con la cámara (disparar foto tras
+  // foto sin volver a la pantalla de selección entre medias, ver cameraQueue en
+  // ScanPlayerCardModal). forceBatch=true además fuerza que incluso UNA sola foto pase por la
+  // tabla de revisión (BulkScanReviewModal) en vez de abrir PlayerForm directamente — aquí la
+  // intención siempre es "carga masiva", nunca una ficha individual paso a paso. ---
   const [bulkScanMode, setBulkScanMode] = useState(null); // 'active' | 'academy' | null
-  const [videoScanMode, setVideoScanMode] = useState(null); // 'active' | 'academy' | null
-  const [pendingVideoFrames, setPendingVideoFrames] = useState(null);
   const [bulkReview, setBulkReview] = useState(null);
 
   // --- Paso Resumen: desglose desplegable de las dos listas ("Jugadores"/"Canteranos"), con
@@ -263,7 +258,6 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const handleBulkScanExtracted = (results) => {
     setBulkReview({ ...bulkScanPropsFor(bulkScanMode), results });
     setBulkScanMode(null);
-    setPendingVideoFrames(null);
   };
 
   const STEP_LABELS = {
@@ -411,21 +405,16 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                     ))}
                   </div>
                   {/* Opción principal destacada: aquí el usuario típicamente mete 20-30
-                      jugadores de golpe, así que el vídeo (pasar el joystick por la plantilla)
-                      es el camino rápido recomendado; fotos y manual quedan como alternativas
-                      secundarias, no escondidas pero sin competir en protagonismo. */}
-                  <button type="button" onClick={() => setVideoScanMode('active')} className="w-full py-4 rounded-2xl bg-blue-600 text-white hover:bg-blue-500 transition-all flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest touch-manipulation shadow-lg shadow-blue-600/20">
-                    <Video size={16} /> Escanear Plantilla con Vídeo (Rápido)
+                      jugadores de golpe, así que "Cargar Plantilla" (lote de fotos o ráfaga con
+                      cámara, ambos dentro de ScanPlayerCardModal) es el camino rápido
+                      recomendado; Manual queda como alternativa secundaria. */}
+                  <button type="button" onClick={() => setBulkScanMode('active')} className="w-full py-4 rounded-2xl bg-blue-600 text-white hover:bg-blue-500 transition-all flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest touch-manipulation shadow-lg shadow-blue-600/20">
+                    <Images size={16} /> Cargar Plantilla (Lote de Fotos / Ráfaga)
                   </button>
-                  <p className="text-[9px] font-bold text-fg-faint text-center px-2 -mt-1.5">Pasa tu plantilla en 30 segundos con el joystick y la IA cargará todo tu equipo.</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => { setPendingVideoFrames(null); setBulkScanMode('active'); }} className="py-3 rounded-2xl border border-dashed border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
-                      <Images size={13} /> Subir Lote de Fotos
-                    </button>
-                    <button type="button" onClick={() => setAddingPlayerMode('active')} className="py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
-                      <Plus size={13} /> Manual
-                    </button>
-                  </div>
+                  <p className="text-[9px] font-bold text-fg-faint text-center px-2 -mt-1.5">Haz fotos nítidas a la tarjeta de finanzas de cada jugador pasando con el joystick.</p>
+                  <button type="button" onClick={() => setAddingPlayerMode('active')} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
+                    <Plus size={13} /> Manual
+                  </button>
                 </div>
               )}
 
@@ -458,18 +447,13 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                           </div>
                         ))}
                       </div>
-                      <button type="button" onClick={() => setVideoScanMode('academy')} className="w-full py-4 rounded-2xl bg-blue-600 text-white hover:bg-blue-500 transition-all flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest touch-manipulation shadow-lg shadow-blue-600/20">
-                        <Video size={16} /> Escanear Academia con Vídeo (Rápido)
+                      <button type="button" onClick={() => setBulkScanMode('academy')} className="w-full py-4 rounded-2xl bg-blue-600 text-white hover:bg-blue-500 transition-all flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest touch-manipulation shadow-lg shadow-blue-600/20">
+                        <Images size={16} /> Cargar Academia (Lote de Fotos / Ráfaga)
                       </button>
-                      <p className="text-[9px] font-bold text-fg-faint text-center px-2 -mt-1.5">Pasa tu Academia en 30 segundos con el joystick y la IA cargará todos tus canteranos.</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button type="button" onClick={() => { setPendingVideoFrames(null); setBulkScanMode('academy'); }} className="py-3 rounded-2xl border border-dashed border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
-                          <Images size={13} /> Subir Lote de Fotos
-                        </button>
-                        <button type="button" onClick={() => setAddingPlayerMode('academy')} className="py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
-                          <Plus size={13} /> Manual
-                        </button>
-                      </div>
+                      <p className="text-[9px] font-bold text-fg-faint text-center px-2 -mt-1.5">Haz fotos nítidas a la tarjeta de finanzas de cada canterano pasando con el joystick.</p>
+                      <button type="button" onClick={() => setAddingPlayerMode('academy')} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
+                        <Plus size={13} /> Manual
+                      </button>
                     </>
                   )}
                 </div>
@@ -571,24 +555,11 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
         <PlayerForm {...playerFormPropsFor(addingPlayerMode)} onClose={() => setAddingPlayerMode(null)} />
       )}
 
-      {videoScanMode && (
-        <VideoScanModal
-          scanNoun={videoScanMode === 'academy' ? 'canterano' : 'jugador'}
-          onClose={() => setVideoScanMode(null)}
-          onBack={() => setVideoScanMode(null)}
-          onFramesExtracted={(frames) => {
-            setPendingVideoFrames(frames);
-            setBulkScanMode(videoScanMode);
-            setVideoScanMode(null);
-          }}
-        />
-      )}
       {bulkScanMode && (
         <ScanPlayerCardModal
           mode={bulkScanMode === 'academy' ? 'academia' : 'primerEquipo'}
           forceBatch
-          initialFiles={pendingVideoFrames}
-          onClose={() => { setBulkScanMode(null); setPendingVideoFrames(null); }}
+          onClose={() => setBulkScanMode(null)}
           onBatchExtracted={handleBulkScanExtracted}
         />
       )}
@@ -599,6 +570,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
           propertyDefault={bulkReview.propertyDefault}
           skipInitialTransaction={bulkReview.skipInitialTransaction}
           academyStepHint="podrás revisarlo en el Paso 5"
+          confirmLabel="Confirmar y Guardar Plantilla"
           onClose={() => setBulkReview(null)}
         />
       )}

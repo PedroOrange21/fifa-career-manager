@@ -142,6 +142,10 @@ null, un canterano no tiene esos datos. Si es una tarjeta de primer equipo norma
 Reglas importantes:
 - Todos los importes en euros deben ir como número entero puro, SIN puntos de miles, SIN comas, SIN el símbolo "€" y sin abreviar (ej. escribe 45000000, nunca "45M" ni "45.000.000 €").
 - Si un dato no aparece visible en la imagen o no puedes leerlo con confianza, devuelve null en ese campo — no inventes ni adivines valores.
+- Prioridad de la extracción: nombre, media y posición principal son los datos que de verdad
+  importan. Si están visibles, responde SIEMPRE con el JSON completo aunque falten datos
+  secundarios (cláusula, prima, nacionalidad, pierna buena...) — pon esos campos a null en vez
+  de fallar la extracción entera por un dato menor que no se ve bien en la foto.
 - No incluyas en la respuesta ningún dato fuera del esquema indicado (nada de altura, peso, cláusula de reventa, primas extra o prima de fichaje): esos campos ya no existen en la ficha de la aplicación.
 - Responde exclusivamente con el JSON que cumpla el esquema indicado, sin texto adicional.`;
 

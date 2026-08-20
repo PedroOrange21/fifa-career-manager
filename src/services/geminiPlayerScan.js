@@ -226,10 +226,13 @@ export function mapAcademyScanResultToPrefill(extracted) {
 // entre la finalización de un jugador y la llamada del siguiente para respetar la cuota de
 // peticiones por minuto (RPM) de Gemini en lotes grandes.
 // onProgress(info) se invoca en cada cambio de fase de la foto en curso — { index (0-based),
-// total, fileName, phase, attempt?, delayMs? } — phase es 'preparing' (comprimiendo),
-// 'scanning' (llamando a Gemini) o 'retrying' (esperando tras un 429/503 antes de reintentar,
-// con attempt/delayMs del intento en curso) — para que la UI pueda mostrar un texto y un
-// porcentaje específicos de cada sub-fase en vez de un "procesando..." genérico.
+// total, fileName, phase, attempt?, delayMs?, name?, error? } — phase es 'preparing'
+// (comprimiendo), 'scanning' (llamando a Gemini), 'retrying' (esperando tras un 429/503 antes
+// de reintentar, con attempt/delayMs del intento en curso), 'done' (terminó con éxito, "name"
+// trae el nombre detectado — puede venir vacío en una lectura parcial) o 'failed' (terminó sin
+// aprovechar nada, "error" trae el motivo) — para que la UI pueda mostrar un texto y un
+// porcentaje específicos de cada sub-fase, y una lista en directo tipo "✅ Añadido: Fulano" en
+// vez de un "procesando..." genérico.
 // Tolerancia a fallos por imagen (cola con try/catch, nunca Promise.all: una imagen que
 // truena no debe tirar abajo el resto del lote): cada resultado logrado, incluso si viene
 // incompleto (p. ej. sin nombre legible), se añade a "succeeded" con su fileName — es la propia
@@ -259,10 +262,13 @@ export async function scanPlayerCardsQueue(files, mode, onProgress) {
 
       report('scanning');
       const extracted = await scanPlayerCard(preparedFile, mode, (attempt, delayMs) => report('retrying', { attempt, delayMs }));
-      succeeded.push({ ...mapper(extracted), fileName: file.name });
+      const mapped = { ...mapper(extracted), fileName: file.name };
+      succeeded.push(mapped);
+      report('done', { name: mapped.name || '' });
     } catch (err) {
       console.error('Error escaneando la imagen:', file.name, err);
       failed.push({ fileName: file.name, error: err.message || 'No se pudo analizar la imagen.' });
+      report('failed', { error: err.message || 'No se pudo analizar la imagen.' });
     }
 
     // No hace falta esperar tras la última: solo se frena entre llamadas consecutivas de verdad.

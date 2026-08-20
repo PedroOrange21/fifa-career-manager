@@ -11,8 +11,6 @@ import { ALL_POSITIONS } from '../../constants/positions';
 import PlayerForm from '../squad/PlayerForm';
 import PlayerInfoModal from '../squad/PlayerInfoModal';
 import AddPlayerChoiceModal from '../squad/AddPlayerChoiceModal';
-import BulkScanEntryModal from '../squad/BulkScanEntryModal';
-import VideoScanModal from '../squad/VideoScanModal';
 import ScanPlayerCardModal from '../squad/ScanPlayerCardModal';
 import BulkScanReviewModal from '../squad/BulkScanReviewModal';
 import ConfirmModal from '../common/ConfirmModal';
@@ -284,12 +282,11 @@ export default function AcademyTab() {
   // los mismos componentes que reutiliza PlayerList para su propio flujo de "Fichar Jugador".
   // Con una sola foto, el escaneo abre PlayerForm en el Paso 4 (Revisión); con varias, abre
   // BulkScanReviewModal con la tabla de revisión y guardado en lote.
-  const [addStep, setAddStep] = useState(null); // null | 'method' | 'bulkEntry' | 'video' | 'scan'
-  // scanForceBatch/pendingVideoFrames: solo relevantes cuando se llega a 'scan' desde el enlace
-  // "¿Quieres añadir varios a la vez?" del propio Paso de Método (ver BulkScanEntryModal/
-  // VideoScanModal) — la vía normal de un solo canterano nunca los toca.
+  const [addStep, setAddStep] = useState(null); // null | 'method' | 'scan'
+  // scanForceBatch: solo relevante cuando se llega a 'scan' desde el enlace "¿Quieres añadir
+  // varios a la vez?" del propio Paso de Método — la vía normal de un solo canterano nunca lo
+  // toca, así que ScanPlayerCardModal sigue con su comportamiento de una sola foto por defecto.
   const [scanForceBatch, setScanForceBatch] = useState(false);
-  const [pendingVideoFrames, setPendingVideoFrames] = useState(null);
   const [bulkReview, setBulkReview] = useState(null);
 
   // Cada modal (PromoteToFirstTeamModal, UpdateRatingModal, PlayerForm) oculta la cabecera y
@@ -445,36 +442,18 @@ export default function AcademyTab() {
           scanNoun="canterano"
           onClose={() => setAddStep(null)}
           onManual={openNewForm}
-          onScan={() => { setScanForceBatch(false); setPendingVideoFrames(null); setAddStep('scan'); }}
-          onBulk={() => setAddStep('bulkEntry')}
-        />
-      )}
-      {addStep === 'bulkEntry' && (
-        <BulkScanEntryModal
-          scanNoun="canterano"
-          onClose={() => setAddStep(null)}
-          onBack={() => setAddStep('method')}
-          onVideo={() => setAddStep('video')}
-          onPhotos={() => { setScanForceBatch(true); setPendingVideoFrames(null); setAddStep('scan'); }}
-        />
-      )}
-      {addStep === 'video' && (
-        <VideoScanModal
-          scanNoun="canterano"
-          onClose={() => setAddStep(null)}
-          onBack={() => setAddStep('bulkEntry')}
-          onFramesExtracted={(frames) => { setPendingVideoFrames(frames); setScanForceBatch(true); setAddStep('scan'); }}
+          onScan={() => { setScanForceBatch(false); setAddStep('scan'); }}
+          onBulk={() => { setScanForceBatch(true); setAddStep('scan'); }}
         />
       )}
       {addStep === 'scan' && (
         <ScanPlayerCardModal
           mode="academia"
           forceBatch={scanForceBatch}
-          initialFiles={pendingVideoFrames}
-          onClose={() => { setAddStep(null); setPendingVideoFrames(null); }}
-          onBack={() => setAddStep(scanForceBatch ? 'bulkEntry' : 'method')}
+          onClose={() => setAddStep(null)}
+          onBack={() => setAddStep('method')}
           onExtracted={handleScanExtracted}
-          onBatchExtracted={(results) => { setPendingVideoFrames(null); handleBatchScanExtracted(results); }}
+          onBatchExtracted={handleBatchScanExtracted}
         />
       )}
       {bulkReview && (

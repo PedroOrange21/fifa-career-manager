@@ -24,11 +24,12 @@ const isHeic = (file) => {
   return HEIC_MIME_TYPES.includes(type) || name.endsWith('.heic') || name.endsWith('.heif');
 };
 
-// Redimensionado agresivo antes de enviar a la API: ancho/alto máximo 1200px (conservando la
-// relación de aspecto) y JPEG a calidad 0.75 — cada foto enviada queda holgadamente por debajo
-// de los 200-300 KB objetivo para lotes de decenas de fotos en conexiones móviles.
-const MAX_DIMENSION = 1200;
-const JPEG_QUALITY = 0.75;
+// Redimensionado estricto antes de enviar a la API: ancho/alto máximo 1000px (conservando la
+// relación de aspecto) y JPEG a calidad 0.70 — cada foto enviada queda por debajo de los
+// ~150 KB objetivo, imprescindible para lotes de 20-30 fotos en modo ráfaga sobre una conexión
+// móvil sin bloquear el payload de las funciones Serverless de Vercel.
+const MAX_DIMENSION = 1000;
+const JPEG_QUALITY = 0.70;
 
 // Carga el archivo como elemento <img> (respaldo cuando no hay createImageBitmap, o cuando
 // createImageBitmap del propio archivo falla — p. ej. Chrome/Firefox con un HEIC). El Object

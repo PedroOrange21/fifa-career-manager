@@ -10,7 +10,9 @@ import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 // temporada) para prerrellenarlo automáticamente. onBack, si se pasa, vuelve al paso anterior
 // sin cerrar del todo el flujo. onBulk (opcional) añade un enlace sutil al pie para el caso
 // ocasional de dar de alta VARIOS jugadores a la vez (reestructuración grande a mitad de
-// temporada) sin invadir el protagonismo de la vía individual — ver BulkScanEntryModal.
+// temporada) sin invadir el protagonismo de la vía individual — abre directamente
+// ScanPlayerCardModal en modo lote (forceBatch), que ya ofrece lote de fotos o modo ráfaga con
+// cámara por sí mismo.
 export default function AddPlayerChoiceModal({ onManual, onScan, onBulk, onClose, onBack, scanNoun = 'jugador' }) {
   useBodyScrollLock();
   useAutoHideChrome();
@@ -48,7 +50,7 @@ export default function AddPlayerChoiceModal({ onManual, onScan, onBulk, onClose
         </div>
         {onBulk && (
           <button type="button" onClick={onBulk} className="w-full text-center mt-4 text-[10px] font-bold text-fg-faint hover:text-blue-400 transition-colors touch-manipulation underline decoration-dotted underline-offset-4">
-            ¿Quieres añadir varios a la vez? Subir lote o vídeo
+            ¿Quieres añadir varios a la vez? Lote de fotos o modo ráfaga
           </button>
         )}
       </div>

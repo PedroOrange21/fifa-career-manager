@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, ChevronLeft, Camera, Image as ImageIcon, ShieldAlert, ScanLine, CopyX, Trash2, Zap } from 'lucide-react';
+import { X, ChevronLeft, Camera, Image as ImageIcon, ShieldAlert, ScanLine, CopyX, Trash2, Zap, Check, Loader2, AlertTriangle } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import { useClubData } from '../../context/ClubDataContext';
@@ -58,12 +58,9 @@ const batchLabelFor = (info, scanNoun) => {
 // acumulando en "cameraQueue" (con miniatura) — el usuario puede seguir pulsando "Hacer otra
 // foto" para encadenar varias antes de lanzar el escaneo de todas juntas con "Escanear fotos".
 // La galería no necesita esto: ya admite selección múltiple nativa en un solo picker.
-// initialFiles: fotogramas ya extraídos de un vídeo (ver VideoScanModal/extractFramesFromVideo)
-// — si se pasan, el escaneo arranca directamente al montar, sin mostrar la pantalla de
-// selección de origen (el usuario ya eligió "vídeo" en el paso anterior).
 // onBack (oculto durante el escaneo, igual que el cierre) vuelve al paso anterior sin perder el
 // flujo de alta.
-export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtracted, onBack, mode = 'primerEquipo', forceBatch = false, initialFiles = null }) {
+export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtracted, onBack, mode = 'primerEquipo', forceBatch = false }) {
   useBodyScrollLock();
   useAutoHideChrome();
   const { players } = useClubData();
@@ -71,6 +68,12 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
   const [status, setStatus] = useState('idle'); // 'idle' | 'capturing' | 'scanning' | 'batchScanning' | 'duplicate' | 'error'
   const [progress, setProgress] = useState(0);
   const [batchInfo, setBatchInfo] = useState(null); // { index, total, fileName, phase, attempt?, delayMs? }
+  // Lista de detección en directo del escaneo en lote: una fila por foto, que va pasando de
+  // "en cola" a "procesando" y por fin a "✅ Añadido: Nombre" o "⚠️ No leída" en cuanto
+  // scanPlayerCardsQueue reporta la fase 'done'/'failed' de esa foto concreta — así el usuario
+  // ve avanzar el lote entero, no solo un porcentaje genérico.
+  const [scanEntries, setScanEntries] = useState([]); // [{ index, fileName, status, name?, error? }]
+  const scanListRef = useRef(null);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState('');
   // Escaneo individual que resultó ser un posible duplicado de un jugador ya registrado (ver
@@ -176,7 +179,16 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
   const processBatch = async (files) => {
     setStatus('batchScanning');
     setBatchInfo({ index: 0, total: files.length, fileName: files[0]?.name || '', phase: 'preparing' });
-    const results = await scanPlayerCardsQueue(files, mode, (info) => setBatchInfo(info));
+    setScanEntries(files.map((f, i) => ({ index: i, fileName: f.name, status: 'pending' })));
+    const results = await scanPlayerCardsQueue(files, mode, (info) => {
+      setBatchInfo(info);
+      setScanEntries((prev) => prev.map((entry) => {
+        if (entry.index !== info.index) return entry;
+        if (info.phase === 'done') return { ...entry, status: 'done', name: info.name || '' };
+        if (info.phase === 'failed') return { ...entry, status: 'failed', error: info.error };
+        return { ...entry, status: 'processing' };
+      }));
+    });
     if (results.succeeded.length === 0) {
       setError('No se pudo extraer ningún dato de las fotos seleccionadas. Inténtalo de nuevo con fotos más nítidas.');
       setStatus('error');
@@ -185,22 +197,19 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
     onBatchExtracted(results);
   };
 
+  // Autoscroll de la lista de detección en directo hacia la foto en curso, para que en lotes
+  // largos (20-30 fotos) el usuario nunca tenga que desplazarse a mano para ver el avance.
+  useEffect(() => {
+    if (!scanListRef.current) return;
+    scanListRef.current.scrollTo({ top: scanListRef.current.scrollHeight, behavior: 'smooth' });
+  }, [scanEntries]);
+
   const processFiles = (files) => {
     if (!files.length) return;
     setError('');
     if (files.length === 1 && !forceBatch) processSingleFile(files[0]);
     else processBatch(files);
   };
-
-  // "initialFiles" (fotogramas ya extraídos de un vídeo por VideoScanModal, ver
-  // extractFramesFromVideo): si vienen dados de antemano, se arranca el escaneo directamente al
-  // montar el modal, sin pasar por la pantalla de "Tomar Foto"/"Subir desde Galería" — el
-  // usuario ya eligió el vídeo como origen en el paso anterior. Solo una vez por montaje
-  // (mismo modal nunca reutiliza otro juego de initialFiles sin desmontarse primero).
-  useEffect(() => {
-    if (initialFiles?.length) processFiles(initialFiles);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Selección desde galería: admite varias a la vez en un único picker nativo, así que se
   // procesan de inmediato tal cual las entrega el input — no pasa por la cola de captura.
@@ -279,8 +288,7 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
         )}
 
         {status === 'batchScanning' && batchInfo && (
-          <div className="flex flex-col items-center gap-4 py-8">
-            <ScanLine size={28} className="text-blue-400 animate-pulse" />
+          <div className="space-y-3 py-2">
             <div className="w-full space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[10px] font-black uppercase tracking-widest text-fg-muted truncate">
@@ -291,7 +299,25 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
               <div className="w-full h-2 rounded-full bg-well-strong overflow-hidden">
                 <div className="h-full bg-blue-500 rounded-full transition-[width] duration-300 ease-out" style={{ width: `${batchPercent}%` }} />
               </div>
-              <p className="text-[9px] font-bold text-fg-faint text-center truncate">{batchInfo.fileName}</p>
+            </div>
+
+            {/* Lista de detección en directo: se va llenando fila a fila conforme avanza la
+                cola secuencial, sin esperar a que termine el lote entero. */}
+            <div ref={scanListRef} className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle max-h-64 overflow-y-auto">
+              {scanEntries.map((entry) => (
+                <div key={entry.index} className="px-3 py-2 flex items-center gap-2">
+                  {entry.status === 'done' && <Check size={13} className="text-green-500 shrink-0" />}
+                  {entry.status === 'failed' && <AlertTriangle size={13} className="text-yellow-500 shrink-0" />}
+                  {entry.status === 'processing' && <Loader2 size={13} className="text-blue-400 shrink-0 animate-spin" />}
+                  {entry.status === 'pending' && <div className="w-[13px] h-[13px] rounded-full border border-border-subtle shrink-0" />}
+                  <span className={`text-[10px] font-bold truncate ${entry.status === 'done' ? 'text-fg' : entry.status === 'failed' ? 'text-yellow-500' : entry.status === 'processing' ? 'text-blue-400' : 'text-fg-faint'}`}>
+                    {entry.status === 'done' && `✅ Añadido: ${entry.name || 'Sin nombre legible'}`}
+                    {entry.status === 'failed' && '⚠️ No leída'}
+                    {entry.status === 'processing' && `Procesando foto ${entry.index + 1} de ${scanEntries.length}...`}
+                    {entry.status === 'pending' && `Foto ${entry.index + 1}: en cola`}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -349,8 +375,8 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
             <div className="p-3 rounded-2xl bg-well border border-border-subtle">
               <p className="text-[10px] font-bold text-fg-muted leading-relaxed">
                 {mode === 'academia'
-                  ? <>Enfoca bien la tarjeta del canterano en la sección <span className="text-fg font-black">Academia</span> de tu Modo Carrera (media, potencial, posición...) y haz la foto con buena luz. Puedes encadenar varias fotos seguidas con la cámara, o subir varias a la vez desde la galería.</>
-                  : <>Enfoca bien la tarjeta del jugador en la sección <span className="text-fg font-black">Plantilla</span> o <span className="text-fg font-black">Finanzas</span> de tu Modo Carrera (media, posición, sueldo, valor de mercado...) y haz la foto con buena luz, sin recortar los datos. Puedes encadenar varias fotos seguidas con la cámara, o subir varias a la vez desde la galería.</>}
+                  ? <>Haz fotos nítidas a la tarjeta de finanzas de cada canterano pasando con el joystick por la <span className="text-fg font-black">Academia</span>. Puedes disparar foto tras foto con la cámara (modo ráfaga) sin salir a la pantalla de carga entre medias, o subir varias a la vez desde la galería.</>
+                  : <>Haz fotos nítidas a la tarjeta de finanzas de cada jugador pasando con el joystick por la <span className="text-fg font-black">Plantilla</span>. Puedes disparar foto tras foto con la cámara (modo ráfaga) sin salir a la pantalla de carga entre medias, o subir varias a la vez desde la galería.</>}
               </p>
             </div>
 
