@@ -68,11 +68,13 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
   const [status, setStatus] = useState('idle'); // 'idle' | 'capturing' | 'scanning' | 'batchScanning' | 'duplicate' | 'error'
   const [progress, setProgress] = useState(0);
   const [batchInfo, setBatchInfo] = useState(null); // { index, total, fileName, phase, attempt?, delayMs? }
-  // Lista de detección en directo del escaneo en lote: una fila por foto, que va pasando de
-  // "en cola" a "procesando" y por fin a "✅ Añadido: Nombre" o "⚠️ No leída" en cuanto
-  // scanPlayerCardsQueue reporta la fase 'done'/'failed' de esa foto concreta — así el usuario
-  // ve avanzar el lote entero, no solo un porcentaje genérico.
-  const [scanEntries, setScanEntries] = useState([]); // [{ index, fileName, status, name?, error? }]
+  // Lista de detección en directo del escaneo en lote: SOLO se añade una fila cuando
+  // scanPlayerCardsQueue reporta la fase 'done'/'failed' de una foto (nunca se pre-rellena con
+  // "en cola" para las que faltan) — así crece hacia abajo en orden cronológico estricto
+  // (1º, 2º, 3º...) sin reordenarse ni mostrar un muro de fotos pendientes que infle el
+  // contenedor. La foto EN CURSO se muestra aparte, en una línea compacta de estado (ver
+  // batchInfo más abajo), no como fila de esta lista.
+  const [completedEntries, setCompletedEntries] = useState([]); // [{ index, fileName, status: 'done'|'failed', name?, position?, rating?, error? }]
   const scanListRef = useRef(null);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState('');
@@ -179,15 +181,22 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
   const processBatch = async (files) => {
     setStatus('batchScanning');
     setBatchInfo({ index: 0, total: files.length, fileName: files[0]?.name || '', phase: 'preparing' });
-    setScanEntries(files.map((f, i) => ({ index: i, fileName: f.name, status: 'pending' })));
+    setCompletedEntries([]);
     const results = await scanPlayerCardsQueue(files, mode, (info) => {
       setBatchInfo(info);
-      setScanEntries((prev) => prev.map((entry) => {
-        if (entry.index !== info.index) return entry;
-        if (info.phase === 'done') return { ...entry, status: 'done', name: info.name || '' };
-        if (info.phase === 'failed') return { ...entry, status: 'failed', error: info.error };
-        return { ...entry, status: 'processing' };
-      }));
+      if (info.phase === 'done' || info.phase === 'failed') {
+        // Append-only: cada foto terminada se añade UNA vez, al final, en el mismo orden en que
+        // la cola secuencial las procesa — nunca se reordena ni se reescribe una fila ya pintada.
+        setCompletedEntries((prev) => [...prev, {
+          index: info.index,
+          fileName: info.fileName,
+          status: info.phase,
+          name: info.name || '',
+          position: info.position || '',
+          rating: info.rating || '',
+          error: info.error,
+        }]);
+      }
     });
     if (results.succeeded.length === 0) {
       setError('No se pudo extraer ningún dato de las fotos seleccionadas. Inténtalo de nuevo con fotos más nítidas.');
@@ -197,12 +206,14 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
     onBatchExtracted(results);
   };
 
-  // Autoscroll de la lista de detección en directo hacia la foto en curso, para que en lotes
-  // largos (20-30 fotos) el usuario nunca tenga que desplazarse a mano para ver el avance.
+  // Autoscroll SUAVE (behavior: 'smooth') del último jugador detectado, acotado al propio
+  // contenedor de la lista (scanListRef, con su overflow-y-auto) — nunca scrollIntoView ni
+  // window.scrollTo, que arrastrarían toda la ventana/página del móvil en vez de solo esta
+  // lista interna.
   useEffect(() => {
     if (!scanListRef.current) return;
     scanListRef.current.scrollTo({ top: scanListRef.current.scrollHeight, behavior: 'smooth' });
-  }, [scanEntries]);
+  }, [completedEntries]);
 
   const processFiles = (files) => {
     if (!files.length) return;
@@ -292,7 +303,7 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
             <div className="w-full space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[10px] font-black uppercase tracking-widest text-fg-muted truncate">
-                  {batchLabelFor(batchInfo, scanNoun)}
+                  {scanNoun === 'canterano' ? 'Escaneando Academia' : 'Escaneando plantilla'}
                 </p>
                 <span className="text-xs font-black text-blue-400 tabular-nums shrink-0">{batchPercent}%</span>
               </div>
@@ -301,23 +312,35 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
               </div>
             </div>
 
-            {/* Lista de detección en directo: se va llenando fila a fila conforme avanza la
-                cola secuencial, sin esperar a que termine el lote entero. */}
-            <div ref={scanListRef} className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle max-h-64 overflow-y-auto">
-              {scanEntries.map((entry) => (
-                <div key={entry.index} className="px-3 py-2 flex items-center gap-2">
-                  {entry.status === 'done' && <Check size={13} className="text-green-500 shrink-0" />}
-                  {entry.status === 'failed' && <AlertTriangle size={13} className="text-yellow-500 shrink-0" />}
-                  {entry.status === 'processing' && <Loader2 size={13} className="text-blue-400 shrink-0 animate-spin" />}
-                  {entry.status === 'pending' && <div className="w-[13px] h-[13px] rounded-full border border-border-subtle shrink-0" />}
-                  <span className={`text-[10px] font-bold truncate ${entry.status === 'done' ? 'text-fg' : entry.status === 'failed' ? 'text-yellow-500' : entry.status === 'processing' ? 'text-blue-400' : 'text-fg-faint'}`}>
-                    {entry.status === 'done' && `✅ Añadido: ${entry.name || 'Sin nombre legible'}`}
-                    {entry.status === 'failed' && '⚠️ No leída'}
-                    {entry.status === 'processing' && `Procesando foto ${entry.index + 1} de ${scanEntries.length}...`}
-                    {entry.status === 'pending' && `Foto ${entry.index + 1}: en cola`}
-                  </span>
+            {/* Detectados: crece hacia abajo en orden cronológico estricto (1º, 2º, 3º...),
+                solo se añade una fila cuando esa foto YA terminó — nunca se pre-rellena con las
+                pendientes, así el contenedor nunca se infla con un muro de "en cola". Altura
+                acotada (max-h) + overflow-y-auto propio: el autoscroll de más abajo queda
+                contenido aquí dentro, sin arrastrar la ventana/página del móvil. */}
+            {completedEntries.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[9px] font-black uppercase tracking-widest text-fg-faint px-1">Detectados ({completedEntries.length})</p>
+                <div ref={scanListRef} className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle max-h-48 overflow-y-auto scroll-smooth">
+                  {completedEntries.map((entry) => (
+                    <div key={entry.index} className="px-3 py-2 flex items-center gap-2">
+                      {entry.status === 'done' ? <Check size={13} className="text-green-500 shrink-0" /> : <AlertTriangle size={13} className="text-yellow-500 shrink-0" />}
+                      <span className={`text-[10px] font-bold truncate ${entry.status === 'done' ? 'text-fg' : 'text-yellow-500'}`}>
+                        {entry.status === 'done'
+                          ? `${entry.name || 'Sin nombre legible'}${entry.position ? ` · ${entry.position}` : ''}${entry.rating ? ` · ${entry.rating}` : ''}`
+                          : '⚠️ No leída'}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+            )}
+
+            {/* Estado actual, compacto y fuera de la lista scrollable de arriba: nunca crece, no
+                desplaza nada — solo cambia de texto conforme avanza la sub-fase de la foto en
+                curso (comprimiendo, escaneando, reintentando...). */}
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
+              <Loader2 size={14} className="text-blue-400 shrink-0 animate-spin" />
+              <span className="text-[10px] font-bold text-blue-400 truncate">⏳ {batchLabelFor(batchInfo, scanNoun)}</span>
             </div>
           </div>
         )}
