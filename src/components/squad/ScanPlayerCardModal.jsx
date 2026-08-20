@@ -34,9 +34,9 @@ const getPhaseLabel = (progress) => (PHASES.find((p) => progress < p.ceiling) ||
 const BATCH_PHASE_FRACTION = { preparing: 0.15, scanning: 0.55, retrying: 0.75 };
 const batchPercentFor = (info) => (info ? Math.min(99, Math.round(((info.index + (BATCH_PHASE_FRACTION[info.phase] ?? 0.5)) / info.total) * 100)) : 0);
 const batchLabelFor = (info, scanNoun) => {
-  if (!info) return '';
+  if (!info) return 'Preparando lote...';
   if (info.phase === 'preparing') return `Comprimiendo foto ${info.index + 1} de ${info.total}...`;
-  if (info.phase === 'retrying') return `Límite de peticiones alcanzado, reintentando en ${Math.round((info.delayMs || 0) / 1000)}s (intento ${info.attempt} de 3)...`;
+  if (info.phase === 'retrying') return `⏳ Esperando turno de IA (reintentando en ${Math.round((info.delayMs || 0) / 1000)}s, intento ${info.attempt} de 3)...`;
   return `Escaneando ${scanNoun} ${info.index + 1} de ${info.total}...`;
 };
 
@@ -93,9 +93,19 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
     if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
   };
   useEffect(() => stopProgressTimer, []);
-  // Las miniaturas de la cola de captura son Object URLs: se liberan al desmontar el modal para
-  // no acumular memoria en una sesión con muchas fotos encadenadas.
-  useEffect(() => () => cameraQueue.forEach((item) => URL.revokeObjectURL(item.previewUrl)), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Las miniaturas de la cola de captura y del escaneo individual son Object URLs: se liberan
+  // al desmontar el modal para no acumular memoria en una sesión con muchas fotos encadenadas.
+  // Se leen desde un ref (no directamente del estado) porque el efecto solo se registra una vez
+  // al montar: sin el ref, su cierre se quedaría con el valor vacío del primer render y nunca
+  // liberaría las miniaturas añadidas después.
+  const cameraQueueRef = useRef(cameraQueue);
+  useEffect(() => { cameraQueueRef.current = cameraQueue; }, [cameraQueue]);
+  const previewRef = useRef(preview);
+  useEffect(() => { previewRef.current = preview; }, [preview]);
+  useEffect(() => () => {
+    cameraQueueRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+  }, []);
 
   // Sube el progreso acercándose cada vez más despacio a "ceiling" sin llegar nunca a tocarlo,
   // dando sensación de trabajo real en curso mientras dura una promesa de duración desconocida.
@@ -137,7 +147,9 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
     }
     stopProgressTimer();
     setProgress(50);
-    setPreview(URL.createObjectURL(preparedFile));
+    // Libera la miniatura de un intento anterior en este mismo modal (p. ej. tras un error y un
+    // reintento) antes de crear la nueva, para no acumular Object URLs sin usar.
+    setPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(preparedFile); });
 
     creepProgressTo(85); // Fase 3: análisis con Gemini (incluye reintentos automáticos 429/503).
     try {
@@ -175,7 +187,7 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
   const cancelDuplicate = () => {
     setPendingDuplicate(null);
     setStatus('idle');
-    setPreview('');
+    setPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return ''; });
   };
 
   const processBatch = async (files) => {
@@ -222,12 +234,25 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
     else processBatch(files);
   };
 
+  // Feedback inmediato al confirmar un lote (galería o "Escanear Fotos" tras modo ráfaga): se
+  // pinta la pantalla de progreso YA, en el frame siguiente al toque, y solo entonces arranca
+  // el trabajo pesado real (comprimir/leer la primera foto) con un pequeño respiro de 50ms —
+  // en Safari, sobre todo con fotos de 12-48 MP, ese trabajo puede tardar lo bastante en
+  // arrancar como para que el cambio de pantalla no llegue a pintarse antes, y la app parezca
+  // congelada justo después de pulsar el tick.
+  const beginProcessing = (files) => {
+    if (!files.length) return;
+    setError('');
+    setStatus(files.length === 1 && !forceBatch ? 'scanning' : 'batchScanning');
+    setTimeout(() => processFiles(files), 50);
+  };
+
   // Selección desde galería: admite varias a la vez en un único picker nativo, así que se
   // procesan de inmediato tal cual las entrega el input — no pasa por la cola de captura.
   const handleGalleryChange = (e) => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
-    processFiles(files);
+    beginProcessing(files);
   };
 
   // Captura desde cámara: el input capture="environment" solo permite UN disparo por
@@ -256,7 +281,7 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
   const startScanningQueuedPhotos = () => {
     const files = cameraQueue.map((item) => item.file);
     setCameraQueue([]);
-    processFiles(files);
+    beginProcessing(files);
   };
 
   const handleClose = () => {
@@ -298,7 +323,7 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
           </div>
         )}
 
-        {status === 'batchScanning' && batchInfo && (
+        {status === 'batchScanning' && (
           <div className="space-y-3 py-2">
             <div className="w-full space-y-2">
               <div className="flex items-center justify-between gap-2">

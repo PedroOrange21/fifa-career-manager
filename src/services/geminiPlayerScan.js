@@ -67,12 +67,15 @@ async function scanPlayerCardOnce(file, mode) {
   return payload.data;
 }
 
-// Códigos que indican un límite de cuota TEMPORAL de Gemini (demasiadas peticiones por minuto,
-// o el modelo saturado un instante) — merece la pena reintentar tras una espera. Cualquier otro
-// error (imagen ilegible, red caída, 4xx de validación...) es definitivo y no se reintenta.
+// Códigos que indican un límite de cuota TEMPORAL de Gemini (demasiadas peticiones por minuto —
+// esta clave tiene un límite de 15 RPM — o el modelo saturado un instante) — merece la pena
+// reintentar tras una espera. Cualquier otro error (imagen ilegible, red caída, 4xx de
+// validación...) es definitivo y no se reintenta.
 const RETRYABLE_STATUSES = new Set([429, 503]);
 const MAX_SCAN_RETRIES = 3;
-const RETRY_BASE_DELAY_MS = 4000;
+// Espera fija (no exponencial) entre reintentos: con 15 RPM de cuota, 5 segundos ya deja pasar
+// margen de sobra dentro de la misma ventana de un minuto sin necesidad de esperas crecientes.
+const RETRY_DELAY_MS = 5000;
 
 // Analiza la foto de una tarjeta de jugador vía api/scan-player.js y devuelve el JSON
 // extraído (mismas claves que describe ese endpoint). "mode" ('primerEquipo' por defecto o
@@ -81,10 +84,11 @@ const RETRY_BASE_DELAY_MS = 4000;
 // extracción es deliberadamente más reducida. Lanza un Error con mensaje legible en español si
 // algo falla (sin conexión, servidor sin clave configurada, respuesta inválida...), para que la
 // UI que llama a esta función pueda mostrarlo directamente al usuario.
-// Backoff exponencial automático ante un 429/503 (límite de peticiones por minuto de Gemini,
-// muy real en lotes grandes): reintenta hasta MAX_SCAN_RETRIES veces con esperas crecientes
-// (4s, 8s, 16s) antes de dar la imagen por fallida de verdad. "onRetry(attempt, delayMs)" es
-// opcional, para que la UI pueda avisar de que se está reintentando en vez de quedarse muda.
+// Reintento automático ante un 429/503 (límite de peticiones por minuto de Gemini, muy real en
+// lotes grandes): NUNCA se marca la foto como "no leída" a la primera — se reintenta hasta
+// MAX_SCAN_RETRIES veces con una espera fija de RETRY_DELAY_MS antes de darla por fallida de
+// verdad. "onRetry(attempt, delayMs)" es opcional, para que la UI pueda avisar ("⏳ Esperando
+// turno de IA...") en vez de quedarse muda mientras se reintenta la MISMA foto.
 export async function scanPlayerCard(file, mode = 'primerEquipo', onRetry) {
   if (!file) throw new Error('No se ha seleccionado ninguna imagen.');
   let lastErr;
@@ -95,10 +99,9 @@ export async function scanPlayerCard(file, mode = 'primerEquipo', onRetry) {
     } catch (err) {
       lastErr = err;
       if (attempt >= MAX_SCAN_RETRIES || !RETRYABLE_STATUSES.has(err.status)) throw err;
-      const delayMs = RETRY_BASE_DELAY_MS * (2 ** attempt);
-      onRetry?.(attempt + 1, delayMs);
+      onRetry?.(attempt + 1, RETRY_DELAY_MS);
       // eslint-disable-next-line no-await-in-loop
-      await sleep(delayMs);
+      await sleep(RETRY_DELAY_MS);
     }
   }
   throw lastErr;
@@ -222,9 +225,10 @@ export function mapAcademyScanResultToPrefill(extracted) {
 // usado tanto por la carga masiva con IA de PlayerList/AcademyTab como por los dos bloques de
 // OnboardingWizard. Cada foto pasa por el mismo pipeline que un escaneo individual
 // (prepareImageForScan para HEIC/compresión, scanPlayerCard con sus reintentos automáticos
-// ante 429/503, y el mapeo correspondiente al modo), con una espera de seguridad de 3 segundos
-// entre la finalización de un jugador y la llamada del siguiente para respetar la cuota de
-// peticiones por minuto (RPM) de Gemini en lotes grandes.
+// ante 429/503, y el mapeo correspondiente al modo), con una espera de seguridad de 3,5
+// segundos entre la finalización de un jugador y la llamada del siguiente — con la cuota de 15
+// peticiones por minuto (RPM) de esta clave, ir más rápido dispara 429 en cuanto el lote pasa
+// de unas pocas fotos.
 // onProgress(info) se invoca en cada cambio de fase de la foto en curso — { index (0-based),
 // total, fileName, phase, attempt?, delayMs?, name?, position?, rating?, error? } — phase es
 // 'preparing' (comprimiendo), 'scanning' (llamando a Gemini), 'retrying' (esperando tras un
@@ -243,7 +247,7 @@ export function mapAcademyScanResultToPrefill(extracted) {
 // 429/503 persistente tras MAX_SCAN_RETRIES) va a "failed": { fileName, error, file } — "file"
 // es el File original (nunca el comprimido, por si prepareImageForScan fue justo lo que falló),
 // conservado para que la revisión pueda mostrar la miniatura de la foto que no se pudo leer.
-const DELAY_BETWEEN_CALLS_MS = 3000;
+const DELAY_BETWEEN_CALLS_MS = 3500;
 export async function scanPlayerCardsQueue(files, mode, onProgress) {
   const mapper = mode === 'academia' ? mapAcademyScanResultToPrefill : mapScanResultToPrefill;
   const succeeded = [];
