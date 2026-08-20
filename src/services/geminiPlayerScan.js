@@ -22,10 +22,11 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Mensajes legibles para cada código de "error" que puede devolver api/scan-player.js (ver
-// contrato uniforme { success: true, data } / { success: false, error, details? } ahí mismo).
+// contrato uniforme { success: true, data } / { success: false, error, details?, rateLimited? }
+// ahí mismo) — "rateLimited: true" se comprueba aparte (ver scanPlayerCardOnce), nunca por el
+// texto exacto de "error", que en ese caso viaja en inglés tal cual lo pide la cuota de Gemini.
 const FRIENDLY_ERROR_MESSAGES = {
   unreadable: 'No se pudo leer ningún dato en esta foto. Prueba con una imagen más nítida y bien encuadrada.',
-  quota_exceeded: 'Límite de peticiones de Gemini alcanzado.',
   service_error: 'No se pudo analizar la imagen. Inténtalo de nuevo.',
   missing_image: 'No se ha seleccionado ninguna imagen.',
   missing_api_key: 'El servidor no tiene configurada la clave de Gemini. Contacta con el administrador.',
@@ -57,16 +58,20 @@ async function scanPlayerCardOnce(file, mode) {
   }
 
   // Contrato uniforme del endpoint: { success: true, data } o { success: false, error,
-  // details? } — "status" queda colgado del Error para que scanPlayerCard sepa si merece la
-  // pena reintentar la MISMA foto (429/503 reales, cuota de Gemini temporalmente excedida) o si
-  // es un fallo definitivo (imagen ilegible, configuración del servidor...). Antes de este
-  // contrato, un 429 real de Gemini se aplanaba siempre a un 502 genérico y el reintento nunca
-  // llegaba a dispararse — con lotes cerca de las 15 RPM de esta clave, eso hacía que TODO el
-  // lote acabara marcado "No leída".
+  // details?, rateLimited? } — "status" y "rateLimited" quedan colgados del Error para que
+  // scanPlayerCard sepa si merece la pena reintentar la MISMA foto (cuota de Gemini
+  // temporalmente excedida) o si es un fallo definitivo (imagen ilegible, configuración del
+  // servidor...). "rateLimited" es una señal explícita en el propio cuerpo, independiente del
+  // código HTTP (que también se propaga como 429/503 reales) — doble comprobación por si algún
+  // proxy intermedio reescribiera el status. Antes de este contrato, un 429 real de Gemini se
+  // aplanaba siempre a un 502 genérico y el reintento nunca llegaba a dispararse — con lotes
+  // cerca de las 15 RPM de esta clave, eso hacía que TODO el lote acabara marcado "No leída".
   if (!response.ok || !payload?.success) {
     console.error('Error de /api/scan-player:', payload?.error, payload?.details);
-    const err = new Error(FRIENDLY_ERROR_MESSAGES[payload?.error] || payload?.details || 'No se pudo analizar la imagen. Inténtalo de nuevo.');
+    const rateLimited = payload?.rateLimited === true;
+    const err = new Error(rateLimited ? 'Límite de peticiones de Gemini alcanzado.' : (FRIENDLY_ERROR_MESSAGES[payload?.error] || payload?.details || 'No se pudo analizar la imagen. Inténtalo de nuevo.'));
     err.status = response.status;
+    err.rateLimited = rateLimited;
     throw err;
   }
   if (!payload.data) {
@@ -81,9 +86,9 @@ async function scanPlayerCardOnce(file, mode) {
 // validación...) es definitivo y no se reintenta.
 const RETRYABLE_STATUSES = new Set([429, 503]);
 const MAX_SCAN_RETRIES = 3;
-// Espera fija (no exponencial) entre reintentos: con 15 RPM de cuota, 5 segundos ya deja pasar
+// Espera fija (no exponencial) entre reintentos: con 15 RPM de cuota, 6 segundos ya deja pasar
 // margen de sobra dentro de la misma ventana de un minuto sin necesidad de esperas crecientes.
-const RETRY_DELAY_MS = 5000;
+const RETRY_DELAY_MS = 6000;
 
 // Analiza la foto de una tarjeta de jugador vía api/scan-player.js y devuelve el JSON
 // extraído (mismas claves que describe ese endpoint). "mode" ('primerEquipo' por defecto o
@@ -106,7 +111,7 @@ export async function scanPlayerCard(file, mode = 'primerEquipo', onRetry) {
       return await scanPlayerCardOnce(file, mode);
     } catch (err) {
       lastErr = err;
-      if (attempt >= MAX_SCAN_RETRIES || !RETRYABLE_STATUSES.has(err.status)) throw err;
+      if (attempt >= MAX_SCAN_RETRIES || !(err.rateLimited || RETRYABLE_STATUSES.has(err.status))) throw err;
       onRetry?.(attempt + 1, RETRY_DELAY_MS);
       // eslint-disable-next-line no-await-in-loop
       await sleep(RETRY_DELAY_MS);
@@ -233,10 +238,10 @@ export function mapAcademyScanResultToPrefill(extracted) {
 // usado tanto por la carga masiva con IA de PlayerList/AcademyTab como por los dos bloques de
 // OnboardingWizard. Cada foto pasa por el mismo pipeline que un escaneo individual
 // (prepareImageForScan para HEIC/compresión, scanPlayerCard con sus reintentos automáticos
-// ante 429/503, y el mapeo correspondiente al modo), con una espera de seguridad de 3,5
+// ante 429/503, y el mapeo correspondiente al modo), con una espera de seguridad de 4,5
 // segundos entre la finalización de un jugador y la llamada del siguiente — con la cuota de 15
-// peticiones por minuto (RPM) de esta clave, ir más rápido dispara 429 en cuanto el lote pasa
-// de unas pocas fotos.
+// peticiones por minuto (RPM) del plan gratuito de Gemini (4 segundos exactos de margen teórico
+// entre llamadas), ir más rápido dispara 429 en cuanto el lote pasa de unas pocas fotos.
 // onProgress(info) se invoca en cada cambio de fase de la foto en curso — { index (0-based),
 // total, fileName, phase, attempt?, delayMs?, name?, position?, rating?, error? } — phase es
 // 'preparing' (comprimiendo), 'scanning' (llamando a Gemini), 'retrying' (esperando tras un
@@ -255,7 +260,7 @@ export function mapAcademyScanResultToPrefill(extracted) {
 // 429/503 persistente tras MAX_SCAN_RETRIES) va a "failed": { fileName, error, file } — "file"
 // es el File original (nunca el comprimido, por si prepareImageForScan fue justo lo que falló),
 // conservado para que la revisión pueda mostrar la miniatura de la foto que no se pudo leer.
-const DELAY_BETWEEN_CALLS_MS = 3500;
+const DELAY_BETWEEN_CALLS_MS = 4500;
 export async function scanPlayerCardsQueue(files, mode, onProgress) {
   const mapper = mode === 'academia' ? mapAcademyScanResultToPrefill : mapScanResultToPrefill;
   const succeeded = [];

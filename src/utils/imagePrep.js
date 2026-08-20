@@ -23,12 +23,12 @@ const isHeic = (file) => {
   return HEIC_MIME_TYPES.includes(type) || name.endsWith('.heic') || name.endsWith('.heif');
 };
 
-// Redimensionado estricto antes de enviar a la API: ancho/alto máximo 1200px (conservando la
-// relación de aspecto) y JPEG a calidad 0.75 — cada foto enviada queda muy por debajo del
+// Redimensionado estricto antes de enviar a la API: ancho/alto máximo 1000px (conservando la
+// relación de aspecto) y JPEG a calidad 0.70 — cada foto enviada queda muy por debajo del
 // límite de payload, imprescindible para lotes de 20-30 fotos en modo ráfaga sobre una conexión
 // móvil.
-const MAX_DIMENSION = 1200;
-const JPEG_QUALITY = 0.75;
+const MAX_DIMENSION = 1000;
+const JPEG_QUALITY = 0.70;
 
 // Lee el archivo como Data URL — FileReader es la vía más compatible en iOS Safari para
 // garantizar que el contenido real del archivo (no solo su cabecera) está disponible antes de

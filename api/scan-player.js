@@ -253,18 +253,22 @@ export default async function handler(req, res) {
   }
 
   if (lastError) {
-    // Cuota excedida (429) o modelo saturado (503) en AMBOS modelos: se propaga el 429/503 real
-    // al cliente (nunca un 502 genérico) para que scanPlayerCard detecte que merece la pena
-    // reintentar la MISMA foto en vez de darla por perdida a la primera — sin esto, cualquier
-    // lote que rozara los 15 RPM de esta clave veía cómo el reintento nunca llegaba a
-    // dispararse y el lote entero acababa marcado "No leída" de principio a fin.
+    // Cuota excedida (429/RESOURCE_EXHAUSTED) o modelo saturado (503) en AMBOS modelos: se
+    // propaga el 429/503 real al cliente (nunca un 502 genérico) Y se marca "rateLimited: true"
+    // de forma explícita en el propio JSON — así scanPlayerCard puede distinguir sin ambigüedad
+    // "espera de cuota, merece la pena reintentar la MISMA foto" de "foto ilegible" o "fallo de
+    // servicio real", tanto por el código HTTP como por el propio cuerpo de la respuesta (doble
+    // señal, por si algún proxy intermedio reescribiera el status). Sin propagar el 429/503 de
+    // verdad, cualquier lote que rozara los 15 RPM de esta clave veía cómo el reintento nunca
+    // llegaba a dispararse y el lote entero acababa marcado "No leída" de principio a fin.
     const upstreamStatus = lastError?.status ?? lastError?.statusCode ?? lastError?.response?.status;
-    const looksLikeQuota = upstreamStatus === 429 || upstreamStatus === 503
+    const isRateLimited = upstreamStatus === 429 || upstreamStatus === 503
       || /429|503|quota|resource_exhausted|rate limit|too many requests/i.test(String(lastError?.message || ''));
-    const httpStatus = looksLikeQuota ? (upstreamStatus === 503 ? 503 : 429) : 502;
+    const httpStatus = isRateLimited ? (upstreamStatus === 503 ? 503 : 429) : 502;
     res.status(httpStatus).json({
       success: false,
-      error: looksLikeQuota ? 'quota_exceeded' : 'service_error',
+      rateLimited: isRateLimited,
+      error: isRateLimited ? 'Quota limit reached' : 'service_error',
       details: lastError.message || String(lastError),
     });
     return;

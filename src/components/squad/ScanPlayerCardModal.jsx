@@ -36,7 +36,7 @@ const batchPercentFor = (info) => (info ? Math.min(99, Math.round(((info.index +
 const batchLabelFor = (info, scanNoun) => {
   if (!info) return 'Preparando lote...';
   if (info.phase === 'preparing') return `Comprimiendo foto ${info.index + 1} de ${info.total}...`;
-  if (info.phase === 'retrying') return `⏳ Esperando turno de IA (reintentando en ${Math.round((info.delayMs || 0) / 1000)}s, intento ${info.attempt} de 3)...`;
+  if (info.phase === 'retrying') return `⏳ Esperando turno de la IA (reintentando en ${Math.round((info.delayMs || 0) / 1000)}s, intento ${info.attempt} de 3)...`;
   return `Escaneando ${scanNoun} ${info.index + 1} de ${info.total}...`;
 };
 
@@ -457,7 +457,7 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
             Foto" durante 'capturing' reutiliza este mismo cameraInputRef con un simple
             .click(), así que basta con que el <input> exista siempre en el DOM. */}
         <input ref={cameraInputRef} type="file" accept="image/*,.heic,.heif" capture="environment" className="hidden" onChange={handleCameraChange} />
-        <input ref={galleryInputRef} type="file" accept="image/*,.heic,.heif" multiple className="hidden" onChange={handleGalleryChange} />
+        <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleGalleryChange} />
       </div>
     </div>
   );
