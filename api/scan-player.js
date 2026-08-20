@@ -8,8 +8,15 @@ import { GoogleGenAI, Type } from '@google/genai';
 // independiente contra generativelanguage.googleapis.com antes de desplegar este cambio — sin
 // necesidad de facturación de Google Cloud (a diferencia de Vertex AI, que sí la exige).
 // GEMINI_API_KEY/VITE_GEMINI_API_KEY: cualquiera de los dos nombres sirve, por si el proyecto
-// tiene configurado uno u otro en Vercel.
-const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+// tiene configurado uno u otro en Vercel. Soporte multiclave: cualquiera de las dos variables
+// puede contener VARIAS claves separadas por comas (ej. "clave1,clave2,clave3") — se prueban en
+// orden y, si una se queda sin cuota diaria/RPM (RESOURCE_EXHAUSTED, 429/503) o resulta
+// inválida (API_KEY_INVALID, PERMISSION_DENIED, UNAUTHENTICATED), se rota automáticamente a la
+// siguiente sin fallar la petición hacia el frontend — ver el bucle de claves más abajo.
+const geminiKeys = (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '')
+  .split(',')
+  .map((k) => k.trim())
+  .filter(Boolean);
 
 // gemini-3.6-flash es el modelo objetivo vigente para esta clave (gemini-2.5-flash y
 // gemini-1.5-flash ya no están disponibles para claves nuevas — Google los retiró); si algún
@@ -216,7 +223,7 @@ export default async function handler(req, res) {
     res.status(405).json({ success: false, error: 'method_not_allowed', details: 'Método no permitido.' });
     return;
   }
-  if (!apiKey) {
+  if (geminiKeys.length === 0) {
     console.error('Falta GEMINI_API_KEY/VITE_GEMINI_API_KEY en las variables de entorno del proyecto.');
     res.status(500).json({ success: false, error: 'missing_api_key', details: 'El servidor no tiene configurada la clave de Gemini. Contacta con el administrador.' });
     return;
@@ -235,8 +242,7 @@ export default async function handler(req, res) {
   const promptText = isAcademy ? ACADEMY_PROMPT : PROMPT;
   const schema = isAcademy ? ACADEMY_RESPONSE_SCHEMA : RESPONSE_SCHEMA;
 
-  const ai = new GoogleGenAI({ apiKey });
-  const callModel = (model) => ai.models.generateContent({
+  const callModel = (ai, model) => ai.models.generateContent({
     model,
     contents: [
       {
@@ -258,18 +264,41 @@ export default async function handler(req, res) {
     },
   });
 
+  // Motivos por los que merece la pena rotar a la SIGUIENTE clave en vez de rendirse: cuota
+  // (diaria o por minuto) agotada en la clave actual, o la propia clave inválida/sin permiso —
+  // en ambos casos la imagen en sí no tiene ningún problema, así que reintentarla con otra clave
+  // es exactamente lo que hace falta. Cualquier otro fallo (INVALID_ARGUMENT, imagen
+  // corrupta...) no se soluciona cambiando de clave, así que ahí se para sin rotar más.
+  const KEY_ROTATION_CODES = new Set(['RESOURCE_EXHAUSTED', 'PERMISSION_DENIED', 'UNAUTHENTICATED', 'API_KEY_INVALID', 'UNAVAILABLE']);
+  const shouldRotateKey = (err) => {
+    const code = extractTechnicalCode(err);
+    if (KEY_ROTATION_CODES.has(code)) return true;
+    return /429|503|quota|resource_exhausted|rate limit|too many requests|api key|invalid/i.test(String(err?.message || ''));
+  };
+
   let response;
   let lastError;
-  for (const model of [PRIMARY_MODEL, FALLBACK_MODEL]) {
-    try {
-      // eslint-disable-next-line no-await-in-loop
-      response = await callModel(model);
-      lastError = null;
-      break;
-    } catch (err) {
-      lastError = err;
-      logGeminiError(`Error llamando a Gemini (modelo ${model}):`, err);
+  keyLoop:
+  for (let keyIndex = 0; keyIndex < geminiKeys.length; keyIndex++) {
+    const ai = new GoogleGenAI({ apiKey: geminiKeys[keyIndex] });
+    for (const model of [PRIMARY_MODEL, FALLBACK_MODEL]) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        response = await callModel(ai, model);
+        lastError = null;
+        break keyLoop; // Éxito: no hace falta probar más modelos ni más claves.
+      } catch (err) {
+        lastError = err;
+        // Solo se identifica la clave por su posición en la lista (nunca el valor real) en los
+        // logs, para no dejar ninguna clave completa expuesta en la consola de Vercel.
+        logGeminiError(`Error llamando a Gemini (clave #${keyIndex + 1} de ${geminiKeys.length}, modelo ${model}):`, err);
+      }
     }
+    // Ambos modelos fallaron con ESTA clave: si el motivo es de cuota/autenticación, se rota a
+    // la siguiente automáticamente; si no, no tiene sentido seguir probando claves distintas
+    // para el mismo fallo (p. ej. una imagen que Gemini rechaza por su propio contenido).
+    if (!shouldRotateKey(lastError) || keyIndex === geminiKeys.length - 1) break;
+    console.warn(`Clave #${keyIndex + 1} agotada o inválida, rotando a la clave #${keyIndex + 2} de ${geminiKeys.length}...`);
   }
 
   if (lastError) {
