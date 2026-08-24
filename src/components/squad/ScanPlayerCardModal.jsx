@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, ChevronLeft, Camera, Image as ImageIcon, ShieldAlert, ScanLine, CopyX, Trash2, Zap, Check, Loader2, AlertTriangle } from 'lucide-react';
+import { X, ChevronLeft, Camera, Image as ImageIcon, ShieldAlert, ScanLine, CopyX, Trash2, Check, Loader2, AlertTriangle } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import { useClubData } from '../../context/ClubDataContext';
 import { scanPlayerCard, mapScanResultToPrefill, mapAcademyScanResultToPrefill, scanPlayerCardsQueue } from '../../services/geminiPlayerScan';
 import { prepareImageForScan } from '../../utils/imagePrep';
 import { findDuplicatePlayer } from '../../utils/duplicatePlayer';
+import AIGlowButton from '../common/AIGlowButton';
 
 const mapByMode = (extracted, mode) => (mode === 'academia' ? mapAcademyScanResultToPrefill(extracted) : mapScanResultToPrefill(extracted));
 
@@ -426,9 +427,9 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
                   <div className="text-[10px] font-bold text-fg-muted mt-0.5">Sigue fotografiando jugadores antes de escanear.</div>
                 </div>
               </button>
-              <button type="button" onClick={startScanningQueuedPhotos} className="w-full py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-2 hover:bg-green-400 transition-all touch-manipulation">
-                <Zap size={16} className="shrink-0" /> Escanear Fotos ({cameraQueue.length})
-              </button>
+              <AIGlowButton onClick={startScanningQueuedPhotos}>
+                Escanear Fotos ({cameraQueue.length})
+              </AIGlowButton>
             </div>
           </div>
         )}

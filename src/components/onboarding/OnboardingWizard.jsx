@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Check, ChevronLeft, ChevronRight, ChevronDown, Plus, Wallet, Users, Sparkles, RotateCcw, Shield, Camera, RefreshCcw, ShieldAlert, Trash2, Pencil, Images } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ChevronDown, Plus, Wallet, Shield, Camera, RefreshCcw, ShieldAlert, Trash2, Pencil, Sparkles, User, CalendarDays, Coins, Star, GraduationCap, BarChart3, MapPin, Target } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency, formatValueInput, parseValue, weeklyWageBudgetFromTransfer } from '../../utils/format';
@@ -10,14 +10,41 @@ import PlayerForm from '../squad/PlayerForm';
 import ScanPlayerCardModal from '../squad/ScanPlayerCardModal';
 import BulkScanReviewModal from '../squad/BulkScanReviewModal';
 import ConfirmModal from '../common/ConfirmModal';
+import AIGlowButton from '../common/AIGlowButton';
 
-const BUDGET_PRESETS = [1000000, 5000000, 10000000, 50000000, 100000000, 200000000, 500000000, 1000000000];
-
-function abbreviateBudget(amount) {
-  if (amount >= 1000000) return `${(amount / 1000000).toLocaleString('es-ES', { useGrouping: true })}M €`;
-  if (amount >= 1000) return `${amount / 1000}Mil €`;
-  return `${amount} €`;
+// Sugerencia de temporada actual a partir de la fecha real: la temporada futbolística europea
+// arranca en torno a julio, así que de julio en adelante se sugiere "año/año+1" y antes de julio
+// "año-1/año" — solo un punto de partida cómodo, el campo queda totalmente editable.
+function defaultSeasonLabel() {
+  const now = new Date();
+  const startYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${startYear}/${String((startYear + 1) % 100).padStart(2, '0')}`;
 }
+
+const CURRENCY_OPTIONS = [
+  { value: 'EUR', label: '€ Euros' },
+  { value: 'GBP', label: '£ Libras' },
+  { value: 'USD', label: '$ Dólares' },
+];
+
+// Filosofía/ADN del club: define la identidad de la carrera, puramente informativa por ahora
+// (se guarda en el club y se muestra en el Resumen) — no condiciona todavía ninguna otra
+// pantalla de la app, es la base sobre la que construir más adelante recomendaciones de
+// fichajes/objetivos ajustadas al estilo elegido.
+const PHILOSOPHY_OPTIONS = [
+  { value: 'galactico', icon: Star, emoji: '🌟', title: 'Galáctico / Élite', desc: 'Fichajes estelares y presupuesto grande: ganarlo todo ya.' },
+  { value: 'cantera', icon: GraduationCap, emoji: '🎓', title: 'Rey de la Cantera', desc: 'Apuesta por la Academia y el talento joven propio.' },
+  { value: 'moneyball', icon: BarChart3, emoji: '📊', title: 'Moneyball / Realista', desc: 'Gestión eficiente del presupuesto, valor por encima de nombre.' },
+  { value: 'local', icon: MapPin, emoji: '🛡️', title: 'Identidad Local', desc: 'Prioriza jugadores del país y una plantilla con raíces propias.' },
+];
+
+const SEASON_OBJECTIVE_OPTIONS = [
+  'Pelear por el Título',
+  'Clasificar a Competición Europea',
+  'Consolidación en la Categoría',
+  'Evitar el Descenso',
+  'Reconstrucción a Largo Plazo',
+];
 
 // Puerta de entrada: decide si corresponde mostrar el asistente (sin montar sus hooks de
 // "pantalla limpia" salvo que realmente vaya a mostrarse) y, si es así, monta el modal.
@@ -40,83 +67,67 @@ export default function OnboardingWizard() {
   return <OnboardingWizardModal clubExists onDismiss={() => setLocallyDismissed(true)} />;
 }
 
-// h-[52px]: misma altura que el componente Dropdown, para que ambos queden alineados cuando
-// comparten fila en un grid.
-const FIELD = 'w-full h-[52px] bg-well-strong px-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold text-fg text-sm placeholder:text-fg-faint';
-
-// Asistente unificado: identidad + fondos iniciales del club (solo si aún no existe, es decir
-// al crear un club nuevo, primero o adicional) seguido siempre por la distinción entre
-// "Empezar desde cero" y "Modo Carrera ya empezado", el registro de jugadores (reutilizando
-// literalmente PlayerForm, el mismo formulario de "Fichar Jugador") y un resumen final.
-// clubExists=false (invocado desde ClubModal al crear un club): añade los pasos de
-// identidad/fondos por delante y crea el club en Firestore al final del paso de fondos.
-// clubExists=true (invocado automáticamente por el wrapper de arriba): empieza directamente
-// en el paso de "Estado de la Partida", ya que el club y su presupuesto ya existen.
+// Asistente unificado de 5 pasos, SIEMPRE en el mismo orden y sin ninguna bifurcación de "empezar
+// desde cero vs. modo carrera ya empezado" (se retiró esa pregunta por completo): Identidad del
+// Club y Mánager -> Filosofía y ADN -> Fondos y Presupuesto -> Plantilla Actual (IA o Manual) ->
+// Confirmación y Resumen. clubExists=false (invocado desde ClubModal al crear un club) recorre
+// los 5 pasos completos y crea el club en Firestore al final del paso de Fondos.
+// clubExists=true (invocado automáticamente por el wrapper de arriba, para retomar un club que
+// ya se creó pero se quedó sin plantilla) salta directo a Plantilla + Resumen: identidad,
+// filosofía y fondos ya quedaron guardados la primera vez que se recorrió este asistente, así
+// que repetirlos aquí sería redundante — es la única variación entre ambos modos.
 export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClubCreated }) {
   useAutoHideChrome();
-  const { clubs, activeClubId, activeClub, createClub, completeOnboarding } = useClubs();
+  const { clubs, activeClub, createClub, completeOnboarding } = useClubs();
   const { players, playerToDelete, setPlayerToDelete, confirmDeletePlayer } = useClubData();
 
-  // "status" (Tipo de Inicio de Partida) va ANTES que "budget" (Fondos): así, al llegar a
-  // Fondos, ya se sabe si el club empieza desde cero (selector de presupuesto habitual) o es
-  // una partida ya avanzada (campo único de presupuesto actual, sin presets — ver
-  // currentStepId === 'budget' más abajo).
   const STEP_SEQUENCE = clubExists
-    ? ['status', 'active', 'academy', 'summary']
-    : ['identity', 'status', 'budget', 'active', 'academy', 'summary'];
+    ? ['squad', 'summary']
+    : ['identity', 'philosophy', 'budget', 'squad', 'summary'];
 
   const [step, setStep] = useState(0);
   const currentStepId = STEP_SEQUENCE[step];
 
-  // --- Paso Identidad (solo clubExists=false) ---
+  // --- Paso 1: Identidad del Club y Mánager (solo clubExists=false) ---
   const [name, setName] = useState('');
   const [logo, setLogo] = useState('');
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [managerName, setManagerName] = useState('');
+  const [seasonLabel, setSeasonLabel] = useState(defaultSeasonLabel);
+  const [currency, setCurrency] = useState('EUR');
   const fileInputRef = useRef(null);
 
-  // --- Paso Fondos (solo clubExists=false) ---
-  const [budget, setBudget] = useState(BUDGET_PRESETS[0]);
-  const [customMode, setCustomMode] = useState(false);
-  const [customBudget, setCustomBudget] = useState('');
-  // Campo único de "Modo Carrera ya Empezado" (startType === 'continue'): separado de
-  // customBudget/customMode (los del selector de presets de "Empezar desde Cero") para que
-  // volver atrás y cambiar de tipo de inicio no arrastre un valor del otro modo por error.
-  const [continueBudgetInput, setContinueBudgetInput] = useState('');
+  // --- Paso 2: Filosofía y ADN del Club (solo clubExists=false) ---
+  const [philosophy, setPhilosophy] = useState(null);
+  const [seasonObjective, setSeasonObjective] = useState(null);
+
+  // --- Paso 3: Fondos y Presupuesto Inicial (solo clubExists=false) ---
+  const [transferBudgetInput, setTransferBudgetInput] = useState('');
   const [createdClubId, setCreatedClubId] = useState(null);
   // Presupuesto Semanal de Salarios: se sugiere automáticamente (Presup. Traspasos / 52, igual
   // que EA Sports FC) pero queda totalmente editable, porque el reparto real del juego no
-  // siempre coincide exactamente con esa fórmula en una partida ya avanzada. Se resincroniza
-  // con la sugerencia mientras el usuario no la haya tocado a mano (weeklyWageTouched); en
-  // cuanto edita el campo, deja de seguir los cambios de presupuesto automáticamente.
+  // siempre coincide exactamente con esa fórmula. Se resincroniza con la sugerencia mientras el
+  // usuario no la haya tocado a mano (weeklyWageTouched); en cuanto edita el campo, deja de
+  // seguir los cambios de presupuesto automáticamente.
   const [weeklyWageInput, setWeeklyWageInput] = useState('');
   const [weeklyWageTouched, setWeeklyWageTouched] = useState(false);
 
-  // --- Paso Estado de la Partida ---
-  const [startType, setStartType] = useState(null); // 'scratch' | 'continue'
-
-  // --- Paso Academia ---
-  const [hasAcademy, setHasAcademy] = useState(null);
-
-  // --- Registro de jugadores: abre PlayerForm (idéntico a "Fichar Jugador") por encima de
-  // este asistente; cada ficha se guarda directamente en Firestore, así que la lista que se
-  // muestra aquí simplemente lee "players" en vivo, sin estado local propio. ---
-  const [addingPlayerMode, setAddingPlayerMode] = useState(null); // 'active' | 'academy' | null
-
-  // --- Carga masiva con IA: aquí el usuario típicamente mete 20-30 jugadores de golpe, así que
-  // "Cargar Plantilla" es la opción destacada — abre ScanPlayerCardModal directamente en modo
-  // lote (forceBatch=true), que ya ofrece las dos vías de captura masiva por sí mismo: subir
-  // varias fotos a la vez desde la galería, o modo ráfaga con la cámara (disparar foto tras
-  // foto sin volver a la pantalla de selección entre medias, ver cameraQueue en
-  // ScanPlayerCardModal). forceBatch=true además fuerza que incluso UNA sola foto pase por la
-  // tabla de revisión (BulkScanReviewModal) en vez de abrir PlayerForm directamente — aquí la
-  // intención siempre es "carga masiva", nunca una ficha individual paso a paso. ---
-  const [bulkScanMode, setBulkScanMode] = useState(null); // 'active' | 'academy' | null
+  // --- Paso 4: Plantilla Actual — registro de jugadores. addingPlayer abre PlayerForm (idéntico
+  // a "Fichar Jugador") por encima de este asistente; cada ficha se guarda directamente en
+  // Firestore, así que la lista que se muestra aquí simplemente lee "players" en vivo, sin
+  // estado local propio. bulkScanning/bulkReview son la vía de carga masiva con IA (lote de
+  // fotos o ráfaga con cámara, ver ScanPlayerCardModal/BulkScanReviewModal): aquí el usuario
+  // típicamente mete 20-30 jugadores de golpe, así que es la opción destacada del paso; los
+  // canteranos que la IA detecte sueltos en el lote (esCanterano) se archivan solos en Academia,
+  // sin necesidad de un paso dedicado aparte en este asistente. ---
+  const [addingPlayer, setAddingPlayer] = useState(false);
+  const [bulkScanning, setBulkScanning] = useState(false);
   const [bulkReview, setBulkReview] = useState(null);
 
-  // --- Paso Resumen: desglose desplegable de las dos listas ("Jugadores"/"Canteranos"), con
-  // edición en línea (reutiliza PlayerForm en modo edición, igual que Plantilla/Academia/
-  // Táctica) y borrado (reutiliza playerToDelete/confirmDeletePlayer de ClubDataContext, mismo
-  // flujo con "Deshacer" que el resto de la app) ---
+  // --- Paso 5: Confirmación y Resumen — desglose desplegable de las dos listas ("Jugadores"/
+  // "Canteranos", esta última solo si la IA reclasificó alguno), con edición en línea (reutiliza
+  // PlayerForm en modo edición) y borrado (reutiliza playerToDelete/confirmDeletePlayer de
+  // ClubDataContext, mismo flujo con "Deshacer" que el resto de la app) ---
   const [expandedGroup, setExpandedGroup] = useState(null); // 'active' | 'academy' | null
   const [editingSummaryPlayer, setEditingSummaryPlayer] = useState(null);
 
@@ -134,25 +145,16 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
     }
   };
 
-  const pickPreset = (amount) => { setCustomMode(false); setCustomBudget(''); setBudget(amount); };
-  const pickCustom = () => { setCustomMode(true); setBudget(parseValue(customBudget)); };
-  const onCustomBudgetChange = (raw) => {
-    const formatted = formatValueInput(raw);
-    setCustomBudget(formatted);
-    setBudget(parseValue(formatted));
-  };
-  const onContinueBudgetChange = (raw) => {
-    const formatted = formatValueInput(raw);
-    setContinueBudgetInput(formatted);
-    setBudget(parseValue(formatted));
-  };
+  const onTransferBudgetChange = (raw) => setTransferBudgetInput(formatValueInput(raw));
+  const budgetAmount = parseValue(transferBudgetInput);
 
   // Mientras el usuario no haya editado a mano el Presup. Sem., se mantiene sincronizado con la
   // sugerencia automática (Presupuesto de Traspasos / 52) cada vez que cambia el presupuesto.
   useEffect(() => {
     if (weeklyWageTouched) return;
-    setWeeklyWageInput(formatValueInput(String(weeklyWageBudgetFromTransfer(budget))));
-  }, [budget, weeklyWageTouched]);
+    setWeeklyWageInput(formatValueInput(String(weeklyWageBudgetFromTransfer(budgetAmount))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [budgetAmount, weeklyWageTouched]);
 
   const onWeeklyWageChange = (raw) => {
     setWeeklyWageTouched(true);
@@ -163,29 +165,27 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const academyRosterPlayers = players.filter((p) => p.type === 'Cantera');
 
   const canGoNext = () => {
-    if (currentStepId === 'identity') return name.trim().length > 0;
-    // "Modo Carrera ya Empezado": campo único directo, sin selector de presets — solo hace
-    // falta que el usuario haya introducido una cantidad mayor que cero.
-    if (currentStepId === 'budget') return startType === 'continue' ? parseValue(continueBudgetInput) > 0 : (!customMode || parseValue(customBudget) > 0);
-    if (currentStepId === 'status') return !!startType;
-    if (currentStepId === 'academy') return hasAcademy !== null || academyRosterPlayers.length > 0;
+    if (currentStepId === 'identity') return name.trim().length > 0 && managerName.trim().length > 0;
+    if (currentStepId === 'philosophy') return !!philosophy;
+    if (currentStepId === 'budget') return budgetAmount > 0;
     return true;
   };
 
   const goNext = async () => {
     setError('');
     if (!canGoNext()) {
-      if (currentStepId === 'identity') setError('El nombre del club es obligatorio.');
+      if (currentStepId === 'identity') setError('El nombre del club y del mánager son obligatorios.');
+      else if (currentStepId === 'philosophy') setError('Elige un estilo de gestión para tu club.');
       else if (currentStepId === 'budget') setError('Introduce una cantidad mayor que cero.');
-      else if (currentStepId === 'status') setError('Elige cómo quieres empezar.');
-      else if (currentStepId === 'academy') setError('Responde si tu club tiene canteranos.');
       return;
     }
     if (currentStepId === 'budget') {
       if (isSaving) return;
       setIsSaving(true);
       try {
-        const result = await createClub(name, logo, budget, parseValue(weeklyWageInput) || null);
+        const result = await createClub(name, logo, budgetAmount, parseValue(weeklyWageInput) || null, {
+          managerName, seasonLabel, currency, philosophy, seasonObjective,
+        });
         setCreatedClubId(result?.clubId || null);
         setIsSaving(false);
         setStep((s) => s + 1);
@@ -201,8 +201,8 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const goPrev = () => { setError(''); setStep((s) => Math.max(0, s - 1)); };
 
   // Solo se marca el onboarding como resuelto si este propio asistente llegó a tener un club
-  // real asociado (ya existía, o se acaba de crear aquí): omitir en los pasos de identidad o
-  // fondos, antes de crear el club, no debe tocar el onboarding de ningún otro club.
+  // real asociado (ya existía, o se acaba de crear aquí): omitir en los pasos previos a crear
+  // el club no debe tocar el onboarding de ningún otro club.
   const handleSkip = async () => {
     onDismiss?.();
     if (clubExists || createdClubId) {
@@ -225,53 +225,38 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   };
 
   // Una vez creado el club (o si ya existía), "clubs.length > 0" es siempre cierto — el botón
-  // de cerrar solo se oculta durante identidad/fondos cuando este es el primer club del
-  // usuario (no puede quedarse sin ningún club activo).
+  // de cerrar solo se oculta durante los pasos previos a crear el club cuando este es el primer
+  // club del usuario (no puede quedarse sin ningún club activo).
   const showDismiss = clubExists || clubs.length > 0;
 
-  const isScratch = startType === 'scratch';
-  // skipInitialTransaction en los tres casos: cualquier jugador registrado aquí es estado base
-  // previo del club (ya fichado antes de usar la app), nunca una compra real hecha dentro de
-  // ella — el historial de transacciones y el presupuesto no deben verse afectados.
-  // "Empieza desde Cero" (isScratch): estos jugadores nunca vinieron de otro club, así que el
-  // campo Club de Procedencia se oculta por completo (hideSourceClub, ver PlayerForm) y se fija
-  // directamente a "En el club desde el inicio" sin pedírselo al usuario. En "Modo Carrera ya
-  // Empezado" el campo se muestra editable con normalidad, para indicar de qué equipo real vino
-  // cada jugador.
-  const playerFormPropsFor = (mode) => {
-    if (mode === 'academy') return { prefill: { type: 'Cantera' }, lockedType: 'Cantera', skipInitialTransaction: true };
-    if (isScratch) return { prefill: { type: 'Comprado', sourceClub: 'En el club desde el inicio' }, lockedType: 'Comprado', hidePurchasePrice: true, hideSourceClub: true, skipInitialTransaction: true };
-    return { prefill: { type: 'Comprado' }, restrictTypes: ['Comprado', 'Cedido'], skipInitialTransaction: true };
-  };
-
-  // Mismo criterio que playerFormPropsFor, pero para BulkScanReviewModal: "propertyDefault" es
-  // solo el punto de partida de cada fila detectada como Propiedad (nunca Cedido/Cantera, que
-  // la IA ya clasifica sola) — el usuario puede corregirlo fila a fila en la propia tabla. En
-  // Onboarding, tanto empezando desde cero como continuando una carrera ya avanzada, una
-  // tarjeta de Propiedad se preasigna siempre a "Ya en el Club": es la forma natural de dar de
-  // alta la plantilla de partida sin tener que rellenar precio/club de origen de cada jugador.
-  const bulkScanPropsFor = (mode) => {
-    if (mode === 'academy') return { mode: 'academia', propertyDefault: 'Comprado', skipInitialTransaction: true };
-    return { mode: 'primerEquipo', propertyDefault: 'Inicial', skipInitialTransaction: true };
-  };
+  // Registro de Plantilla Inicial: nunca implica una compra real (ver initialSquadTypes en
+  // PlayerForm y restrictToInitialTypes en BulkScanReviewModal, que retiran "Comprado" del
+  // selector) — solo 3 estados de situación (En Propiedad / Cedido en Nuestro Club / Cedido a
+  // Otro Club), así el historial de traspasos de la carrera nunca se ve alterado por un jugador
+  // que ya estaba en el club antes de usar la app.
+  const playerFormProps = { prefill: { type: 'Comprado', sourceClub: 'En el club desde el inicio' }, initialSquadTypes: true, hidePurchasePrice: true, hideSourceClub: true, skipInitialTransaction: true };
+  const bulkScanProps = { mode: 'primerEquipo', propertyDefault: 'Inicial', skipInitialTransaction: true, restrictToInitialTypes: true };
 
   const handleBulkScanExtracted = (results) => {
-    setBulkReview({ ...bulkScanPropsFor(bulkScanMode), results });
-    setBulkScanMode(null);
+    setBulkReview({ ...bulkScanProps, results });
+    setBulkScanning(false);
   };
 
   const STEP_LABELS = {
-    identity: 'Escudo y Nombre',
+    identity: 'Identidad',
+    philosophy: 'Filosofía',
     budget: 'Fondos Iniciales',
-    status: 'Estado de la Partida',
-    active: isScratch ? 'Jugadores Base' : 'Plantilla Actual',
-    academy: 'Academia',
+    squad: 'Plantilla Actual',
     summary: 'Resumen',
   };
 
   const displayName = clubExists ? (activeClub?.name || '') : name;
   const displayLogo = clubExists ? activeClub?.logo : logo;
-  const displayBudget = clubExists ? (activeClub?.transferBudget || 0) : budget;
+  const displayBudget = clubExists ? (activeClub?.transferBudget || 0) : budgetAmount;
+  const displayManagerName = clubExists ? (activeClub?.managerName || '') : managerName;
+  const displaySeasonLabel = clubExists ? (activeClub?.seasonLabel || '') : seasonLabel;
+  const displayPhilosophy = clubExists ? activeClub?.philosophy : philosophy;
+  const philosophyMeta = PHILOSOPHY_OPTIONS.find((p) => p.value === displayPhilosophy);
 
   return (
     <>
@@ -316,51 +301,68 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Nombre del Club</label>
-                    <input type="text" autoFocus placeholder="Ej: CD Olvera" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); goNext(); } }} />
+                    <input type="text" autoFocus placeholder="Ej: CD Olvera" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={name} onChange={(e) => setName(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1 flex items-center gap-1.5"><User size={11} className="shrink-0" /> Nombre del Mánager (DT)</label>
+                    <input type="text" placeholder="Ej: Tu nombre" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={managerName} onChange={(e) => setManagerName(e.target.value)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1 flex items-center gap-1.5"><CalendarDays size={11} className="shrink-0" /> Temporada</label>
+                      <input type="text" placeholder="Ej: 2025/26" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={seasonLabel} onChange={(e) => setSeasonLabel(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1 flex items-center gap-1.5"><Coins size={11} className="shrink-0" /> Moneda</label>
+                      <div className="flex gap-1">
+                        {CURRENCY_OPTIONS.map((c) => (
+                          <button key={c.value} type="button" onClick={() => setCurrency(c.value)} className={`flex-1 h-[52px] rounded-xl text-[10px] font-black transition-all touch-manipulation ${currency === c.value ? 'bg-green-500 text-black' : 'bg-well text-fg-muted border border-border-subtle hover:bg-well-strong'}`}>{c.label.split(' ')[0]}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {currentStepId === 'philosophy' && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-fg-muted">¿Cuál es el ADN de tu club?</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {PHILOSOPHY_OPTIONS.map((opt) => {
+                        const Icon = opt.icon;
+                        const active = philosophy === opt.value;
+                        return (
+                          <button key={opt.value} type="button" onClick={() => setPhilosophy(opt.value)} className={`p-3.5 rounded-2xl border text-left transition-all touch-manipulation ${active ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:bg-well-strong'}`}>
+                            <Icon size={18} className="mb-1.5" />
+                            <div className="font-black uppercase text-[11px] leading-tight">{opt.emoji} {opt.title}</div>
+                            <div className="text-[9px] font-bold mt-1 opacity-70 leading-snug">{opt.desc}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="space-y-2 pt-2 border-t border-border-subtle">
+                    <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1 flex items-center gap-1.5"><Target size={11} className="shrink-0" /> Objetivo de la Temporada</label>
+                    <div className="space-y-1.5">
+                      {SEASON_OBJECTIVE_OPTIONS.map((obj) => (
+                        <button key={obj} type="button" onClick={() => setSeasonObjective(obj)} className={`w-full py-2.5 px-3 rounded-xl text-left text-[10px] font-black uppercase transition-all touch-manipulation ${seasonObjective === obj ? 'bg-green-500 text-black' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>{obj}</button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
 
               {currentStepId === 'budget' && (
                 <div className="space-y-4">
-                  {startType === 'continue' ? (
-                    <>
-                      {/* "Modo Carrera ya Empezado": sin selector de presets — un único campo
-                          directo con el presupuesto real de la partida en curso, tal como lo
-                          muestra el propio juego. */}
-                      <div className="flex items-start gap-2 p-3 rounded-2xl bg-well border border-border-subtle">
-                        <Wallet size={16} className="text-green-500 shrink-0 mt-0.5" />
-                        <span className="text-xs font-bold text-fg-muted leading-relaxed">Ve en tu juego a la pestaña <span className="text-fg font-black">Oficina &gt; Resumen del presupuesto &gt; Presupuesto</span> e introduce los datos actuales de tu club.</span>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Presupuesto para Traspasos Actual (€)</label>
-                        <input type="text" inputMode="numeric" autoFocus placeholder="Ej: 45.000.000" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={continueBudgetInput} onChange={(e) => onContinueBudgetChange(e.target.value)} />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex items-center gap-2 p-3 rounded-2xl bg-well border border-border-subtle">
-                        <Wallet size={16} className="text-green-500 shrink-0" />
-                        <span className="text-xs font-bold text-fg-muted">Fondos para fichajes y masa salarial desde el primer día</span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {BUDGET_PRESETS.map((amount) => (
-                          <button key={amount} type="button" onClick={() => pickPreset(amount)} className={`py-3 rounded-xl text-[10px] font-black uppercase border transition-all ${!customMode && budget === amount ? 'bg-green-500 text-black border-green-500' : 'bg-well border-border-subtle text-fg-secondary hover:border-fg-muted'}`}>
-                            {abbreviateBudget(amount)}
-                          </button>
-                        ))}
-                        <button type="button" onClick={pickCustom} className={`py-3 rounded-xl text-[10px] font-black uppercase border transition-all ${customMode ? 'bg-green-500 text-black border-green-500' : 'bg-well border-border-subtle text-fg-secondary hover:border-fg-muted'}`}>
-                          Personalizar
-                        </button>
-                      </div>
-                      {customMode && (
-                        <div className="space-y-2 animate-in fade-in duration-150">
-                          <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Cantidad Personalizada</label>
-                          <input type="text" inputMode="numeric" autoFocus placeholder="Ej: 20.000.000" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={customBudget} onChange={(e) => onCustomBudgetChange(e.target.value)} />
-                        </div>
-                      )}
-                    </>
-                  )}
+                  <div className="flex items-start gap-2 p-3 rounded-2xl bg-well border border-border-subtle">
+                    <Wallet size={16} className="text-green-500 shrink-0 mt-0.5" />
+                    <span className="text-xs font-bold text-fg-muted leading-relaxed">Ve en tu juego a la pestaña <span className="text-fg font-black">Oficina &gt; Resumen del presupuesto &gt; Presupuesto</span> e introduce los datos actuales de tu club.</span>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Presupuesto de Traspasos (€)</label>
+                    <input type="text" inputMode="numeric" autoFocus placeholder="Ej: 45.000.000" className="w-full bg-well p-4 rounded-2xl outline-none border border-border focus:border-green-500 font-bold text-fg text-base md:text-sm placeholder:text-fg-faint" value={transferBudgetInput} onChange={(e) => onTransferBudgetChange(e.target.value)} />
+                  </div>
 
                   {/* Sugerido automáticamente como Presupuesto de Traspasos / 52 (igual que EA
                       Sports FC), pero totalmente editable: ese reparto no siempre coincide con
@@ -377,23 +379,9 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                 </div>
               )}
 
-              {currentStepId === 'status' && (
+              {currentStepId === 'squad' && (
                 <div className="space-y-3">
-                  <p className="text-xs font-bold text-fg-muted">¿Cómo quieres empezar tu Modo Carrera?</p>
-                  <button type="button" onClick={() => setStartType('scratch')} className={`w-full p-4 rounded-2xl border text-left transition-all ${startType === 'scratch' ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:bg-well-strong'}`}>
-                    <div className="font-black uppercase text-sm flex items-center gap-2"><RotateCcw size={16} /> Empezar desde Cero</div>
-                    <div className="text-[10px] font-bold mt-1 opacity-70">Arranca una carrera limpia y nueva: presupuesto inicial por defecto y plantilla vacía, para ir registrando a tus jugadores paso a paso desde ahora.</div>
-                  </button>
-                  <button type="button" onClick={() => setStartType('continue')} className={`w-full p-4 rounded-2xl border text-left transition-all ${startType === 'continue' ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:bg-well-strong'}`}>
-                    <div className="font-black uppercase text-sm flex items-center gap-2"><Users size={16} /> Modo Carrera ya Empezado</div>
-                    <div className="text-[10px] font-bold mt-1 opacity-70">Vuelca los datos de una partida ya avanzada de EA Sports FC: los fichajes que ya hiciste, el presupuesto actual de tu club y tus jugadores reales, ya adaptados.</div>
-                  </button>
-                </div>
-              )}
-
-              {currentStepId === 'active' && (
-                <div className="space-y-3">
-                  <p className="text-xs font-bold text-fg-muted">{isScratch ? 'Añade los jugadores base de tu primer equipo.' : 'Añade tu plantilla actual, ficha a ficha.'}</p>
+                  <p className="text-xs font-bold text-fg-muted">Añade tu plantilla actual, ficha a ficha.</p>
                   <div className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
                     {activeRosterPlayers.length === 0 ? (
                       <div className="p-4 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Aún no has añadido jugadores</div>
@@ -404,58 +392,19 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                       </div>
                     ))}
                   </div>
-                  {/* Opción principal destacada: aquí el usuario típicamente mete 20-30
-                      jugadores de golpe, así que "Cargar Plantilla" (lote de fotos o ráfaga con
-                      cámara, ambos dentro de ScanPlayerCardModal) es el camino rápido
-                      recomendado; Manual queda como alternativa secundaria. */}
-                  <button type="button" onClick={() => setBulkScanMode('active')} className="w-full py-4 rounded-2xl bg-blue-600 text-white hover:bg-blue-500 transition-all flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest touch-manipulation shadow-lg shadow-blue-600/20">
-                    <Images size={16} /> Escanear Plantilla con IA
+                  <div className="p-3 rounded-2xl bg-well border border-border-subtle">
+                    <p className="text-[10px] font-bold text-fg-muted leading-relaxed">Ve en tu juego a <span className="text-fg font-black">Plantilla &gt; Menú de plantilla &gt; Finanzas</span>, y haz una foto a la información que aparece a la derecha de la pantalla para cada jugador.</p>
+                  </div>
+                  {/* Opción principal destacada, con el diseño premium de IA (borde degradado
+                      animado + halo, ver AIGlowButton): aquí el usuario típicamente mete 20-30
+                      jugadores de golpe. "Añadir Jugadores a Mano" queda como alternativa
+                      secundaria discreta. */}
+                  <AIGlowButton onClick={() => setBulkScanning(true)}>
+                    Escanear Plantilla con IA
+                  </AIGlowButton>
+                  <button type="button" onClick={() => setAddingPlayer(true)} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
+                    <Plus size={13} /> Añadir Jugadores a Mano
                   </button>
-                  <p className="text-[9px] font-bold text-fg-faint text-center px-2 -mt-1.5">Haz fotos nítidas a la tarjeta de finanzas de cada jugador pasando con el joystick.</p>
-                  <button type="button" onClick={() => setAddingPlayerMode('active')} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
-                    <Plus size={13} /> Manual
-                  </button>
-                </div>
-              )}
-
-              {currentStepId === 'academy' && (
-                <div className="space-y-3">
-                  {/* Si ya llegaron canteranos a la Academia por redirección automática desde
-                      un escaneo de Primer Equipo (esCanterano, ver BulkScanReviewModal), se da
-                      por hecho que la respuesta es "Sí" y se salta directamente a la lista —
-                      preguntar de nuevo sería redundante con lo que el usuario ya hizo. */}
-                  {academyRosterPlayers.length > 0 ? (
-                    <p className="text-xs font-bold text-fg-muted">Ya tienes <span className="text-fg font-black">{academyRosterPlayers.length}</span> canterano{academyRosterPlayers.length === 1 ? '' : 's'} registrado{academyRosterPlayers.length === 1 ? '' : 's'} en tu Academia. ¿Quieres añadir más o continuar?</p>
-                  ) : (
-                    <>
-                      <p className="text-xs font-bold text-fg-muted">¿Tu club tiene canteranos en la Academia?</p>
-                      <div className="flex gap-2">
-                        <button type="button" onClick={() => setHasAcademy(true)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${hasAcademy === true ? 'bg-emerald-600 text-white' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>Sí</button>
-                        <button type="button" onClick={() => setHasAcademy(false)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${hasAcademy === false ? 'bg-well-strong text-fg' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>No</button>
-                      </div>
-                    </>
-                  )}
-                  {(hasAcademy || academyRosterPlayers.length > 0) && (
-                    <>
-                      <div className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
-                        {academyRosterPlayers.length === 0 ? (
-                          <div className="p-4 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Aún no has añadido canteranos</div>
-                        ) : academyRosterPlayers.map((p) => (
-                          <div key={p.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
-                            <span className="text-xs font-black text-fg truncate">{p.name}</span>
-                            <span className="text-[9px] font-black text-fg-faint uppercase shrink-0 ml-2">{p.positions?.[0] || '—'} · Pot. {p.potential || '—'}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <button type="button" onClick={() => setBulkScanMode('academy')} className="w-full py-4 rounded-2xl bg-blue-600 text-white hover:bg-blue-500 transition-all flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest touch-manipulation shadow-lg shadow-blue-600/20">
-                        <Images size={16} /> Escanear Academia con IA
-                      </button>
-                      <p className="text-[9px] font-bold text-fg-faint text-center px-2 -mt-1.5">Haz fotos nítidas a la tarjeta de finanzas de cada canterano pasando con el joystick.</p>
-                      <button type="button" onClick={() => setAddingPlayerMode('academy')} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
-                        <Plus size={13} /> Manual
-                      </button>
-                    </>
-                  )}
                 </div>
               )}
 
@@ -465,9 +414,18 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                     {displayLogo ? <img src={displayLogo} alt="Logo" className="w-14 h-14 rounded-xl object-cover border border-border-subtle shrink-0" /> : <div className="w-14 h-14 rounded-xl bg-well-strong flex items-center justify-center shrink-0"><Shield size={22} className="text-fg-faint" /></div>}
                     <div className="min-w-0">
                       <div className="font-black uppercase italic text-base truncate text-fg">{displayName || 'Tu Club'}</div>
+                      {displayManagerName && <div className="text-[10px] font-bold text-fg-muted truncate">DT: {displayManagerName}{displaySeasonLabel ? ` · Temporada ${displaySeasonLabel}` : ''}</div>}
                       <div className="flex items-center gap-1.5 text-green-500 font-black text-xs mt-0.5"><Wallet size={12} /> {formatCurrency(displayBudget)}</div>
                     </div>
                   </div>
+
+                  {philosophyMeta && (
+                    <div className="flex items-center gap-2 p-3 rounded-2xl bg-well border border-border-subtle">
+                      <philosophyMeta.icon size={16} className="text-green-500 shrink-0" />
+                      <span className="text-xs font-black text-fg">{philosophyMeta.emoji} {philosophyMeta.title}</span>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-3">
                     <button type="button" onClick={() => setExpandedGroup((g) => (g === 'active' ? null : 'active'))} className={`p-3 rounded-xl border text-center transition-all touch-manipulation ${expandedGroup === 'active' ? 'bg-green-500/10 border-green-500/40' : 'bg-well border-border-subtle hover:bg-well-strong'}`}>
                       <div className="text-lg font-black italic text-fg">{activeRosterPlayers.length}</div>
@@ -486,7 +444,9 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                   {/* Desglose desplegable: datos clave de cada jugador ya registrado, para
                       revisar todo el equipo de un vistazo antes de confirmar — editable en
                       línea (lápiz, abre PlayerForm en modo edición) y con borrado (papelera,
-                      mismo flujo con "Deshacer" que Plantilla/Academia). */}
+                      mismo flujo con "Deshacer" que el resto de la app). Los canteranos que
+                      aparecen aquí llegaron por reclasificación automática de la IA durante el
+                      escaneo de plantilla (esCanterano), no por un paso de Academia dedicado. */}
                   {expandedGroup === 'active' && (
                     <div className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                       {activeRosterPlayers.length === 0 ? (
@@ -544,22 +504,22 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
               </button>
             ) : (
               <button type="button" onClick={handleFinish} disabled={isSaving} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-2 hover:bg-green-400 transition-all disabled:opacity-50">
-                {isSaving ? 'Guardando...' : (<><Check size={16} /> Entrar a mi Club</>)}
+                {isSaving ? 'Guardando...' : '🚀 Entrar al Despacho del Club'}
               </button>
             )}
           </footer>
         </div>
       </div>
 
-      {addingPlayerMode && (
-        <PlayerForm {...playerFormPropsFor(addingPlayerMode)} onClose={() => setAddingPlayerMode(null)} />
+      {addingPlayer && (
+        <PlayerForm {...playerFormProps} onClose={() => setAddingPlayer(false)} />
       )}
 
-      {bulkScanMode && (
+      {bulkScanning && (
         <ScanPlayerCardModal
-          mode={bulkScanMode === 'academy' ? 'academia' : 'primerEquipo'}
+          mode="primerEquipo"
           forceBatch
-          onClose={() => setBulkScanMode(null)}
+          onClose={() => setBulkScanning(false)}
           onBatchExtracted={handleBulkScanExtracted}
         />
       )}
@@ -569,14 +529,15 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
           results={bulkReview.results}
           propertyDefault={bulkReview.propertyDefault}
           skipInitialTransaction={bulkReview.skipInitialTransaction}
-          academyStepHint="podrás revisarlo en el Paso 5"
+          restrictToInitialTypes={bulkReview.restrictToInitialTypes}
+          academyStepHint="podrás revisarlo en el Resumen"
           confirmLabel="Confirmar y Guardar Plantilla"
           onClose={() => setBulkReview(null)}
         />
       )}
 
       {editingSummaryPlayer && (
-        <PlayerForm editingPlayer={editingSummaryPlayer} initialStep={4} onClose={() => setEditingSummaryPlayer(null)} />
+        <PlayerForm editingPlayer={editingSummaryPlayer} initialStep={4} initialSquadTypes={editingSummaryPlayer.type !== 'Cantera'} onClose={() => setEditingSummaryPlayer(null)} />
       )}
       {playerToDelete && (
         <ConfirmModal

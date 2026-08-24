@@ -169,3 +169,65 @@ textarea::placeholder {
   from { width: 100%; }
   to { width: 0%; }
 }
+
+/* --- Estilo premium "IA" (borde degradado animado + halo), estilo Siri/Gemini/Apple
+   Intelligence: reutilizado por TODOS los botones y acciones que disparan una llamada real a
+   la IA (Escanear con IA, Escanear Fotos, etc. — ver AIGlowButton.jsx). @property registra el
+   ángulo como un tipo animable de verdad (no un simple custom property estático), así el
+   conic-gradient puede rotar con una única animación de CSS en vez de necesitar JS/SVG; en
+   navegadores sin soporte de @property el degradado simplemente queda fijo en vez de rotar,
+   degradación aceptable sin ningún error. */
+@property --ai-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes ai-border-spin {
+  to { --ai-angle: 360deg; }
+}
+@keyframes ai-glow-pulse {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+@keyframes ai-sparkle-pulse {
+  0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
+  50% { opacity: 0.55; transform: scale(1.2) rotate(12deg); }
+}
+.btn-ai-glow {
+  --ai-angle: 0deg;
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(160deg, #150a24, #0a0a14 55%, #0a1424);
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.25), 0 4px 22px -6px rgba(139, 92, 246, 0.55), 0 4px 26px -8px rgba(34, 211, 238, 0.4);
+  transition: transform 0.2s ease, box-shadow 0.25s ease;
+}
+.btn-ai-glow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(from var(--ai-angle), #8b5cf6, #22d3ee, #ec4899, #3b82f6, #8b5cf6);
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: ai-border-spin 3.2s linear infinite, ai-glow-pulse 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+.btn-ai-glow:hover, .btn-ai-glow:focus-visible {
+  transform: scale(1.03);
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.4), 0 6px 30px -4px rgba(139, 92, 246, 0.7), 0 6px 32px -6px rgba(34, 211, 238, 0.55);
+}
+.btn-ai-glow:active {
+  transform: scale(1.01);
+}
+.btn-ai-glow:disabled {
+  transform: none;
+  box-shadow: none;
+  opacity: 0.5;
+}
+.btn-ai-glow .ai-sparkle {
+  animation: ai-sparkle-pulse 1.9s ease-in-out infinite;
+}

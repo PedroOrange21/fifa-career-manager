@@ -201,7 +201,17 @@ function SectionHeader({ emoji, title }) {
 // (Comprado) o Club de Origen (Cedido) — el tipo concreto ya lo decidió el usuario en
 // AddPlayerOperationTypeModal antes incluso de escanear, ver operationType en
 // mapScanResultToPrefill.
-export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onClose, initialStep = 1, initialEditField = null, lockedType = null, restrictTypes = null, hidePurchasePrice = false, hideSourceClub = false, skipInitialTransaction = false, postScanReview = false }) {
+// initialSquadTypes: usado exclusivamente por el registro de Plantilla Inicial del asistente de
+// bienvenida (OnboardingWizard, tanto al crear como al editar desde el Resumen) — sustituye el
+// selector de Tipo de Adquisición habitual (Cantera/Cedido/Comprado) por 3 ESTADOS DE
+// SITUACIÓN que nunca implican una compra real: "En Propiedad" (type Comprado, sin precio ni
+// club de procedencia — un jugador que ya estaba en el club antes de usar la app), "Cedido en
+// Nuestro Club" (type Cedido, idéntico al ya existente) y "Cedido a Otro Club" (type Comprado +
+// transferStatus 'CedidoFuera' + outboundLoan, mismo formato que una cesión saliente real). La
+// opción "Comprado" como transferencia real queda deliberadamente fuera de este selector:
+// registrar aquí una "compra" alteraría el historial de traspasos de una partida que, en
+// realidad, ya estaba en marcha antes de escanear/rellenar la plantilla.
+export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onClose, initialStep = 1, initialEditField = null, lockedType = null, restrictTypes = null, hidePurchasePrice = false, hideSourceClub = false, skipInitialTransaction = false, postScanReview = false, initialSquadTypes = false }) {
   const { addOrUpdatePlayer, deleteTarget } = useClubData();
   useAutoHideChrome();
 
@@ -273,6 +283,23 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
     setShowFootMenu(false);
   };
   const setOutboundDuration = (value) => set({ outboundLoan: { ...(form.outboundLoan || {}), duration: value } });
+  const setOutboundDestinationClub = (value) => set({ outboundLoan: { ...(form.outboundLoan || {}), destinationClub: value } });
+
+  // Situación en el Club (ver initialSquadTypes más arriba): deriva el estado de los 3 botones a
+  // partir de type/transferStatus reales, y selectInitialAcquisition() es quien los fija juntos
+  // en cada cambio — nunca se editan por separado, para no dejar una combinación imposible
+  // (p. ej. type Cedido con transferStatus CedidoFuera a la vez).
+  const acquisitionKind = form.type === 'Cedido' ? 'loan_in' : form.transferStatus === 'CedidoFuera' ? 'loan_out' : 'owned';
+  const INITIAL_ACQUISITION_OPTIONS = [
+    { key: 'owned', label: 'En Propiedad', activeClass: 'bg-blue-600 text-white' },
+    { key: 'loan_in', label: 'Cedido en Nuestro Club', activeClass: 'bg-yellow-600 text-white' },
+    { key: 'loan_out', label: 'Cedido a Otro Club', activeClass: 'bg-purple-600 text-white' },
+  ];
+  const selectInitialAcquisition = (kind) => {
+    if (kind === 'owned') set({ type: 'Comprado', contractYears: '', transferStatus: 'Activo', outboundLoan: null });
+    else if (kind === 'loan_in') set({ type: 'Cedido', contractYears: '', transferStatus: 'Activo', outboundLoan: null });
+    else if (kind === 'loan_out') set({ type: 'Comprado', contractYears: '', transferStatus: 'CedidoFuera', outboundLoan: form.outboundLoan || { destinationClub: '', duration: '1 Temporada' } });
+  };
 
   // Un jugador cedido a nuestro club (type 'Cedido') no nos pertenece: si el usuario cambia
   // el tipo de adquisición a 'Cedido' se limpia cualquier estado de mercado previo (no puede
@@ -398,6 +425,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
       if (form.type === 'Comprado' && !form.contractYears) return { message: 'Selecciona los años de contrato.', field: 'contractYears' };
       if (form.type === 'Cedido' && !form.originClub.trim()) return { message: 'Club de origen obligatorio.', field: 'originClub' };
       if (form.type === 'Cedido' && form.hasBuyOption && (!form.buyOption || parseValue(form.buyOption) <= 0)) return { message: 'Introduce el precio de la opción de compra.', field: 'buyOption' };
+      if (form.transferStatus === 'CedidoFuera' && !(form.outboundLoan?.destinationClub || '').trim()) return { message: 'Club de destino obligatorio.', field: 'outboundClub' };
     }
     return null;
   };
@@ -676,9 +704,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                       existente, sin la opción Cantera). */}
                   {!lockedType && (
                     <div className="space-y-1 relative">
-                      <label className="text-[9px] font-black text-fg-muted ml-1">Tipo de Adquisición</label>
+                      <label className="text-[9px] font-black text-fg-muted ml-1">{initialSquadTypes ? 'Situación en el Club' : 'Tipo de Adquisición'}</label>
                       <div className="flex gap-2">
-                        {(restrictTypes || ['Cantera', 'Cedido', 'Comprado']).map((t) => {
+                        {initialSquadTypes ? INITIAL_ACQUISITION_OPTIONS.map((opt) => (
+                          <button key={opt.key} type="button" onClick={() => selectInitialAcquisition(opt.key)} className={`flex-1 py-2.5 rounded-xl text-[9px] font-black uppercase transition-all touch-manipulation ${acquisitionKind === opt.key ? opt.activeClass : 'bg-well text-fg-muted hover:bg-well-strong'}`}>{opt.label}</button>
+                        )) : (restrictTypes || ['Cantera', 'Cedido', 'Comprado']).map((t) => {
                           const activeClass = t === 'Cantera' ? 'bg-emerald-600 text-white' : t === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-blue-600 text-white';
                           return (
                             <button key={t} type="button" onClick={() => selectAcquisitionType(t)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === t ? activeClass : 'bg-well text-fg-muted hover:bg-well-strong'}`}>{t}</button>
@@ -709,6 +739,22 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">Precio de Compra (€) *</label>
                       <input type="text" inputMode="numeric" required placeholder="Ej: 50.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.value} onChange={formatMoneyField('value')} />
+                    </div>
+                  )}
+
+                  {/* "Cedido a Otro Club" (initialSquadTypes): el jugador sigue siendo nuestro,
+                      pero necesita club de destino + duración — mismo par de campos que el resto
+                      de cesiones, solo que aquí alimentan outboundLoan en vez de originClub. */}
+                  {form.transferStatus === 'CedidoFuera' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1 relative">
+                        <label className="text-[9px] font-black text-fg-muted ml-1">Club de Destino *</label>
+                        <input type="text" required placeholder="Ej: Almería" onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.outboundLoan?.destinationClub || ''} onChange={(e) => setOutboundDestinationClub(e.target.value)} />
+                      </div>
+                      <div className="space-y-1 relative">
+                        <label className="text-[9px] font-black text-fg-muted ml-1">Duración Cesión</label>
+                        <input type="text" placeholder="Ej: 11 Meses" onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.outboundLoan?.duration || ''} onChange={(e) => setOutboundDuration(e.target.value)} />
+                      </div>
                     </div>
                   )}
 
@@ -912,9 +958,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                   <SectionHeader emoji="💰" title="Economía" />
                   <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
                     {!lockedType && (
-                      <ReviewRow label="Adquisición" active={editField === 'type'} onOpen={() => setEditField('type')} display={form.type}>
+                      <ReviewRow label={initialSquadTypes ? 'Situación en el Club' : 'Adquisición'} active={editField === 'type'} onOpen={() => setEditField('type')} display={initialSquadTypes ? (INITIAL_ACQUISITION_OPTIONS.find((o) => o.key === acquisitionKind)?.label || acquisitionKind) : form.type}>
                         <div className="flex gap-2">
-                          {(restrictTypes || ['Cantera', 'Cedido', 'Comprado']).map((t) => (
+                          {initialSquadTypes ? INITIAL_ACQUISITION_OPTIONS.map((opt) => (
+                            <button key={opt.key} type="button" onClick={() => selectInitialAcquisition(opt.key)} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${acquisitionKind === opt.key ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>{opt.label}</button>
+                          )) : (restrictTypes || ['Cantera', 'Cedido', 'Comprado']).map((t) => (
                             <button key={t} type="button" onClick={() => selectAcquisitionType(t)} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${form.type === t ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>{t}</button>
                           ))}
                         </div>
@@ -1001,14 +1049,18 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                   </>
                   )}
 
-                  {/* Solo aparece al editar un jugador que está actualmente cedido a otro
-                      club (transferStatus === 'CedidoFuera'): permite ajustar la duración de
-                      esa cesión saliente sin tener que ir a la Plantilla. Al final de la
-                      ficha, como pide el diseño. */}
+                  {/* Aparece tanto al editar un jugador ya cedido a otro club (transferStatus
+                      'CedidoFuera', ajusta la duración sin ir a la Plantilla) como al crear uno
+                      con "Cedido a Otro Club" en initialSquadTypes (aquí es donde se completa
+                      el Club de Destino antes de confirmar). Al final de la ficha, como pide
+                      el diseño. */}
                   {form.transferStatus === 'CedidoFuera' && (
                     <>
                       <SectionHeader emoji="🔄" title="Cesión" />
                       <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+                        <ReviewRow label="Club de Destino" active={editField === 'outboundClub'} onOpen={() => setEditField('outboundClub')} display={form.outboundLoan?.destinationClub || 'Sin definir'}>
+                          <input autoFocus type="text" placeholder="Ej: Almería" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.outboundLoan?.destinationClub || ''} onChange={(e) => setOutboundDestinationClub(e.target.value)} />
+                        </ReviewRow>
                         <ReviewRow label="Duración de la Cesión" active={editField === 'outboundDuration'} onOpen={() => setEditField('outboundDuration')} display={form.outboundLoan?.duration || 'Sin definir'}>
                           <Dropdown value={form.outboundLoan?.duration} options={LOAN_DURATION_OPTIONS} onChange={(v) => { setOutboundDuration(v); setEditField(null); }} placeholder="Seleccionar" />
                         </ReviewRow>

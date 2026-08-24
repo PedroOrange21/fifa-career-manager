@@ -21,6 +21,17 @@ const TYPE_OPTIONS = [
   // en api/scan-player.js y su mapeo en mapScanResultToPrefill.
   { value: 'CedidoFuera', label: 'Cedido Fuera' },
 ];
+// Registro de PLANTILLA INICIAL (ver restrictToInitialTypes en el componente): "Comprado" queda
+// deliberadamente fuera de las opciones — un jugador registrado aquí nunca tuvo una compra real
+// dentro de la app, así que exponer ese botón invitaría a alterar el historial de traspasos por
+// error. Solo quedan los 3 ESTADOS DE SITUACIÓN reales: en propiedad, cedido en nuestro club o
+// cedido a otro club.
+const INITIAL_TYPE_OPTIONS = TYPE_OPTIONS.filter((t) => t.value !== 'Comprado').map((t) => (
+  t.value === 'Inicial' ? { ...t, label: 'En Propiedad' }
+    : t.value === 'Cedido' ? { ...t, label: 'Cedido en Nuestro Club' }
+      : t.value === 'CedidoFuera' ? { ...t, label: 'Cedido a Otro Club' }
+        : t
+));
 
 const FIELD_CLASS = 'w-full bg-well-strong p-2 rounded-lg outline-none border border-border-subtle focus:border-green-500 font-bold text-[11px] text-fg placeholder:text-fg-faint';
 const FIELD_CLASS_ERROR = 'w-full bg-well-strong p-2 rounded-lg outline-none border border-red-500 focus:border-red-500 font-bold text-[11px] text-fg placeholder:text-fg-faint';
@@ -108,10 +119,11 @@ const getRowErrors = (r) => {
 // la IA, completar una lectura parcial/fallida a mano, o cambiar el tipo de operación con sus
 // campos correspondientes. Definida fuera del componente principal (identidad estable entre
 // renders) para no perder el foco de los inputs en cada pulsación de tecla.
-function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, onToggleExclude, onToggleExpand, onUpdate, onRemove, onRetry }) {
+function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, restrictToInitialTypes, onToggleExclude, onToggleExpand, onUpdate, onRemove, onRetry }) {
   const errors = getRowErrors(r);
   const hasErrors = Object.keys(errors).length > 0;
   const primaryPosition = r.positions?.[0] || '';
+  const typeOptions = restrictToInitialTypes ? INITIAL_TYPE_OPTIONS : TYPE_OPTIONS;
 
   return (
     <div className={`transition-opacity ${isOut ? 'opacity-40' : ''}`}>
@@ -134,7 +146,7 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, onToggleEx
             <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-wide truncate">Canterano detectado (se moverá a Academia)</div>
           ) : (
             <div className="text-[9px] font-bold text-fg-faint uppercase tracking-wide truncate">
-              {mode === 'academia' || r.reviewType === 'Cantera' ? `${primaryPosition || '—'} · Pot. ${r.potential || '—'} · ${r.age || '—'} Años` : `${primaryPosition || '—'} · ${TYPE_OPTIONS.find((t) => t.value === r.reviewType)?.label || r.reviewType} · ${r.age || '—'} Años`}
+              {mode === 'academia' || r.reviewType === 'Cantera' ? `${primaryPosition || '—'} · Pot. ${r.potential || '—'} · ${r.age || '—'} Años` : `${primaryPosition || '—'} · ${typeOptions.find((t) => t.value === r.reviewType)?.label || r.reviewType} · ${r.age || '—'} Años`}
             </div>
           )}
         </button>
@@ -208,7 +220,7 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, onToggleEx
               <div className="space-y-0.5">
                 <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Tipo de Operación</label>
                 <div className="flex gap-1.5">
-                  {TYPE_OPTIONS.map((t) => (
+                  {typeOptions.map((t) => (
                     <button key={t.value} type="button" onClick={() => onUpdate(r.id, { reviewType: t.value })} className={`flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all border ${r.reviewType === t.value ? (t.value === 'Cedido' ? 'bg-yellow-600 text-white border-yellow-600' : t.value === 'Inicial' ? 'bg-zinc-500 text-white border-zinc-500' : t.value === 'CedidoFuera' ? 'bg-purple-600 text-white border-purple-600' : 'bg-blue-600 text-white border-blue-600') : 'bg-well text-fg-muted border-border-subtle'}`}>{t.label}</button>
                   ))}
                 </div>
@@ -272,7 +284,7 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, onToggleEx
 
 // Grupo de filas con cabecera opcional (usado para separar Primer Equipo / Academia cuando un
 // lote sale mixto — ver requisito de "organiza la revisión por secciones").
-function ReviewSection({ title, icon: Icon, rows, mode, duplicateOf, existingMatches, excluded, onToggleExclude, onToggleExpand, onUpdate, onRemove, onRetry }) {
+function ReviewSection({ title, icon: Icon, rows, mode, duplicateOf, existingMatches, excluded, restrictToInitialTypes, onToggleExclude, onToggleExpand, onUpdate, onRemove, onRetry }) {
   if (rows.length === 0) return null;
   return (
     <div className="space-y-2">
@@ -290,6 +302,7 @@ function ReviewSection({ title, icon: Icon, rows, mode, duplicateOf, existingMat
             isOut={excluded.has(r.id)}
             isDuplicate={!!duplicateOf[r.id]}
             existingMatch={existingMatches[r.id]}
+            restrictToInitialTypes={restrictToInitialTypes}
             onToggleExclude={onToggleExclude}
             onToggleExpand={onToggleExpand}
             onUpdate={onUpdate}
@@ -356,7 +369,11 @@ function FailedPhotoCard({ r, onRetry, onManualFill, onRemove }) {
 //   para referenciar su propio paso — el resto de puntos de entrada lo dejan sin definir.
 // - confirmLabel: texto del botón final, "Confirmar y Guardar Todo" por defecto; OnboardingWizard
 //   pasa "Confirmar y Guardar Plantilla" para su propia carga inicial.
-export default function BulkScanReviewModal({ mode = 'primerEquipo', results, propertyDefault = 'Comprado', skipInitialTransaction = false, academyStepHint = '', confirmLabel = 'Confirmar y Guardar Todo', onClose, onSaved }) {
+// - restrictToInitialTypes: usado exclusivamente por la carga masiva de Plantilla Inicial del
+//   asistente de bienvenida — retira "Comprado" del selector de Tipo de Operación (ver
+//   INITIAL_TYPE_OPTIONS más arriba), dejando solo los 3 ESTADOS DE SITUACIÓN reales que nunca
+//   implican una compra dentro de la app.
+export default function BulkScanReviewModal({ mode = 'primerEquipo', results, propertyDefault = 'Comprado', skipInitialTransaction = false, academyStepHint = '', confirmLabel = 'Confirmar y Guardar Todo', restrictToInitialTypes = false, onClose, onSaved }) {
   useBodyScrollLock();
   useAutoHideChrome();
   const { players, addOrUpdatePlayer } = useClubData();
@@ -612,11 +629,11 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
               {mainRows.length > 0 && (
                 isMixedBatch ? (
                   <>
-                    <ReviewSection title="Primer Equipo" rows={primerEquipoRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
-                    <ReviewSection title="Academia" icon={GraduationCap} rows={academiaRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
+                    <ReviewSection title="Primer Equipo" rows={primerEquipoRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} restrictToInitialTypes={restrictToInitialTypes} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
+                    <ReviewSection title="Academia" icon={GraduationCap} rows={academiaRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} restrictToInitialTypes={restrictToInitialTypes} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
                   </>
                 ) : (
-                  <ReviewSection rows={mainRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
+                  <ReviewSection rows={mainRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} restrictToInitialTypes={restrictToInitialTypes} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
                 )
               )}
 

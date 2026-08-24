@@ -55,12 +55,23 @@ export function ClubsProvider({ children }) {
   // guardar la cifra EXACTA que el usuario introduce a mano en el Paso 3 del asistente ("Modo
   // Carrera ya Empezado"); null significa "sin override, usar la fórmula" (ver
   // effectiveWeeklyWageBudget en utils/format.js, que decide cuál de las dos usar).
-  const createClub = async (name, logo, initialBudget = 0, weeklyWageBudgetOverride = null) => {
+  // "identity" agrupa los datos del Paso 1/2 del asistente de bienvenida que no son
+  // estrictamente financieros (mánager, temporada, moneda, filosofía, objetivo) — todos
+  // opcionales y de solo lectura fuera del propio asistente por ahora (sin editor dedicado
+  // todavía), así que se guardan tal cual o null si no se rellenaron.
+  const createClub = async (name, logo, initialBudget = 0, weeklyWageBudgetOverride = null, identity = {}) => {
     if (!user || !name.trim()) return null;
     const isFirstClub = clubs.length === 0;
     const clubId = crypto.randomUUID();
     const budget = Number(initialBudget) || 0;
     const weeklyOverride = weeklyWageBudgetOverride != null ? Number(weeklyWageBudgetOverride) || null : null;
+    const identityFields = {
+      managerName: identity.managerName?.trim() || null,
+      seasonLabel: identity.seasonLabel?.trim() || null,
+      currency: identity.currency || 'EUR',
+      philosophy: identity.philosophy || null,
+      seasonObjective: identity.seasonObjective || null,
+    };
     await setDoc(clubDoc(user.uid, clubId), {
       name: name.trim(),
       logo: logo || null,
@@ -68,12 +79,13 @@ export function ClubsProvider({ children }) {
       transferBudget: budget,
       weeklyWageBudgetOverride: weeklyOverride,
       currentSeasonNumber: 1,
+      ...identityFields,
       // Los clubes creados a partir de aquí ya registran los sueldos de jugadores/objetivos
       // directamente en semanal (ver ClubDataContext, migración "wageMigrationV1"): se marcan
       // como ya migrados desde el origen para que ese efecto nunca los reconvierta.
       wageMigrationV1: true,
     });
-    setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: budget, weeklyWageBudgetOverride: weeklyOverride, currentSeasonNumber: 1, wageMigrationV1: true }]));
+    setClubs((prev) => (prev.find((c) => c.id === clubId) ? prev : [...prev, { id: clubId, name: name.trim(), logo: logo || null, createdAt: Date.now(), transferBudget: budget, weeklyWageBudgetOverride: weeklyOverride, currentSeasonNumber: 1, ...identityFields, wageMigrationV1: true }]));
     // No cierra showClubModal aquí: el asistente de creación (OnboardingWizardModal) sigue
     // abierto tras crear el club para encadenar el registro de jugadores, y es él quien decide
     // cuándo cerrarse (Omitir o Entrar a mi Club).
