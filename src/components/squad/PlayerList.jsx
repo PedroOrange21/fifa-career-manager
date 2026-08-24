@@ -46,6 +46,44 @@ const getPositionOrder = (p) => {
   return idx === -1 ? ALL_POSITIONS.length : idx;
 };
 
+// Mismo agrupamiento por línea (POR/DEF/MED/DEL) ya usado en Finanzas (FinanceStatsTab.jsx,
+// desglose de gasto por demarcación) y en Objetivos de Mercado — duplicado a propósito aquí,
+// mismo patrón ya establecido en el resto de la app, para el mini-diagrama de distribución de
+// la cabecera de Plantilla.
+const SQUAD_POSITION_GROUPS = {
+  POR: ['POR'],
+  DEF: ['DFC', 'LD', 'LI', 'CAD', 'CAI'],
+  MED: ['MCD', 'MC', 'MD', 'MI', 'MCO'],
+  DEL: ['ED', 'EI', 'SD', 'DC'],
+};
+const SQUAD_POSITION_GROUP_META = {
+  POR: { name: 'Porteros', className: 'bg-amber-500/15 text-amber-500' },
+  DEF: { name: 'Defensas', className: 'bg-blue-500/15 text-blue-400' },
+  MED: { name: 'Centrocampistas', className: 'bg-green-500/15 text-green-400' },
+  DEL: { name: 'Delanteros', className: 'bg-purple-500/15 text-purple-400' },
+};
+const squadGroupOfPosition = (pos) => Object.keys(SQUAD_POSITION_GROUPS).find((g) => SQUAD_POSITION_GROUPS[g].includes(pos)) || null;
+
+// Mini-diagrama sutil de distribución por líneas: cuenta la plantilla activa REAL (nunca la
+// lista ya filtrada por la búsqueda de nombre, que cambiaría el desglose según lo que el
+// usuario esté tecleando en ese momento) y la pinta como píldoras discretas, una por línea.
+function SquadPositionBreakdown({ players }) {
+  const counts = { POR: 0, DEF: 0, MED: 0, DEL: 0 };
+  players.forEach((p) => {
+    const group = squadGroupOfPosition(p.positions?.[0] || p.pos);
+    if (group) counts[group] += 1;
+  });
+  return (
+    <div className="flex items-center gap-1">
+      {Object.keys(SQUAD_POSITION_GROUP_META).map((g) => (
+        <span key={g} title={`${counts[g]} ${SQUAD_POSITION_GROUP_META[g].name}`} className={`flex items-center gap-1 text-[8px] md:text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${SQUAD_POSITION_GROUP_META[g].className}`}>
+          {g} {counts[g]}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pendingPrefill, onConsumePendingPrefill }) {
   const { players, lineup, bench, playerToDelete, setPlayerToDelete, confirmDeletePlayer, setPlayerTransferStatus, startEndLoan } = useClubData();
   const [searchQuery, setSearchQuery] = useState('');
@@ -424,8 +462,9 @@ export default function PlayerList({ pendingEditPlayer, onConsumePendingEdit, pe
         </div>
       </div>
 
-      <div className="flex justify-between items-center px-2">
-        <span className="text-[10px] text-fg-muted font-black uppercase tracking-widest">{activePlayers.length} Jugadores Activos</span>
+      <div className="flex justify-between items-center px-2 gap-2">
+        <span className="text-[10px] text-fg-muted font-black uppercase tracking-widest shrink-0">{activePlayers.length} Jugadores Activos</span>
+        <SquadPositionBreakdown players={players.filter((p) => p.transferStatus !== 'CedidoFuera' && p.type !== 'Cantera')} />
       </div>
 
       <div className="bg-surface rounded-[24px] md:rounded-[32px] border border-border overflow-hidden divide-y divide-border-subtle shadow-2xl">
@@ -653,6 +692,16 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
   // Un cedido entrante nunca es cedible/transferible por nuestro club (no es de nuestra
   // propiedad), igual que ya reflejan MARKET_ACTIONS deshabilitando esas dos opciones para él.
   const marketStatus = !isIncomingLoan && (p.transferStatus === 'Cedible' || p.transferStatus === 'Transferible') ? p.transferStatus : null;
+  // Posicionamiento condicional del badge de mercado: si el jugador YA tiene badge de
+  // alineación (Titular/Banquillo, esquina superior derecha ocupada), el de mercado baja a la
+  // esquina inferior derecha en vez de solaparse; si no hay badge de alineación, el de mercado
+  // usa la esquina superior de siempre. Caso límite (canterano YA convocado, que además usa la
+  // esquina inferior para su propio badge de Cantera): se apila el badge de mercado un poco más
+  // arriba en esa misma esquina para no superponerse con el de Cantera.
+  const marketBadgeAtBottom = isCalledUp;
+  const marketBadgeStackedAboveCantera = marketBadgeAtBottom && p.type === 'Cantera';
+  const marketBadgeMobilePos = marketBadgeAtBottom ? (marketBadgeStackedAboveCantera ? 'bottom-9' : 'bottom-2') : 'top-2';
+  const marketBadgeDesktopPos = marketBadgeAtBottom ? (marketBadgeStackedAboveCantera ? 'bottom-7' : 'bottom-0') : 'top-0';
   const isCalledUp = Object.values(lineup).includes(p.id) || Object.values(bench).includes(p.id);
   // Un canterano que todavía no ha subido al primer equipo no participa del mercado: no puede
   // marcarse transferible/cedible ni venderse/cederse hasta que esté promocionado (convocado
@@ -729,6 +778,17 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
             <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${canteraBadgeExpanded ? 'max-w-[160px] ml-1.5' : 'max-w-0 ml-0'}`}>Canterano del club</span>
           </button>
         )}
+        {/* Badge de situación de mercado (Cedible/Transferible): mismo diseño e interacción que
+            el resto de badges circulares — icono solo en reposo, se despliega con el texto al
+            tocar (móvil) o al pasar el cursor (escritorio); nunca un toggle en sí mismo, cambiar
+            el estado sigue siendo cosa del menú "..." → Añadir a Cedibles/Transferibles.
+            Posición condicional: ver marketBadgeMobilePos/marketBadgeDesktopPos más arriba. */}
+        {marketStatus && (
+          <button type="button" ref={marketBadgeRef} onClick={(e) => { e.stopPropagation(); setMarketBadgeExpanded((v) => !v); }} title={marketStatus === 'Cedible' ? 'Cedible' : 'Transferible'} className={`group/badge md:hidden absolute right-2 ${marketBadgeMobilePos} z-20 flex items-center h-6 pl-1.5 pr-1.5 rounded-full border transition-all duration-300 ease-in-out touch-manipulation ${marketStatus === 'Cedible' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>
+            <ArrowRightLeft size={12} className="shrink-0" />
+            <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${marketBadgeExpanded ? 'max-w-[120px] ml-1.5' : 'max-w-0 ml-0'}`}>{marketStatus === 'Cedible' ? 'Cedible' : 'Transferible'}</span>
+          </button>
+        )}
 
         {/* Cuerpo de la tarjeta (badges de escritorio, avatar, info y badge de Cedible): en
             escritorio TODO este bloque se desplaza junto hacia la DERECHA al hacer hover
@@ -764,6 +824,12 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
               <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[160px] group-hover/badge:ml-1.5">Canterano del club</span>
             </button>
           )}
+          {marketStatus && (
+            <button type="button" title={marketStatus === 'Cedible' ? 'Cedible' : 'Transferible'} className={`group/badge hidden md:flex absolute right-0 ${marketBadgeDesktopPos} z-20 items-center h-6 pl-1.5 pr-1.5 rounded-full border transition-all duration-300 ease-in-out ${marketStatus === 'Cedible' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>
+              <ArrowRightLeft size={12} className="shrink-0" />
+              <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[120px] group-hover/badge:ml-1.5">{marketStatus === 'Cedible' ? 'Cedible' : 'Transferible'}</span>
+            </button>
+          )}
 
           <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
             {/* Zona de posición principal y media: abre la vista de detalle del jugador. Si el
@@ -793,26 +859,6 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
             </div>
           </div>
 
-          {/* Badge de situación de mercado (Cedible/Transferible): MISMO diseño e interacción
-              que los badges circulares de Titular/Banquillo/Cantera — icono solo en reposo,
-              se despliega en píldora con el texto al tocar (móvil, con useOnClickOutside para
-              replegar) o al pasar el cursor (escritorio, group-hover puro), nunca un toggle en
-              sí mismo (cambiar el estado sigue siendo cosa del menú "..." → Añadir a Cedibles/
-              Transferibles, igual que Titular/Banquillo se cambian desde Táctica, no desde
-              aquí). Cedible en ámbar (mismo tono ya usado en el resto de la app para cesiones)
-              y Transferible en rojo, ambos con el mismo icono de intercambio. */}
-          {marketStatus && (
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              <button type="button" ref={marketBadgeRef} onClick={(e) => { e.stopPropagation(); setMarketBadgeExpanded((v) => !v); }} title={marketStatus === 'Cedible' ? 'Cedible' : 'Transferible'} className={`md:hidden flex items-center h-6 pl-1.5 pr-1.5 rounded-full border transition-all duration-300 ease-in-out touch-manipulation ${marketStatus === 'Cedible' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>
-                <ArrowRightLeft size={12} className="shrink-0" />
-                <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${marketBadgeExpanded ? 'max-w-[120px] ml-1.5' : 'max-w-0 ml-0'}`}>{marketStatus === 'Cedible' ? 'Cedible' : 'Transferible'}</span>
-              </button>
-              <button type="button" title={marketStatus === 'Cedible' ? 'Cedible' : 'Transferible'} className={`group/badge hidden md:flex items-center h-6 pl-1.5 pr-1.5 rounded-full border transition-all duration-300 ease-in-out ${marketStatus === 'Cedible' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>
-                <ArrowRightLeft size={12} className="shrink-0" />
-                <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[120px] group-hover/badge:ml-1.5">{marketStatus === 'Cedible' ? 'Cedible' : 'Transferible'}</span>
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Botón "..." de escritorio: capa fija (absolute left-3, centrado verticalmente con
