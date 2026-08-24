@@ -11,14 +11,13 @@ const FIELD_CLASS = 'w-full h-[52px] bg-well p-4 rounded-xl outline-none border 
 // inesperado mientras el usuario escribe.
 const blockEnterKey = (e) => { if (e.key === 'Enter') e.preventDefault(); };
 
-// Tercer paso de "Fichar Jugador" (tras elegir "Nuevo Fichaje" en AddPlayerOperationTypeModal,
-// antes de AddPlayerChoiceModal): un único campo opcional, el Precio de Compra/Traspaso, por si
-// resulta ser una compra — el resto (club de procedencia, si es cesión, duración de cesión...)
-// ya no se pide aquí: si se escanea con IA, Gemini detecta la cesión y su club de origen por sí
-// sola (ver esCesion en api/scan-player.js); si se rellena a mano, el propio asistente de
-// PlayerForm deja elegir Comprado/Cedido y sus campos correspondientes en el Paso 3. "Continuar"
-// siempre está activo: el precio es opcional, no bloquea el avance. No se muestra para "Ya en
-// el Club" (PlayerList salta directo al Paso de Método) ni para Academia.
+// Paso 4 de "Fichar Jugador" (tras elegir "Comprado / Traspaso" en
+// AddPlayerAcquisitionTypeModal, antes de AddPlayerChoiceModal): un único campo opcional, el
+// Precio de Compra/Traspaso — el resto de datos (club de procedencia, años de contrato...) se
+// completan más adelante, al escanear con IA o rellenar a mano. "Continuar" siempre está
+// activo: el precio es opcional, no bloquea el avance. Nunca se muestra para "Cedido" (una
+// cesión no tiene precio de traspaso que precargar, ver selectAcquisitionType en PlayerList),
+// "Ya en el Club" ni Academia.
 export default function AddPlayerPreDataModal({ onClose, onBack, onContinue }) {
   useBodyScrollLock();
   useAutoHideChrome();
@@ -40,7 +39,7 @@ export default function AddPlayerPreDataModal({ onClose, onBack, onContinue }) {
 
         <div className="p-3 rounded-2xl bg-well border border-border-subtle mb-4">
           <p className="text-[10px] font-bold text-fg-muted leading-relaxed">
-            Si sabes ya el precio de traspaso, indícalo ahora — este dato no aparece en la tarjeta del jugador. Si es una cesión, no hace falta: la IA la detecta sola al escanear, o la indicas tú mismo en el formulario manual.
+            Si sabes ya el precio de traspaso, indícalo ahora — este dato no aparece en la tarjeta del jugador. Si no lo sabes todavía, puedes dejarlo en blanco y completarlo después.
           </p>
         </div>
 

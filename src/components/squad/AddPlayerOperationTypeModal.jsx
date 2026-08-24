@@ -3,10 +3,10 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
 // Segundo paso de "Fichar Jugador" (tras elegir Primer Equipo en AddPlayerDestinationModal,
-// antes de AddPlayerChoiceModal): solo dos vías. "Nuevo Fichaje" cubre tanto Comprado como
-// Cedido sin que el usuario tenga que distinguirlos aquí — si escanea con IA, Gemini detecta
-// por sí sola si la tarjeta indica una cesión (ver esCesion en api/scan-player.js); si rellena
-// a mano, elige Comprado o Cedido dentro del propio asistente (Paso 3). "Ya en el Club" es la
+// antes de AddPlayerAcquisitionTypeModal): solo dos vías. "Nuevo Fichaje" continúa al Paso 3
+// (Comprado o Cedido, ver AddPlayerAcquisitionTypeModal) — el escaneo con IA sigue detectando
+// por sí solo si la tarjeta indica una cesión (esCesion en api/scan-player.js), pero el alta
+// manual ya arranca con el tipo elegido ahí, sin selector propio. "Ya en el Club" es la
 // variante sin traspaso real (jugador ya presente en la plantilla desde el inicio, igual que ya
 // hace OnboardingWizard para la partida "Empieza desde Cero"), que salta directa al Paso de
 // Método sin pedir ningún dato de fichaje.
@@ -32,7 +32,7 @@ export default function AddPlayerOperationTypeModal({ onClose, onBack, onSelect 
             <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0"><Handshake size={22} /></div>
             <div className="flex-1 min-w-0">
               <div className="font-black uppercase italic text-sm text-fg">Nuevo Fichaje</div>
-              <div className="text-[10px] font-bold text-fg-muted mt-0.5">Comprado o cedido — la IA o tú decidís los detalles.</div>
+              <div className="text-[10px] font-bold text-fg-muted mt-0.5">A continuación eliges si es Comprado o Cedido.</div>
             </div>
             <ChevronRight size={18} className="text-fg-faint shrink-0" />
           </button>
