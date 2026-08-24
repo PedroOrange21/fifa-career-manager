@@ -330,7 +330,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                           muestra el propio juego. */}
                       <div className="flex items-start gap-2 p-3 rounded-2xl bg-well border border-border-subtle">
                         <Wallet size={16} className="text-green-500 shrink-0 mt-0.5" />
-                        <span className="text-xs font-bold text-fg-muted leading-relaxed">Ve en tu juego a la pestaña <span className="text-fg font-black">Oficina &gt; Resumen del presupuesto</span> e introduce los datos actuales de tu club.</span>
+                        <span className="text-xs font-bold text-fg-muted leading-relaxed">Ve en tu juego a la pestaña <span className="text-fg font-black">Oficina &gt; Resumen del presupuesto &gt; Presupuesto</span> e introduce los datos actuales de tu club.</span>
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Presupuesto para Traspasos Actual (€)</label>
@@ -409,7 +409,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                       cámara, ambos dentro de ScanPlayerCardModal) es el camino rápido
                       recomendado; Manual queda como alternativa secundaria. */}
                   <button type="button" onClick={() => setBulkScanMode('active')} className="w-full py-4 rounded-2xl bg-blue-600 text-white hover:bg-blue-500 transition-all flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest touch-manipulation shadow-lg shadow-blue-600/20">
-                    <Images size={16} /> Cargar Plantilla (Lote de Fotos / Ráfaga)
+                    <Images size={16} /> Escanear Plantilla con IA
                   </button>
                   <p className="text-[9px] font-bold text-fg-faint text-center px-2 -mt-1.5">Haz fotos nítidas a la tarjeta de finanzas de cada jugador pasando con el joystick.</p>
                   <button type="button" onClick={() => setAddingPlayerMode('active')} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
@@ -448,7 +448,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                         ))}
                       </div>
                       <button type="button" onClick={() => setBulkScanMode('academy')} className="w-full py-4 rounded-2xl bg-blue-600 text-white hover:bg-blue-500 transition-all flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest touch-manipulation shadow-lg shadow-blue-600/20">
-                        <Images size={16} /> Cargar Academia (Lote de Fotos / Ráfaga)
+                        <Images size={16} /> Escanear Academia con IA
                       </button>
                       <p className="text-[9px] font-bold text-fg-faint text-center px-2 -mt-1.5">Haz fotos nítidas a la tarjeta de finanzas de cada canterano pasando con el joystick.</p>
                       <button type="button" onClick={() => setAddingPlayerMode('academy')} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">

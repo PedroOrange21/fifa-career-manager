@@ -197,6 +197,25 @@ export function mapScanResultToPrefill(extracted) {
   // número de años entre 1 y 5 (el rango que admite el desplegable de Años de Contrato).
   const contractYearsMatch = String(extracted.duracionContrato || '').match(/\d+/);
   const contractYears = contractYearsMatch ? Math.min(5, Math.max(1, parseInt(contractYearsMatch[0], 10))) : '';
+
+  // Cesión SALIENTE (dirección opuesta a esCesion, ver api/scan-player.js): el jugador SIGUE
+  // siendo nuestro (type "Comprado"), solo se marca su estado de mercado como "CedidoFuera" con
+  // el club de destino y la duración — mismo campo "outboundLoan" que ya usa cedePlayer() al
+  // ceder manualmente a un jugador desde la Plantilla, así PlayerForm/PlayerInfoModal lo tratan
+  // exactamente igual venga de donde venga.
+  if (extracted.esCesionSaliente) {
+    const destinationClubName = resolveClubName(extracted.clubCesionSaliente);
+    return {
+      ...common,
+      type: 'Comprado',
+      value: '',
+      contractYears,
+      releaseClause: extracted.clausulaRescision || '',
+      transferStatus: 'CedidoFuera',
+      outboundLoan: { destinationClub: destinationClubName, duration: extracted.duracionCesionSaliente || '1 Temporada' },
+    };
+  }
+
   return {
     ...common,
     type: 'Comprado',
@@ -231,10 +250,12 @@ export function mapAcademyScanResultToPrefill(extracted) {
 // usado tanto por la carga masiva con IA de PlayerList/AcademyTab como por los dos bloques de
 // OnboardingWizard. Cada foto pasa por el mismo pipeline que un escaneo individual
 // (prepareImageForScan para HEIC/compresión, scanPlayerCard con sus reintentos automáticos
-// ante 429/503, y el mapeo correspondiente al modo), con una espera de seguridad de 4 segundos
-// entre la finalización de un jugador y la llamada del siguiente — con la cuota de 15
-// peticiones por minuto (RPM) del plan gratuito de Gemini (4 segundos exactos de margen teórico
-// entre llamadas), ir más rápido dispara 429 en cuanto el lote pasa de unas pocas fotos.
+// ante 429/503, y el mapeo correspondiente al modo), con una pequeña espera de seguridad entre
+// la finalización de un jugador y la llamada del siguiente — con el pool multiclave actual (4
+// claves de Gemini + 7 de Groq como respaldo, ver api/scan-player.js) la cuota por minuto de UNA
+// sola clave ya no es el cuello de botella real: si una clave se queda sin cuota, el backend
+// rota a la siguiente al instante sin bloquear al usuario, así que basta un margen corto entre
+// llamadas en vez de los ~4s que hacían falta con una única clave.
 // onProgress(info) se invoca en cada cambio de fase de la foto en curso — { index (0-based),
 // total, fileName, phase, attempt?, delayMs?, name?, position?, rating?, error? } — phase es
 // 'preparing' (comprimiendo), 'scanning' (llamando a Gemini), 'retrying' (esperando tras un
@@ -253,7 +274,7 @@ export function mapAcademyScanResultToPrefill(extracted) {
 // 429/503 persistente tras MAX_SCAN_RETRIES) va a "failed": { fileName, error, file } — "file"
 // es el File original (nunca el comprimido, por si prepareImageForScan fue justo lo que falló),
 // conservado para que la revisión pueda mostrar la miniatura de la foto que no se pudo leer.
-const DELAY_BETWEEN_CALLS_MS = 4000;
+const DELAY_BETWEEN_CALLS_MS = 1300;
 export async function scanPlayerCardsQueue(files, mode, onProgress) {
   const mapper = mode === 'academia' ? mapAcademyScanResultToPrefill : mapScanResultToPrefill;
   const succeeded = [];

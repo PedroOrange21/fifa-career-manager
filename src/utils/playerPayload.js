@@ -28,8 +28,11 @@ export function buildPlayerPayload(data) {
     agreedRole: !isCantera && data.agreedRole ? data.agreedRole : null,
     buyOption: null,
     wagePercentage: isCedido && data.wagePercentage != null ? parseInt(data.wagePercentage, 10) : null,
-    transferStatus: 'Activo',
-    outboundLoan: null,
+    // Por defecto 'Activo'/null como siempre; el llamador puede pasar transferStatus:
+    // 'CedidoFuera' + outboundLoan (ver BulkScanReviewModal, cesión saliente detectada por IA)
+    // para dar de alta un jugador que ya nace marcado como cedido fuera del club.
+    transferStatus: data.transferStatus || 'Activo',
+    outboundLoan: data.transferStatus === 'CedidoFuera' ? (data.outboundLoan || null) : null,
     isInitialSquad: !!data.isInitialSquad,
     wage: isCantera ? 0 : parseValue(String(data.wage || '')),
     releaseClause: type === 'Comprado' ? (parseValue(String(data.releaseClause || '')) || null) : null,

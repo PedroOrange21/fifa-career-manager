@@ -85,6 +85,10 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
   // Cola de captura continua de cámara (ver comentario del componente): [{ id, file,
   // previewUrl }]. Solo relevante mientras status === 'capturing'.
   const [cameraQueue, setCameraQueue] = useState([]);
+  // Miniatura ampliada a pantalla completa (lightbox): el item de cameraQueue que se está
+  // viendo en grande, o null si el visor está cerrado. Vive fuera de cameraQueue para no
+  // complicar su forma; solo referencia el item, nunca lo duplica.
+  const [viewingPhoto, setViewingPhoto] = useState(null);
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
   const progressTimerRef = useRef(null);
@@ -269,6 +273,7 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
   };
 
   const removeQueuedPhoto = (id) => {
+    setViewingPhoto((prev) => (prev?.id === id ? null : prev));
     setCameraQueue((prev) => {
       const target = prev.find((item) => item.id === id);
       if (target) URL.revokeObjectURL(target.previewUrl);
@@ -395,22 +400,25 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
         )}
 
         {status === 'capturing' && (
-          <div className="space-y-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-fg-muted">{cameraQueue.length} foto{cameraQueue.length === 1 ? '' : 's'} lista{cameraQueue.length === 1 ? '' : 's'} para escanear</p>
-            <div className="grid grid-cols-4 gap-2">
+          <div className="flex flex-col max-h-[75dvh]">
+            <p className="shrink-0 text-[10px] font-black uppercase tracking-widest text-fg-muted mb-3">{cameraQueue.length} foto{cameraQueue.length === 1 ? '' : 's'} lista{cameraQueue.length === 1 ? '' : 's'} para escanear</p>
+            {/* Rejilla scrolleable con altura acotada: por muchas fotos que se acumulen en modo
+                ráfaga, el scroll queda contenido aquí dentro y nunca empuja los botones de
+                acción de más abajo fuera de la pantalla. */}
+            <div className="grid grid-cols-4 gap-2 overflow-y-auto max-h-[45vh] content-start pr-0.5">
               {cameraQueue.map((item) => (
-                <div key={item.id} className="relative aspect-square rounded-xl overflow-hidden border border-border-subtle group">
+                <div key={item.id} role="button" tabIndex={0} onClick={() => setViewingPhoto(item)} onKeyDown={(e) => { if (e.key === 'Enter') setViewingPhoto(item); }} className="relative aspect-square rounded-xl overflow-hidden border border-border-subtle group touch-manipulation cursor-pointer">
                   <img src={item.previewUrl} alt="Foto capturada" className="w-full h-full object-cover" />
-                  <button type="button" onClick={() => removeQueuedPhoto(item.id)} title="Eliminar" className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 md:opacity-0 transition-opacity touch-manipulation">
+                  <button type="button" onClick={(e) => { e.stopPropagation(); removeQueuedPhoto(item.id); }} title="Eliminar" className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 md:opacity-0 transition-opacity">
                     <Trash2 size={16} className="text-white" />
                   </button>
-                  <button type="button" onClick={() => removeQueuedPhoto(item.id)} title="Eliminar" className="absolute top-1 right-1 md:hidden bg-black/70 rounded-full p-1 text-white">
+                  <button type="button" onClick={(e) => { e.stopPropagation(); removeQueuedPhoto(item.id); }} title="Eliminar" className="absolute top-1 right-1 md:hidden bg-black/70 rounded-full p-1 text-white">
                     <Trash2 size={11} />
                   </button>
                 </div>
               ))}
             </div>
-            <div className="space-y-2.5">
+            <div className="shrink-0 space-y-2.5 pt-3">
               <button type="button" onClick={() => cameraInputRef.current?.click()} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-dashed border-border-subtle bg-well hover:border-blue-500 hover:bg-well-strong transition-all text-left touch-manipulation">
                 <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0"><Camera size={22} /></div>
                 <div className="flex-1 min-w-0">
@@ -430,8 +438,8 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
             <div className="p-3 rounded-2xl bg-well border border-border-subtle">
               <p className="text-[10px] font-bold text-fg-muted leading-relaxed">
                 {mode === 'academia'
-                  ? <>Haz fotos nítidas a la tarjeta de finanzas de cada canterano pasando con el joystick por la <span className="text-fg font-black">Academia</span>. Puedes disparar foto tras foto con la cámara (modo ráfaga) sin salir a la pantalla de carga entre medias, o subir varias a la vez desde la galería.</>
-                  : <>Haz fotos nítidas a la tarjeta de finanzas de cada jugador pasando con el joystick por la <span className="text-fg font-black">Plantilla</span>. Puedes disparar foto tras foto con la cámara (modo ráfaga) sin salir a la pantalla de carga entre medias, o subir varias a la vez desde la galería.</>}
+                  ? <>Ve en tu juego a <span className="text-fg font-black">Academia &gt; Menú de plantilla &gt; Finanzas</span>, y haz una foto a la información que aparece a la derecha de la pantalla para cada canterano. Puedes disparar foto tras foto con la cámara (modo ráfaga) sin salir a la pantalla de carga entre medias, o subir varias a la vez desde la galería.</>
+                  : <>Ve en tu juego a <span className="text-fg font-black">Plantilla &gt; Menú de plantilla &gt; Finanzas</span>, y haz una foto a la información que aparece a la derecha de la pantalla para cada jugador. Puedes disparar foto tras foto con la cámara (modo ráfaga) sin salir a la pantalla de carga entre medias, o subir varias a la vez desde la galería.</>}
               </p>
             </div>
 
@@ -466,6 +474,24 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
         <input ref={cameraInputRef} type="file" accept="image/*,.heic,.heif" capture="environment" className="hidden" onChange={handleCameraChange} />
         <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleGalleryChange} />
       </div>
+
+      {/* Visor de miniatura a pantalla completa: por encima del propio modal (z-160 > z-150),
+          con opción de eliminar esa foto concreta antes de lanzar el escaneo. */}
+      {viewingPhoto && (
+        <div className="fixed inset-0 bg-black/95 z-[160] flex items-center justify-center p-4 animate-in fade-in duration-150" onClick={() => setViewingPhoto(null)}>
+          <div className="relative max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
+            <img src={viewingPhoto.previewUrl} alt="Foto ampliada" className="w-full max-h-[80dvh] object-contain rounded-2xl border border-border-subtle" />
+            <div className="absolute top-2 right-2 flex gap-2">
+              <button type="button" onClick={() => removeQueuedPhoto(viewingPhoto.id)} title="Eliminar esta foto" className="p-2.5 rounded-full bg-red-500/90 text-white hover:bg-red-400 transition-colors touch-manipulation">
+                <Trash2 size={18} />
+              </button>
+              <button type="button" onClick={() => setViewingPhoto(null)} title="Cerrar" className="p-2.5 rounded-full bg-well-strong/90 text-fg hover:bg-well transition-colors touch-manipulation">
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

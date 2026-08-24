@@ -16,6 +16,10 @@ const TYPE_OPTIONS = [
   { value: 'Inicial', label: 'Ya en el Club' },
   { value: 'Comprado', label: 'Comprado' },
   { value: 'Cedido', label: 'Cedido' },
+  // Cesión SALIENTE: el jugador sigue siendo nuestro (se guarda como "Comprado" internamente),
+  // pero su transferStatus nace en "CedidoFuera" con el club de destino — ver esCesionSaliente
+  // en api/scan-player.js y su mapeo en mapScanResultToPrefill.
+  { value: 'CedidoFuera', label: 'Cedido Fuera' },
 ];
 
 const FIELD_CLASS = 'w-full bg-well-strong p-2 rounded-lg outline-none border border-border-subtle focus:border-green-500 font-bold text-[11px] text-fg placeholder:text-fg-faint';
@@ -34,6 +38,7 @@ const nextRowId = () => `row-${Date.now()}-${rowIdCounter++}`;
 function buildRow(prefill, { status = 'ok', fileName = '', propertyDefault = 'Comprado', file = null, error = '' } = {}) {
   const isCantera = prefill.type === 'Cantera';
   const isCedido = prefill.type === 'Cedido';
+  const isCedidoFuera = prefill.transferStatus === 'CedidoFuera';
   return {
     id: nextRowId(),
     fileName: fileName || prefill.fileName || '',
@@ -60,11 +65,15 @@ function buildRow(prefill, { status = 'ok', fileName = '', propertyDefault = 'Co
     potential: prefill.potential || '',
     marketValue: formatValueInput(String(prefill.marketValue || '')),
     wage: formatValueInput(String(prefill.wage || '')),
-    reviewType: isCantera ? 'Cantera' : isCedido ? 'Cedido' : propertyDefault,
+    reviewType: isCantera ? 'Cantera' : isCedido ? 'Cedido' : isCedidoFuera ? 'CedidoFuera' : propertyDefault,
     sourceClub: prefill.sourceClub || '',
     value: formatValueInput(String(prefill.value || '')),
     originClub: prefill.originClub || '',
     loanDuration: prefill.loanDuration || '1 Temporada',
+    // Cesión saliente: club de destino y duración, separados de originClub/loanDuration (que son
+    // de la cesión ENTRANTE) para no mezclar ambas direcciones en la misma fila.
+    outboundClub: prefill.outboundLoan?.destinationClub || '',
+    outboundDuration: prefill.outboundLoan?.duration || '1 Temporada',
     // Las 'failed' arrancan colapsadas: viven como tarjeta compacta en "Fotos No Reconocidas"
     // (ver FailedPhotoCard) hasta que "Rellenar a Mano" las promueve a la lista principal ya
     // desplegadas — no tiene sentido mostrar de entrada un formulario vacío por cada foto que
@@ -90,6 +99,7 @@ const getRowErrors = (r) => {
     if (!r.value || parseValue(r.value) <= 0) errors.value = true;
   }
   if (r.reviewType === 'Cedido' && !r.originClub.trim()) errors.originClub = true;
+  if (r.reviewType === 'CedidoFuera' && !r.outboundClub.trim()) errors.outboundClub = true;
   return errors;
 };
 
@@ -199,7 +209,7 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, onToggleEx
                 <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Tipo de Operación</label>
                 <div className="flex gap-1.5">
                   {TYPE_OPTIONS.map((t) => (
-                    <button key={t.value} type="button" onClick={() => onUpdate(r.id, { reviewType: t.value })} className={`flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all border ${r.reviewType === t.value ? (t.value === 'Cedido' ? 'bg-yellow-600 text-white border-yellow-600' : t.value === 'Inicial' ? 'bg-zinc-500 text-white border-zinc-500' : 'bg-blue-600 text-white border-blue-600') : 'bg-well text-fg-muted border-border-subtle'}`}>{t.label}</button>
+                    <button key={t.value} type="button" onClick={() => onUpdate(r.id, { reviewType: t.value })} className={`flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all border ${r.reviewType === t.value ? (t.value === 'Cedido' ? 'bg-yellow-600 text-white border-yellow-600' : t.value === 'Inicial' ? 'bg-zinc-500 text-white border-zinc-500' : t.value === 'CedidoFuera' ? 'bg-purple-600 text-white border-purple-600' : 'bg-blue-600 text-white border-blue-600') : 'bg-well text-fg-muted border-border-subtle'}`}>{t.label}</button>
                   ))}
                 </div>
               </div>
@@ -234,6 +244,18 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, onToggleEx
                   <div className="space-y-0.5">
                     <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Duración Cesión</label>
                     <input type="text" className={FIELD_CLASS} value={r.loanDuration} onChange={(e) => onUpdate(r.id, { loanDuration: e.target.value })} placeholder="Ej: 11 Meses" />
+                  </div>
+                </div>
+              )}
+              {r.reviewType === 'CedidoFuera' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-0.5">
+                    <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Club Destino {errors.outboundClub && <span className="text-red-400">· Requerido</span>}</label>
+                    <input type="text" className={errors.outboundClub ? FIELD_CLASS_ERROR : FIELD_CLASS} value={r.outboundClub} onChange={(e) => onUpdate(r.id, { outboundClub: e.target.value })} placeholder="Ej: Almería" />
+                  </div>
+                  <div className="space-y-0.5">
+                    <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Duración Cesión</label>
+                    <input type="text" className={FIELD_CLASS} value={r.outboundDuration} onChange={(e) => onUpdate(r.id, { outboundDuration: e.target.value })} placeholder="Ej: 11 Meses" />
                   </div>
                 </div>
               )}
@@ -483,8 +505,12 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
     try {
       for (const r of includedRows) {
         const isInitial = r.reviewType === 'Inicial';
+        // Cesión SALIENTE: se guarda como "Comprado" (el jugador sigue siendo nuestro) con
+        // transferStatus/outboundLoan aparte — ver buildPlayerPayload y cedePlayer(), mismo
+        // formato que una cesión hecha a mano desde la Plantilla.
+        const isCedidoFuera = r.reviewType === 'CedidoFuera';
         const payload = buildPlayerPayload({
-          type: isInitial ? 'Comprado' : r.reviewType,
+          type: (isInitial || isCedidoFuera) ? 'Comprado' : r.reviewType,
           name: r.name,
           rating: r.rating,
           positions: r.positions,
@@ -494,11 +520,13 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
           potential: r.potential,
           marketValue: r.marketValue,
           wage: r.wage,
-          sourceClub: isInitial ? 'En el club desde el inicio' : (r.reviewType === 'Comprado' ? r.sourceClub : r.reviewType === 'Cedido' ? r.originClub : ''),
+          sourceClub: isInitial ? 'En el club desde el inicio' : (r.reviewType === 'Comprado' ? r.sourceClub : r.reviewType === 'Cedido' ? r.originClub : isCedidoFuera ? (r.sourceClub || 'En el club desde el inicio') : ''),
           value: r.reviewType === 'Comprado' ? r.value : '',
           originClub: r.reviewType === 'Cedido' ? r.originClub : '',
           loanDuration: r.reviewType === 'Cedido' ? r.loanDuration : '',
           isInitialSquad: isInitial,
+          transferStatus: isCedidoFuera ? 'CedidoFuera' : undefined,
+          outboundLoan: isCedidoFuera ? { destinationClub: r.outboundClub.trim(), duration: r.outboundDuration || '1 Temporada' } : undefined,
         });
         // eslint-disable-next-line no-await-in-loop
         await addOrUpdatePlayer(payload, undefined, { skipFinancialEffects: skipInitialTransaction });
