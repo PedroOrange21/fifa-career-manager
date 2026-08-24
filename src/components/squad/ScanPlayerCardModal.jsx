@@ -408,13 +408,16 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
                 acción de más abajo fuera de la pantalla. */}
             <div className="grid grid-cols-4 gap-2 overflow-y-auto max-h-[45vh] content-start pr-0.5">
               {cameraQueue.map((item) => (
-                <div key={item.id} role="button" tabIndex={0} onClick={() => setViewingPhoto(item)} onKeyDown={(e) => { if (e.key === 'Enter') setViewingPhoto(item); }} className="relative aspect-square rounded-xl overflow-hidden border border-border-subtle group touch-manipulation cursor-pointer">
+                // IMPORTANTE: nunca un botón "eliminar" a pantalla completa (absolute inset-0)
+                // encima de la miniatura — aunque tenga opacity-0, sigue capturando el clic (la
+                // opacidad no desactiva pointer-events), así que tocar la foto para ampliarla
+                // acababa borrándola en su lugar. La papelera es solo este botón pequeño de la
+                // esquina, con stopPropagation()+preventDefault() para no disparar el onClick
+                // del contenedor (abrir el visor) al pulsarla.
+                <div key={item.id} role="button" tabIndex={0} onClick={() => setViewingPhoto(item)} onKeyDown={(e) => { if (e.key === 'Enter') setViewingPhoto(item); }} className="relative aspect-square rounded-xl overflow-hidden border border-border-subtle touch-manipulation cursor-pointer">
                   <img src={item.previewUrl} alt="Foto capturada" className="w-full h-full object-cover" />
-                  <button type="button" onClick={(e) => { e.stopPropagation(); removeQueuedPhoto(item.id); }} title="Eliminar" className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 md:opacity-0 transition-opacity">
-                    <Trash2 size={16} className="text-white" />
-                  </button>
-                  <button type="button" onClick={(e) => { e.stopPropagation(); removeQueuedPhoto(item.id); }} title="Eliminar" className="absolute top-1 right-1 md:hidden bg-black/70 rounded-full p-1 text-white">
-                    <Trash2 size={11} />
+                  <button type="button" onClick={(e) => { e.stopPropagation(); e.preventDefault(); removeQueuedPhoto(item.id); }} title="Eliminar" className="absolute top-1 right-1 bg-black/70 hover:bg-red-500/90 rounded-full p-1.5 text-white transition-colors">
+                    <Trash2 size={12} />
                   </button>
                 </div>
               ))}

@@ -98,9 +98,13 @@ const toFormState = (p) => {
     value: formatValueInput(String(p?.value || '')),
     loanDuration: p?.loanDuration || '1 Temporada',
     originClub: p?.originClub || '',
-    hasBuyOption: !!p?.buyOption,
-    buyOption: formatValueInput(String(p?.buyOption || '')),
-    wagePercentage: p?.wagePercentage != null ? String(p.wagePercentage) : '',
+    // hasBuyOption/buyOption/wagePercentage: caen a los mismos campos dentro de outboundLoan
+    // cuando el jugador es una cesión SALIENTE (ver handleConfirm más abajo, que los guarda ahí
+    // en vez de a nivel superior) — así reabrir para editar un CedidoFuera ya existente
+    // rellena el slider y la opción de compra con sus valores reales en vez de arrancar vacíos.
+    hasBuyOption: !!(p?.buyOption || p?.outboundLoan?.buyOption),
+    buyOption: formatValueInput(String(p?.buyOption || p?.outboundLoan?.buyOption || '')),
+    wagePercentage: (p?.wagePercentage ?? p?.outboundLoan?.wagePercentage) != null ? String(p.wagePercentage ?? p.outboundLoan.wagePercentage) : '',
     potential: p?.potential != null ? String(p.potential) : '',
     wage: formatValueInput(String(p?.wage || '')),
     releaseClause: formatValueInput(String(p?.releaseClause || '')),
@@ -505,7 +509,15 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
         // CedidoFuera): antes se pisaba siempre con 'Activo', lo que sacaba en silencio a un
         // jugador cedido fuera de esa lista con solo editarlo desde el Paso 4.
         transferStatus: form.transferStatus,
-        outboundLoan: form.transferStatus === 'CedidoFuera' ? form.outboundLoan : null,
+        // wagePercentage/hasBuyOption/buyOption son los mismos campos compartidos que rellena
+        // el bloque "% Salario Pagado"/"¿Con Opción de Compra?" de arriba (ver comentario ahí):
+        // para una cesión SALIENTE viven dentro de outboundLoan (mismo esquema que cedePlayer),
+        // nunca en los campos de nivel superior — esos son exclusivos de la cesión ENTRANTE.
+        outboundLoan: form.transferStatus === 'CedidoFuera' ? {
+          ...(form.outboundLoan || {}),
+          wagePercentage: form.wagePercentage ? parseInt(form.wagePercentage) : 0,
+          buyOption: form.hasBuyOption ? (parseValue(form.buyOption) || null) : null,
+        } : null,
         // Al EDITAR se conserva tal cual (form.isInitialSquad, cargado por toFormState desde el
         // jugador ya guardado) — este asistente no ofrece forma de cambiarlo después de creado.
         // Al CREAR (sin editingPlayer) se deriva de hidePurchasePrice && hideSourceClub: hoy la
@@ -787,7 +799,13 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                     </div>
                   )}
 
-                  {form.type === 'Cedido' && (
+                  {/* % de reparto de salario: aplica tanto a la cesión ENTRANTE (Cedido, lo
+                      que paga nuestro club de un jugador ajeno) como a la SALIENTE
+                      (transferStatus CedidoFuera, lo que paga nuestro club de un jugador
+                      propio mientras está fuera) — nunca coinciden a la vez, así que reutilizar
+                      el mismo par de campos (wagePercentage/hasBuyOption/buyOption) para ambas
+                      direcciones es seguro y evita duplicar el formulario entero. */}
+                  {(form.type === 'Cedido' || form.transferStatus === 'CedidoFuera') && (
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">% Salario Pagado por Nuestro Club</label>
                       <div className="flex items-center gap-3 bg-well p-3 rounded-xl border border-border-subtle">
@@ -798,7 +816,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                     </div>
                   )}
 
-                  {form.type === 'Cedido' && (
+                  {(form.type === 'Cedido' || form.transferStatus === 'CedidoFuera') && (
                     <div className="space-y-1 relative">
                       <label className="text-[9px] font-black text-fg-muted ml-1">¿Con Opción de Compra?</label>
                       <div className="flex gap-2">
@@ -1009,6 +1027,32 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                         <ReviewRow label="Cláusula de Rescisión (€)" active={editField === 'releaseClause'} onOpen={() => setEditField('releaseClause')} display={`${form.releaseClause || '0'} €`}>
                           <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.releaseClause} onChange={formatMoneyField('releaseClause')} />
                         </ReviewRow>
+                        {/* Reparto de salario y opción de compra de la cesión SALIENTE (ver el
+                            mismo bloque del Paso 3): "Comprado" cubre tanto un jugador en
+                            propiedad normal como uno cedido a otro club (transferStatus
+                            CedidoFuera), que sí necesita estos dos campos aunque siga siendo
+                            nuestro. */}
+                        {form.transferStatus === 'CedidoFuera' && (
+                          <>
+                            <ReviewRow label="% Salario Pagado por Nuestro Club" active={editField === 'wagePercentage'} onOpen={() => setEditField('wagePercentage')} display={`${form.wagePercentage || 0}%`}>
+                              <div className="flex items-center gap-3">
+                                <input type="range" min="0" max="100" step="5" className="flex-1 accent-green-500" value={form.wagePercentage || 0} onChange={(e) => set({ wagePercentage: e.target.value })} />
+                                <span className="w-12 text-center font-black text-fg bg-well-strong rounded-lg py-1.5 text-xs shrink-0">{form.wagePercentage || 0}%</span>
+                              </div>
+                              <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
+                            </ReviewRow>
+                            <ReviewRow label="¿Opción de Compra?" active={editField === 'buyOption'} onOpen={() => setEditField('buyOption')} display={form.hasBuyOption ? `Sí · ${form.buyOption || '0'} €` : 'No'}>
+                              <div className="flex gap-2 mb-2">
+                                <button type="button" onClick={() => set({ hasBuyOption: true })} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${form.hasBuyOption ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>Sí</button>
+                                <button type="button" onClick={() => set({ hasBuyOption: false, buyOption: '' })} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${!form.hasBuyOption ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>No</button>
+                              </div>
+                              {form.hasBuyOption && (
+                                <input autoFocus type="text" inputMode="numeric" placeholder="Ej: 40.000.000" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.buyOption} onChange={formatMoneyField('buyOption')} />
+                              )}
+                              {!form.hasBuyOption && <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>}
+                            </ReviewRow>
+                          </>
+                        )}
                       </>
                     )}
 
