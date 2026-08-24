@@ -2,12 +2,13 @@ import { X, ChevronLeft, ChevronRight, Wallet, ArrowRightLeft } from 'lucide-rea
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
-// Paso 3 de "Fichar Jugador" (tras elegir "Nuevo Fichaje" en AddPlayerOperationTypeModal, antes
-// de Datos Previos/Método): decide explícitamente si es un traspaso en propiedad o una cesión
-// ANTES de llegar al formulario, en vez de dejar que lo decida solo la IA al escanear o el
-// propio selector interno de PlayerForm — así el resto del asistente (Datos Previos, y el
-// formulario manual ya con el tipo bloqueado) muestra desde el principio únicamente los campos
-// que corresponden a la elección. onSelect recibe 'Comprado' o 'Cedido'.
+// Segundo paso de "Fichar Jugador" (justo tras elegir Primer Equipo en
+// AddPlayerDestinationModal, sin ningún paso intermedio de por medio): decide explícitamente si
+// es un traspaso en propiedad o una cesión ANTES de llegar al formulario, en vez de dejar que lo
+// decida solo la IA al escanear o el propio selector interno de PlayerForm — así el resto del
+// asistente (Datos de Traspaso, y el formulario manual ya con el tipo bloqueado) muestra desde
+// el principio únicamente los campos que corresponden a la elección. onSelect recibe 'Comprado'
+// (Traspaso) o 'Cedido'.
 export default function AddPlayerAcquisitionTypeModal({ onClose, onBack, onSelect }) {
   useBodyScrollLock();
   useAutoHideChrome();
@@ -29,7 +30,7 @@ export default function AddPlayerAcquisitionTypeModal({ onClose, onBack, onSelec
           <button type="button" onClick={() => onSelect('Comprado')} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border-subtle bg-well hover:border-blue-500 hover:bg-well-strong transition-all text-left touch-manipulation">
             <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0"><Wallet size={22} /></div>
             <div className="flex-1 min-w-0">
-              <div className="font-black uppercase italic text-sm text-fg">💳 Comprado / Traspaso</div>
+              <div className="font-black uppercase italic text-sm text-fg">Traspaso</div>
               <div className="text-[10px] font-bold text-fg-muted mt-0.5">Pasa a ser propiedad del club, con precio de traspaso.</div>
             </div>
             <ChevronRight size={18} className="text-fg-faint shrink-0" />
@@ -37,7 +38,7 @@ export default function AddPlayerAcquisitionTypeModal({ onClose, onBack, onSelec
           <button type="button" onClick={() => onSelect('Cedido')} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border-subtle bg-well hover:border-yellow-500 hover:bg-well-strong transition-all text-left touch-manipulation">
             <div className="w-12 h-12 rounded-xl bg-yellow-500/10 text-yellow-500 flex items-center justify-center shrink-0"><ArrowRightLeft size={22} /></div>
             <div className="flex-1 min-w-0">
-              <div className="font-black uppercase italic text-sm text-fg">🔄 Cedido a Nuestro Club</div>
+              <div className="font-black uppercase italic text-sm text-fg">Cedido</div>
               <div className="text-[10px] font-bold text-fg-muted mt-0.5">Cesión temporal: club de origen, duración y reparto de sueldo.</div>
             </div>
             <ChevronRight size={18} className="text-fg-faint shrink-0" />

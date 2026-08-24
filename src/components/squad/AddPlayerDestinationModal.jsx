@@ -3,10 +3,11 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 
 // Primer paso de "Fichar Jugador": ¿a qué plantilla se incorpora? Determina el resto del
-// flujo — Primer Equipo continúa a AddPlayerOperationTypeModal (Comprado/Cedido) y de ahí a
-// AddPlayerChoiceModal (Manual/Escanear con IA); Academia va directa al asistente manual con
-// el tipo ya fijado a 'Cantera' (mismo criterio que el propio botón "Fichar Jugador" de
-// AcademyTab, que tampoco ofrece escaneo por IA ni distingue Comprado/Cedido).
+// flujo — Primer Equipo continúa DIRECTAMENTE a AddPlayerAcquisitionTypeModal (Traspaso/
+// Cedido, sin ningún paso intermedio) y de ahí a AddPlayerChoiceModal (Manual/Escanear con IA);
+// Academia va directa al asistente manual con el tipo ya fijado a 'Cantera' (mismo criterio
+// que el propio botón "Fichar Jugador" de AcademyTab, que tampoco ofrece escaneo por IA ni
+// distingue Comprado/Cedido).
 export default function AddPlayerDestinationModal({ onClose, onSelectFirstTeam, onSelectAcademy }) {
   useBodyScrollLock();
   useAutoHideChrome();

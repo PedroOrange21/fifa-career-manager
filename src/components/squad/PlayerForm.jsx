@@ -212,9 +212,7 @@ function SectionHeader({ emoji, title }) {
 // (sin barra de progreso "Paso 4 de 4" ni botón "Anterior", ya que aquí no hay pasos 1-3
 // recorridos de verdad en esta sesión) y resalta en rojo los campos que la tarjeta escaneada
 // nunca trae y siguen vacíos: Club de Procedencia (Comprado y Cedido), Precio de Compra
-// (Comprado) o Club de Origen (Cedido) — el tipo concreto ya lo decidió el usuario en
-// AddPlayerOperationTypeModal antes incluso de escanear, ver operationType en
-// mapScanResultToPrefill.
+// (Comprado) o Club de Origen (Cedido).
 // initialSquadTypes: usado exclusivamente por el registro de Plantilla Inicial del asistente de
 // bienvenida (OnboardingWizard, tanto al crear como al editar desde el Resumen) — sustituye el
 // selector de Tipo de Adquisición habitual (Cantera/Cedido/Comprado) por 3 ESTADOS DE
