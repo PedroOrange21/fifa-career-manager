@@ -58,11 +58,16 @@ const SQUAD_POSITION_GROUPS = {
   DEL: ['ED', 'EI', 'SD', 'DC'],
 };
 const SQUAD_POSITION_GROUP_META = {
-  POR: { name: 'Porteros', className: 'bg-amber-500/15 text-amber-500' },
-  DEF: { name: 'Defensas', className: 'bg-blue-500/15 text-blue-400' },
-  MED: { name: 'Centrocampistas', className: 'bg-green-500/15 text-green-400' },
-  DEL: { name: 'Delanteros', className: 'bg-purple-500/15 text-purple-400' },
+  POR: { name: 'Porteros' },
+  DEF: { name: 'Defensas' },
+  MED: { name: 'Centrocampistas' },
+  DEL: { name: 'Delanteros' },
 };
+// Monocromático a propósito (ver requisito de diseño): un único tono neutro para las 4
+// píldoras, sin diferenciar por línea — bg-well-strong/text-fg-secondary ya son tokens que se
+// adaptan solos entre Modo Claro y Oscuro (ver index.css), así que no hace falta ninguna
+// variante dark: manual aquí.
+const SQUAD_POSITION_PILL_CLASS = 'bg-well-strong text-fg-secondary border border-border-subtle';
 const squadGroupOfPosition = (pos) => Object.keys(SQUAD_POSITION_GROUPS).find((g) => SQUAD_POSITION_GROUPS[g].includes(pos)) || null;
 
 // Mini-diagrama sutil de distribución por líneas: cuenta la plantilla activa REAL (nunca la
@@ -77,7 +82,7 @@ function SquadPositionBreakdown({ players }) {
   return (
     <div className="flex items-center gap-1">
       {Object.keys(SQUAD_POSITION_GROUP_META).map((g) => (
-        <span key={g} title={`${counts[g]} ${SQUAD_POSITION_GROUP_META[g].name}`} className={`flex items-center gap-1 text-[8px] md:text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${SQUAD_POSITION_GROUP_META[g].className}`}>
+        <span key={g} title={`${counts[g]} ${SQUAD_POSITION_GROUP_META[g].name}`} className={`flex items-center gap-1 text-[8px] md:text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${SQUAD_POSITION_PILL_CLASS}`}>
           {g} {counts[g]}
         </span>
       ))}
