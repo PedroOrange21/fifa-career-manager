@@ -12,6 +12,16 @@ import Dropdown from '../common/Dropdown';
 import ScanPlayerCardModal from './ScanPlayerCardModal';
 
 const POSITION_OPTIONS = ALL_POSITIONS.map((p) => ({ value: p, label: p }));
+// Mismas 5 etiquetas que api/scan-player.js extrae de la tarjeta (relevancia) y que PlayerForm
+// ofrece manualmente (AGREED_ROLE_OPTIONS) — duplicado aquí en vez de importado para no acoplar
+// este archivo al de PlayerForm por una constante tan pequeña y estable.
+const AGREED_ROLE_OPTIONS = [
+  { value: 'Crucial', label: 'Crucial' },
+  { value: 'Importante', label: 'Importante' },
+  { value: 'Rotación', label: 'Rotación' },
+  { value: 'Esporádico', label: 'Esporádico' },
+  { value: 'Promesa', label: 'Promesa' },
+];
 const TYPE_OPTIONS = [
   { value: 'Inicial', label: 'Ya en el Club' },
   { value: 'Comprado', label: 'Comprado' },
@@ -77,6 +87,13 @@ function buildRow(prefill, { status = 'ok', fileName = '', propertyDefault = 'Co
     marketValue: formatValueInput(String(prefill.marketValue || '')),
     wage: formatValueInput(String(prefill.wage || '')),
     reviewType: isCantera ? 'Cantera' : isCedido ? 'Cedido' : isCedidoFuera ? 'CedidoFuera' : propertyDefault,
+    // Relevancia (ver relevancia en api/scan-player.js): antes se perdía en el camino porque
+    // buildRow nunca la leía del "prefill" ni el guardado en lote la incluía en el payload —
+    // por eso todo jugador cargado en lote (el camino que usa el propio Asistente de
+    // Bienvenida) acababa siempre con Relevancia "Sin definir" aunque la IA sí la hubiera
+    // extraído correctamente. Corregido de punta a punta: aquí, en el panel de edición de la
+    // fila, y en handleSaveAll más abajo.
+    agreedRole: prefill.agreedRole || '',
     sourceClub: prefill.sourceClub || '',
     value: formatValueInput(String(prefill.value || '')),
     originClub: prefill.originClub || '',
@@ -234,6 +251,10 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, restrictTo
                   <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Sueldo Semanal (€)</label>
                   <input type="text" inputMode="numeric" className={FIELD_CLASS} value={r.wage} onChange={(e) => formatMoneyLiveWithCursor(e.target, (v) => onUpdate(r.id, { wage: v }))} placeholder="Ej: 100.000" />
                 </div>
+              </div>
+              <div className="space-y-0.5">
+                <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Relevancia</label>
+                <Dropdown value={r.agreedRole} options={AGREED_ROLE_OPTIONS} onChange={(v) => onUpdate(r.id, { agreedRole: v })} labelClassName="text-[10px]" placeholder="Sin definir" />
               </div>
               {r.reviewType === 'Comprado' && (
                 <div className="grid grid-cols-2 gap-2">
@@ -537,6 +558,7 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
           potential: r.potential,
           marketValue: r.marketValue,
           wage: r.wage,
+          agreedRole: r.agreedRole || '',
           sourceClub: isInitial ? 'En el club desde el inicio' : (r.reviewType === 'Comprado' ? r.sourceClub : r.reviewType === 'Cedido' ? r.originClub : isCedidoFuera ? (r.sourceClub || 'En el club desde el inicio') : ''),
           value: r.reviewType === 'Comprado' ? r.value : '',
           originClub: r.reviewType === 'Cedido' ? r.originClub : '',

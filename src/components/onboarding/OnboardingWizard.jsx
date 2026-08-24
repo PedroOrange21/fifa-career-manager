@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, ChevronLeft, ChevronRight, ChevronDown, Plus, Wallet, Shield, Camera, RefreshCcw, ShieldAlert, Trash2, Pencil, Sparkles, User, CalendarDays, Coins, Star, GraduationCap, BarChart3, MapPin, Target } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ChevronDown, Plus, Wallet, Shield, Camera, ShieldAlert, Trash2, Pencil, Sparkles, User, CalendarDays, Coins, Star, GraduationCap, BarChart3, MapPin, Target, Crop, Users } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency, formatValueInput, parseValue, weeklyWageBudgetFromTransfer } from '../../utils/format';
-import { resizeImageToDataUrl } from '../../utils/image';
+import { readFileAsDataUrl } from '../../utils/cropImage';
 import { getCardStyle } from '../../utils/cardStyle';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import PlayerForm from '../squad/PlayerForm';
@@ -11,6 +11,7 @@ import ScanPlayerCardModal from '../squad/ScanPlayerCardModal';
 import BulkScanReviewModal from '../squad/BulkScanReviewModal';
 import ConfirmModal from '../common/ConfirmModal';
 import AIGlowButton from '../common/AIGlowButton';
+import ImageCropperModal from '../common/ImageCropperModal';
 
 // Sugerencia de temporada actual a partir de la fecha real: la temporada futbolística europea
 // arranca en torno a julio, así que de julio en adelante se sugiere "año/año+1" y antes de julio
@@ -90,8 +91,9 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
 
   // --- Paso 1: Identidad del Club y Mánager (solo clubExists=false) ---
   const [name, setName] = useState('');
-  const [logo, setLogo] = useState('');
-  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [logo, setLogo] = useState(''); // Resultado final ya recortado (cuadrado, comprimido).
+  const [logoOriginal, setLogoOriginal] = useState(''); // Fuente sin recortar, para poder reencuadrar más tarde sin perder calidad.
+  const [cropperSrc, setCropperSrc] = useState(''); // Imagen abierta en el modal de recorte, o '' si está cerrado.
   const [managerName, setManagerName] = useState('');
   const [seasonLabel, setSeasonLabel] = useState(defaultSeasonLabel);
   const [currency, setCurrency] = useState('EUR');
@@ -112,16 +114,19 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const [weeklyWageInput, setWeeklyWageInput] = useState('');
   const [weeklyWageTouched, setWeeklyWageTouched] = useState(false);
 
-  // --- Paso 4: Plantilla Actual — registro de jugadores. addingPlayer abre PlayerForm (idéntico
-  // a "Fichar Jugador") por encima de este asistente; cada ficha se guarda directamente en
-  // Firestore, así que la lista que se muestra aquí simplemente lee "players" en vivo, sin
-  // estado local propio. bulkScanning/bulkReview son la vía de carga masiva con IA (lote de
-  // fotos o ráfaga con cámara, ver ScanPlayerCardModal/BulkScanReviewModal): aquí el usuario
-  // típicamente mete 20-30 jugadores de golpe, así que es la opción destacada del paso; los
-  // canteranos que la IA detecte sueltos en el lote (esCanterano) se archivan solos en Academia,
-  // sin necesidad de un paso dedicado aparte en este asistente. ---
-  const [addingPlayer, setAddingPlayer] = useState(false);
-  const [bulkScanning, setBulkScanning] = useState(false);
+  // --- Paso 4: Plantilla Actual — registro de jugadores, con dos secciones (pestañas) dentro
+  // del MISMO paso: Primer Equipo y Academia/Cantera. addingPlayerMode ('active'|'academy')
+  // abre PlayerForm (idéntico a "Fichar Jugador") por encima de este asistente; cada ficha se
+  // guarda directamente en Firestore, así que la lista que se muestra aquí simplemente lee
+  // "players" en vivo (nunca un borrador local que se pueda perder al navegar Atrás/Siguiente:
+  // ver el guard de createdClubId en goNext, la causa real de que la plantilla "desapareciera").
+  // bulkScanMode/bulkReview son la vía de carga masiva con IA (lote de fotos o ráfaga con
+  // cámara, ver ScanPlayerCardModal/BulkScanReviewModal) — la opción destacada de cada pestaña;
+  // un canterano que la IA detecte suelto en un lote de Primer Equipo (esCanterano) se archiva
+  // solo en la pestaña Academia, sin que el usuario tenga que hacer nada. ---
+  const [squadTab, setSquadTab] = useState('active'); // 'active' | 'academy'
+  const [addingPlayerMode, setAddingPlayerMode] = useState(null); // 'active' | 'academy' | null
+  const [bulkScanMode, setBulkScanMode] = useState(null); // 'active' | 'academy' | null
   const [bulkReview, setBulkReview] = useState(null);
 
   // --- Paso 5: Confirmación y Resumen — desglose desplegable de las dos listas ("Jugadores"/
@@ -134,15 +139,27 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLogoUpload = async (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    setIsUploadingLogo(true);
+  // Selección de archivo (primera vez, o "Cambiar Foto"): lee el archivo ORIGINAL sin
+  // redimensionar y abre el recorte interactivo antes de fijar nada como escudo definitivo.
+  const handleLogoFileChange = async (e) => {
+    const file = e.target.files[0]; e.target.value = ''; if (!file) return;
     try {
-      const dataUrl = await resizeImageToDataUrl(file, 150, 0.8);
-      setLogo(dataUrl);
-    } finally {
-      setIsUploadingLogo(false);
+      const dataUrl = await readFileAsDataUrl(file);
+      setLogoOriginal(dataUrl);
+      setCropperSrc(dataUrl);
+    } catch (err) {
+      console.error('Error leyendo el escudo:', err);
     }
+  };
+  // "Editar Encuadre": reabre el recorte sobre la imagen ORIGINAL ya guardada (logoOriginal),
+  // nunca sobre el resultado ya recortado/comprimido — así el segundo recorte no pierde calidad.
+  const handleReopenCropper = () => { if (logoOriginal) setCropperSrc(logoOriginal); };
+  const handleCropApplied = (dataUrl) => { setLogo(dataUrl); setCropperSrc(''); };
+  const handleCropCancel = () => {
+    setCropperSrc('');
+    // Si se cancela el primer recorte (nunca hubo un "logo" definitivo antes), no dejar la
+    // fuente original huérfana sin ningún resultado que mostrar.
+    if (!logo) setLogoOriginal('');
   };
 
   const onTransferBudgetChange = (raw) => setTransferBudgetInput(formatValueInput(raw));
@@ -181,6 +198,19 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
     }
     if (currentStepId === 'budget') {
       if (isSaving) return;
+      // Guard crítico: si el usuario ya creó el club (avanzó una vez más allá de este paso) y
+      // vuelve aquí con "Atrás" para revisar algo, "Siguiente" NO debe volver a llamar a
+      // createClub — antes lo hacía siempre sin condición, así que retroceder y avanzar de
+      // nuevo creaba un SEGUNDO club con un clubId nuevo, la app cambiaba de club activo a ese
+      // duplicado recién creado y la plantilla ya escaneada (que seguía colgando del primer
+      // club, ahora huérfano) "desaparecía" de la vista — el síntoma real detrás del reporte de
+      // "los jugadores escaneados desaparecen al navegar". Con el club ya creado, simplemente se
+      // avanza de paso; los datos de Identidad/Filosofía/Fondos ya quedaron guardados la
+      // primera vez.
+      if (createdClubId) {
+        setStep((s) => s + 1);
+        return;
+      }
       setIsSaving(true);
       try {
         const result = await createClub(name, logo, budgetAmount, parseValue(weeklyWageInput) || null, {
@@ -229,17 +259,23 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   // club del usuario (no puede quedarse sin ningún club activo).
   const showDismiss = clubExists || clubs.length > 0;
 
-  // Registro de Plantilla Inicial: nunca implica una compra real (ver initialSquadTypes en
-  // PlayerForm y restrictToInitialTypes en BulkScanReviewModal, que retiran "Comprado" del
-  // selector) — solo 3 estados de situación (En Propiedad / Cedido en Nuestro Club / Cedido a
-  // Otro Club), así el historial de traspasos de la carrera nunca se ve alterado por un jugador
-  // que ya estaba en el club antes de usar la app.
-  const playerFormProps = { prefill: { type: 'Comprado', sourceClub: 'En el club desde el inicio' }, initialSquadTypes: true, hidePurchasePrice: true, hideSourceClub: true, skipInitialTransaction: true };
-  const bulkScanProps = { mode: 'primerEquipo', propertyDefault: 'Inicial', skipInitialTransaction: true, restrictToInitialTypes: true };
+  // Registro de Plantilla Inicial (Primer Equipo): nunca implica una compra real (ver
+  // initialSquadTypes en PlayerForm y restrictToInitialTypes en BulkScanReviewModal, que
+  // retiran "Comprado" del selector) — solo 3 estados de situación (En Propiedad / Cedido en
+  // Nuestro Club / Cedido a Otro Club), así el historial de traspasos de la carrera nunca se ve
+  // alterado por un jugador que ya estaba en el club antes de usar la app. Academia usa el
+  // mismo patrón "sin transacción real" que ya tenía (lockedType 'Cantera'), sin necesidad de
+  // los 3 estados de situación — un canterano no tiene ni compra ni cesión que registrar.
+  const playerFormPropsFor = (mode) => (mode === 'academy'
+    ? { prefill: { type: 'Cantera' }, lockedType: 'Cantera', skipInitialTransaction: true }
+    : { prefill: { type: 'Comprado', sourceClub: 'En el club desde el inicio' }, initialSquadTypes: true, hidePurchasePrice: true, hideSourceClub: true, skipInitialTransaction: true });
+  const bulkScanPropsFor = (mode) => (mode === 'academy'
+    ? { mode: 'academia', propertyDefault: 'Comprado', skipInitialTransaction: true }
+    : { mode: 'primerEquipo', propertyDefault: 'Inicial', skipInitialTransaction: true, restrictToInitialTypes: true });
 
   const handleBulkScanExtracted = (results) => {
-    setBulkReview({ ...bulkScanProps, results });
-    setBulkScanning(false);
+    setBulkReview({ ...bulkScanPropsFor(bulkScanMode), results });
+    setBulkScanMode(null);
   };
 
   const STEP_LABELS = {
@@ -292,12 +328,17 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
             <div key={currentStepId} className="space-y-4 pb-4 animate-in fade-in duration-300">
               {currentStepId === 'identity' && (
                 <div className="space-y-4">
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="relative group cursor-pointer" onClick={() => !isUploadingLogo && fileInputRef.current?.click()}>
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
                       {logo ? <img src={logo} alt="Logo" className="w-20 h-20 rounded-2xl border-2 border-border object-cover shadow-2xl" /> : <div className="w-20 h-20 rounded-2xl bg-well border-2 border-dashed border-border flex flex-col items-center justify-center shadow-2xl hover:border-green-500 transition-all text-fg-muted hover:text-green-500"><Shield size={28} /><span className="text-[8px] font-black uppercase mt-1">Escudo</span></div>}
-                      <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleLogoUpload} />
-                      <button type="button" disabled={isUploadingLogo} className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">{isUploadingLogo ? <RefreshCcw size={20} className="animate-spin text-white" /> : <Camera size={20} className="text-white" />}</button>
+                      <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleLogoFileChange} />
+                      <button type="button" className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera size={20} className="text-white" /></button>
                     </div>
+                    {logo && (
+                      <button type="button" onClick={handleReopenCropper} className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-fg-faint hover:text-green-500 transition-colors touch-manipulation">
+                        <Crop size={11} className="shrink-0" /> Editar Encuadre / Recortar
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Nombre del Club</label>
@@ -381,30 +422,76 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
 
               {currentStepId === 'squad' && (
                 <div className="space-y-3">
-                  <p className="text-xs font-bold text-fg-muted">Añade tu plantilla actual, ficha a ficha.</p>
-                  <div className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
-                    {activeRosterPlayers.length === 0 ? (
-                      <div className="p-4 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Aún no has añadido jugadores</div>
-                    ) : activeRosterPlayers.map((p) => (
-                      <div key={p.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
-                        <span className="text-xs font-black text-fg truncate">{p.name}</span>
-                        <span className="text-[9px] font-black text-fg-faint uppercase shrink-0 ml-2">{p.positions?.[0] || '—'} · {p.rating}</span>
+                  {/* Pestañas Primer Equipo / Academia: MISMO Paso 4, dos secciones — un
+                      canterano detectado sin querer en un lote de Primer Equipo (esCanterano)
+                      se archiva solo en la pestaña Academia, sin que el usuario tenga que
+                      cambiar de pestaña a propósito para verlo aparecer ahí. */}
+                  <div className="flex gap-2 p-1 bg-well rounded-2xl border border-border-subtle">
+                    <button type="button" onClick={() => setSquadTab('active')} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-1.5 transition-all touch-manipulation ${squadTab === 'active' ? 'bg-green-500 text-black' : 'text-fg-muted hover:text-fg'}`}>
+                      <Users size={13} className="shrink-0" /> Primer Equipo ({activeRosterPlayers.length})
+                    </button>
+                    <button type="button" onClick={() => setSquadTab('academy')} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-1.5 transition-all touch-manipulation ${squadTab === 'academy' ? 'bg-green-500 text-black' : 'text-fg-muted hover:text-fg'}`}>
+                      <GraduationCap size={13} className="shrink-0" /> Academia ({academyRosterPlayers.length})
+                    </button>
+                  </div>
+
+                  {squadTab === 'active' ? (
+                    <>
+                      <div className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+                        {activeRosterPlayers.length === 0 ? (
+                          <div className="p-4 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Aún no has añadido jugadores</div>
+                        ) : activeRosterPlayers.map((p) => (
+                          <div key={p.id} className="px-3 py-2 flex items-center gap-2">
+                            <button type="button" onClick={() => setEditingSummaryPlayer(p)} className="min-w-0 flex-1 text-left touch-manipulation">
+                              <div className="text-xs font-black text-fg truncate">{p.name}</div>
+                              <div className="text-[9px] font-bold text-fg-faint uppercase tracking-wide truncate">{p.positions?.[0] || '—'} · {p.rating} OVR</div>
+                            </button>
+                            <button type="button" onClick={() => setEditingSummaryPlayer(p)} title="Editar" className="shrink-0 p-1.5 text-fg-faint hover:text-green-500 transition-colors touch-manipulation"><Pencil size={13} /></button>
+                            <button type="button" onClick={() => setPlayerToDelete(p.id)} title="Eliminar" className="shrink-0 p-1.5 text-fg-faint hover:text-red-400 transition-colors touch-manipulation"><Trash2 size={13} /></button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  <div className="p-3 rounded-2xl bg-well border border-border-subtle">
-                    <p className="text-[10px] font-bold text-fg-muted leading-relaxed">Ve en tu juego a <span className="text-fg font-black">Plantilla &gt; Menú de plantilla &gt; Finanzas</span>, y haz una foto a la información que aparece a la derecha de la pantalla para cada jugador.</p>
-                  </div>
-                  {/* Opción principal destacada, con el diseño premium de IA (borde degradado
-                      animado + halo, ver AIGlowButton): aquí el usuario típicamente mete 20-30
-                      jugadores de golpe. "Añadir Jugadores a Mano" queda como alternativa
-                      secundaria discreta. */}
-                  <AIGlowButton onClick={() => setBulkScanning(true)}>
-                    Escanear Plantilla con IA
-                  </AIGlowButton>
-                  <button type="button" onClick={() => setAddingPlayer(true)} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
-                    <Plus size={13} /> Añadir Jugadores a Mano
-                  </button>
+                      <div className="p-3 rounded-2xl bg-well border border-border-subtle">
+                        <p className="text-[10px] font-bold text-fg-muted leading-relaxed">Ve en tu juego a <span className="text-fg font-black">Plantilla &gt; Menú de plantilla &gt; Finanzas</span>, y haz una foto a la información que aparece a la derecha de la pantalla para cada jugador.</p>
+                      </div>
+                      {/* Opción principal destacada, con el diseño premium de IA (borde
+                          degradado animado + halo, ver AIGlowButton): aquí el usuario
+                          típicamente mete 20-30 jugadores de golpe. "Añadir a Mano" queda como
+                          alternativa secundaria discreta. */}
+                      <AIGlowButton onClick={() => setBulkScanMode('active')}>
+                        Escanear Plantilla con IA
+                      </AIGlowButton>
+                      <button type="button" onClick={() => setAddingPlayerMode('active')} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
+                        <Plus size={13} /> Añadir Jugadores a Mano
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+                        {academyRosterPlayers.length === 0 ? (
+                          <div className="p-4 text-center text-[10px] font-bold text-fg-faint uppercase tracking-widest">Aún no has añadido canteranos</div>
+                        ) : academyRosterPlayers.map((p) => (
+                          <div key={p.id} className="px-3 py-2 flex items-center gap-2">
+                            <button type="button" onClick={() => setEditingSummaryPlayer(p)} className="min-w-0 flex-1 text-left touch-manipulation">
+                              <div className="text-xs font-black text-fg truncate">{p.name}</div>
+                              <div className="text-[9px] font-bold text-fg-faint uppercase tracking-wide truncate">{p.positions?.[0] || '—'} · Pot. {p.potential || '—'}</div>
+                            </button>
+                            <button type="button" onClick={() => setEditingSummaryPlayer(p)} title="Editar" className="shrink-0 p-1.5 text-fg-faint hover:text-green-500 transition-colors touch-manipulation"><Pencil size={13} /></button>
+                            <button type="button" onClick={() => setPlayerToDelete(p.id)} title="Eliminar" className="shrink-0 p-1.5 text-fg-faint hover:text-red-400 transition-colors touch-manipulation"><Trash2 size={13} /></button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="p-3 rounded-2xl bg-well border border-border-subtle">
+                        <p className="text-[10px] font-bold text-fg-muted leading-relaxed">Ve en tu juego a <span className="text-fg font-black">Academia &gt; Menú de plantilla &gt; Finanzas</span>, y haz una foto a la información que aparece a la derecha de la pantalla para cada canterano.</p>
+                      </div>
+                      <AIGlowButton onClick={() => setBulkScanMode('academy')}>
+                        Escanear Academia con IA
+                      </AIGlowButton>
+                      <button type="button" onClick={() => setAddingPlayerMode('academy')} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
+                        <Plus size={13} /> Añadir Canteranos a Mano
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -511,15 +598,19 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
         </div>
       </div>
 
-      {addingPlayer && (
-        <PlayerForm {...playerFormProps} onClose={() => setAddingPlayer(false)} />
+      {cropperSrc && (
+        <ImageCropperModal imageSrc={cropperSrc} onCancel={handleCropCancel} onApply={handleCropApplied} />
       )}
 
-      {bulkScanning && (
+      {addingPlayerMode && (
+        <PlayerForm {...playerFormPropsFor(addingPlayerMode)} onClose={() => setAddingPlayerMode(null)} />
+      )}
+
+      {bulkScanMode && (
         <ScanPlayerCardModal
-          mode="primerEquipo"
+          mode={bulkScanMode === 'academy' ? 'academia' : 'primerEquipo'}
           forceBatch
-          onClose={() => setBulkScanning(false)}
+          onClose={() => setBulkScanMode(null)}
           onBatchExtracted={handleBulkScanExtracted}
         />
       )}
