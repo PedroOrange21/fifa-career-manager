@@ -442,7 +442,7 @@ export default function ScanPlayerCardModal({ onClose, onExtracted, onBatchExtra
             <div className="p-3 rounded-2xl bg-well border border-border-subtle">
               <p className="text-[10px] font-bold text-fg-muted leading-relaxed">
                 {mode === 'academia'
-                  ? <>Ve en tu juego a <span className="text-fg font-black">Academia &gt; Menú de plantilla &gt; Finanzas</span>, y haz una foto a la información que aparece a la derecha de la pantalla para cada canterano. Puedes disparar foto tras foto con la cámara (modo ráfaga) sin salir a la pantalla de carga entre medias, o subir varias a la vez desde la galería.</>
+                  ? <>Ve en tu juego a <span className="text-fg font-black">Academia &gt; Plantilla de la cantera</span>, y haz una foto a la información que aparece a la derecha de la pantalla para cada canterano. Puedes disparar foto tras foto con la cámara (modo ráfaga) sin salir a la pantalla de carga entre medias, o subir varias a la vez desde la galería.</>
                   : <>Ve en tu juego a <span className="text-fg font-black">Plantilla &gt; Menú de plantilla &gt; Finanzas</span>, y haz una foto a la información que aparece a la derecha de la pantalla para cada jugador. Puedes disparar foto tras foto con la cámara (modo ráfaga) sin salir a la pantalla de carga entre medias, o subir varias a la vez desde la galería.</>}
               </p>
             </div>

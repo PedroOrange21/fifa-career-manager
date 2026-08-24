@@ -128,6 +128,10 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const [addingPlayerMode, setAddingPlayerMode] = useState(null); // 'active' | 'academy' | null
   const [bulkScanMode, setBulkScanMode] = useState(null); // 'active' | 'academy' | null
   const [bulkReview, setBulkReview] = useState(null);
+  // Aviso de Academia vacía al pulsar "Siguiente" desde Plantilla (ver goNext): nunca bloquea
+  // el avance de verdad, solo da la oportunidad de ir directo a la pestaña Academia antes de
+  // decidir seguir sin canteranos.
+  const [showAcademyWarning, setShowAcademyWarning] = useState(false);
 
   // --- Paso 5: Confirmación y Resumen — desglose desplegable de las dos listas ("Jugadores"/
   // "Canteranos", esta última solo si la IA reclasificó alguno), con edición en línea (reutiliza
@@ -226,9 +230,26 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
       }
       return;
     }
+    // Aviso amistoso (no bloqueante): si ya hay Primer Equipo pero la Academia sigue vacía, se
+    // ofrece la oportunidad de escanearla antes de pasar al Resumen, en vez de dar por hecho
+    // que el usuario no tiene canteranos que registrar. Solo se dispara una vez por intento de
+    // avanzar — "Continuar sin canteranos" avanza igual sin volver a preguntar.
+    if (currentStepId === 'squad' && activeRosterPlayers.length > 0 && academyRosterPlayers.length === 0) {
+      setShowAcademyWarning(true);
+      return;
+    }
     setStep((s) => Math.min(STEP_SEQUENCE.length - 1, s + 1));
   };
   const goPrev = () => { setError(''); setStep((s) => Math.max(0, s - 1)); };
+
+  const handleGoToAcademy = () => {
+    setShowAcademyWarning(false);
+    setSquadTab('academy');
+  };
+  const handleContinueWithoutAcademy = () => {
+    setShowAcademyWarning(false);
+    setStep((s) => Math.min(STEP_SEQUENCE.length - 1, s + 1));
+  };
 
   // Solo se marca el onboarding como resuelto si este propio asistente llegó a tener un club
   // real asociado (ya existía, o se acaba de crear aquí): omitir en los pasos previos a crear
@@ -482,7 +503,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                         ))}
                       </div>
                       <div className="p-3 rounded-2xl bg-well border border-border-subtle">
-                        <p className="text-[10px] font-bold text-fg-muted leading-relaxed">Ve en tu juego a <span className="text-fg font-black">Academia &gt; Menú de plantilla &gt; Finanzas</span>, y haz una foto a la información que aparece a la derecha de la pantalla para cada canterano.</p>
+                        <p className="text-[10px] font-bold text-fg-muted leading-relaxed">Ve en tu juego a <span className="text-fg font-black">Academia &gt; Plantilla de la cantera</span>, y haz una foto a la información que aparece a la derecha de la pantalla para cada canterano.</p>
                       </div>
                       <AIGlowButton onClick={() => setBulkScanMode('academy')}>
                         Escanear Academia con IA
@@ -639,6 +660,24 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
           onCancel={() => setPlayerToDelete(null)}
           onConfirm={confirmDeletePlayer}
         />
+      )}
+
+      {/* Aviso amistoso (nunca bloqueante) al pulsar "Siguiente" desde Plantilla con el Primer
+          Equipo ya cargado pero la Academia todavía vacía (ver goNext) — un modal a medida en
+          vez de ConfirmModal porque aquí hacen falta DOS acciones con su propio significado
+          ("Añadir canteranos" lleva a la pestaña Academia, no cancela nada) en vez de un simple
+          cancelar/confirmar. */}
+      {showAcademyWarning && (
+        <div className="fixed inset-0 bg-black/80 z-[250] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={handleContinueWithoutAcademy}>
+          <div className="bg-surface border border-border w-full max-w-sm rounded-[28px] p-5 shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 text-green-500 font-black text-sm uppercase mb-2"><GraduationCap size={18} className="shrink-0" /> ¿No quieres añadir jugadores de la Academia?</div>
+            <p className="text-xs font-bold text-fg-muted leading-relaxed mb-4">Aún no has registrado ningún canterano en tu academia. Puedes escanearlos ahora o añadirlos más adelante desde el despacho del club.</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={handleContinueWithoutAcademy} className="flex-1 py-3 rounded-xl bg-well-strong text-fg font-black uppercase text-[10px] hover:brightness-125 transition-all touch-manipulation">Continuar sin Canteranos</button>
+              <button type="button" onClick={handleGoToAcademy} className="flex-1 py-3 rounded-xl bg-green-500 text-black font-black uppercase text-[10px] hover:bg-green-400 transition-all touch-manipulation">Añadir Canteranos</button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
