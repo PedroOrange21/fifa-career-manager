@@ -648,8 +648,19 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
         />
       )}
 
+      {/* Edición unificada: MISMO PlayerForm para cualquier jugador ya registrado, venga del
+          Paso 4 (Primer Equipo o Academia) o del Paso 5, con los campos ajustados según su
+          tipo — un canterano bloquea el selector de Tipo de Adquisición (lockedType='Cantera',
+          igual que al darlo de alta) para que editarlo no pueda convertirlo por accidente en
+          Comprado/Cedido; cualquier otro jugador usa los 3 estados de situación inicial. */}
       {editingSummaryPlayer && (
-        <PlayerForm editingPlayer={editingSummaryPlayer} initialStep={4} initialSquadTypes={editingSummaryPlayer.type !== 'Cantera'} onClose={() => setEditingSummaryPlayer(null)} />
+        <PlayerForm
+          editingPlayer={editingSummaryPlayer}
+          initialStep={4}
+          lockedType={editingSummaryPlayer.type === 'Cantera' ? 'Cantera' : null}
+          initialSquadTypes={editingSummaryPlayer.type !== 'Cantera'}
+          onClose={() => setEditingSummaryPlayer(null)}
+        />
       )}
       {playerToDelete && (
         <ConfirmModal
@@ -671,7 +682,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
         <div className="fixed inset-0 bg-black/80 z-[250] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={handleContinueWithoutAcademy}>
           <div className="bg-surface border border-border w-full max-w-sm rounded-[28px] p-5 shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2 text-green-500 font-black text-sm uppercase mb-2"><GraduationCap size={18} className="shrink-0" /> ¿No quieres añadir jugadores de la Academia?</div>
-            <p className="text-xs font-bold text-fg-muted leading-relaxed mb-4">Aún no has registrado ningún canterano en tu academia. Puedes escanearlos ahora o añadirlos más adelante desde el despacho del club.</p>
+            <p className="text-xs font-bold text-fg-muted leading-relaxed mb-4">Aún no has registrado ningún canterano. Puedes escanearlos ahora o añadirlos más adelante desde el despacho del club.</p>
             <div className="flex gap-2">
               <button type="button" onClick={handleContinueWithoutAcademy} className="flex-1 py-3 rounded-xl bg-well-strong text-fg font-black uppercase text-[10px] hover:brightness-125 transition-all touch-manipulation">Continuar sin Canteranos</button>
               <button type="button" onClick={handleGoToAcademy} className="flex-1 py-3 rounded-xl bg-green-500 text-black font-black uppercase text-[10px] hover:bg-green-400 transition-all touch-manipulation">Añadir Canteranos</button>
