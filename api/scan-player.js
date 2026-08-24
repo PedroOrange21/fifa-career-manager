@@ -30,6 +30,17 @@ const geminiKeys = [...new Set(
 const PRIMARY_MODEL = 'gemini-3.6-flash';
 const FALLBACK_MODEL = 'gemini-3.7-flash';
 
+// Respaldo de segundo nivel (ver handler más abajo): si TODAS las claves/modelos de Gemini
+// fallan o devuelven algo inaprovechable para esta foto, se prueba con Groq Vision antes de
+// rendirse del todo — mismo patrón de pool multiclave separado por comas que Gemini.
+const groqKeys = [...new Set(
+  (process.env.GROQ_API_KEY || '')
+    .split(',')
+    .map((k) => k.trim())
+    .filter(Boolean),
+)];
+const GROQ_MODELS = ['llama-3.2-11b-vision-preview', 'llama-3.2-90b-vision-preview'];
+
 // Tipos MIME que Gemini acepta para imágenes; cualquier otro valor (o ausente) cae a JPEG, que
 // es lo que produce cualquier cámara de móvil.
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
@@ -81,14 +92,73 @@ const GOOGLE_STATUS_CODES = [
   'NOT_FOUND', 'ABORTED',
 ];
 const extractTechnicalCode = (err) => {
+  // Códigos sintéticos propios de este endpoint (EMPTY_RESPONSE_SAFETY, INVALID_JSON_RESPONSE,
+  // GROQ_QUOTA_EXCEEDED...): si el mensaje YA es un token en mayúsculas/guion bajo, se devuelve
+  // tal cual — es más específico que cualquier búsqueda de patrón.
+  const rawMessage = String(err?.message || err || '');
+  if (/^[A-Z][A-Z0-9_]*$/.test(rawMessage)) return rawMessage;
   const nestedStatus = err?.error?.status || err?.response?.data?.error?.status || err?.cause?.status;
   if (nestedStatus) return String(nestedStatus).toUpperCase();
-  const message = String(err?.message || err || '');
-  const matchedCode = GOOGLE_STATUS_CODES.find((code) => message.toUpperCase().includes(code));
+  const matchedCode = GOOGLE_STATUS_CODES.find((code) => rawMessage.toUpperCase().includes(code));
   if (matchedCode) return matchedCode;
   const httpCode = err?.status ?? err?.statusCode ?? err?.response?.status;
   if (httpCode) return `HTTP_${httpCode}`;
   return 'UNKNOWN_ERROR';
+};
+
+// Llamada a Groq Cloud Vision (API compatible con OpenAI chat completions) como respaldo de
+// segundo nivel cuando Gemini falla del todo. Reutiliza literalmente el mismo "promptText" que
+// ya usa Gemini (PROMPT/ACADEMY_PROMPT, ver más abajo) — así el JSON que devuelve Groq tiene
+// EXACTAMENTE los mismos nombres de campo (nombre, media, posicionPrincipal...) que espera
+// mapScanResultToPrefill/mapAcademyScanResultToPrefill en el cliente, sin que ese código tenga
+// que saber si el dato vino de Gemini o de Groq. Groq no admite un responseSchema estricto como
+// Gemini (solo response_format: json_object, que fuerza JSON válido pero no una forma
+// concreta), así que se refuerza con una frase final explícita pidiendo el JSON en crudo.
+const callGroqVision = async (groqKey, model, promptText, mimeType, imageBase64) => {
+  let response;
+  try {
+    response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${groqKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: `${promptText}\n\nResponde ÚNICAMENTE con el objeto JSON en crudo, sin vallas de código Markdown ni texto adicional.` },
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+            ],
+          },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.1,
+      }),
+    });
+  } catch (err) {
+    const networkErr = new Error('GROQ_FETCH_FAILED');
+    networkErr.cause = err;
+    throw networkErr;
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const code = payload?.error?.code || payload?.error?.type;
+    const err = new Error(code ? String(code).toUpperCase() : `GROQ_HTTP_${response.status}`);
+    err.status = response.status;
+    err.details = payload?.error?.message || '';
+    throw err;
+  }
+
+  const text = payload?.choices?.[0]?.message?.content;
+  if (!text) {
+    const err = new Error('GROQ_EMPTY_RESPONSE');
+    throw err;
+  }
+  return parseGeminiJson(text);
 };
 
 // Esquema de salida estructurada: obliga a Gemini a responder JSON con exactamente estos
@@ -228,9 +298,9 @@ export default async function handler(req, res) {
     res.status(405).json({ success: false, error: 'method_not_allowed', details: 'Método no permitido.' });
     return;
   }
-  if (geminiKeys.length === 0) {
-    console.error('Falta GEMINI_API_KEY/VITE_GEMINI_API_KEY en las variables de entorno del proyecto.');
-    res.status(500).json({ success: false, error: 'missing_api_key', details: 'El servidor no tiene configurada la clave de Gemini. Contacta con el administrador.' });
+  if (geminiKeys.length === 0 && groqKeys.length === 0) {
+    console.error('Faltan GEMINI_API_KEY/VITE_GEMINI_API_KEY y GROQ_API_KEY en las variables de entorno del proyecto.');
+    res.status(500).json({ success: false, error: 'missing_api_key', details: 'El servidor no tiene configurada ninguna clave de IA. Contacta con el administrador.' });
     return;
   }
 
@@ -281,82 +351,103 @@ export default async function handler(req, res) {
     return /429|503|quota|resource_exhausted|rate limit|too many requests|api key|invalid/i.test(String(err?.message || ''));
   };
 
+  // --- Nivel 1: Gemini multiclave ---
   let response;
   let lastError;
-  keyLoop:
-  for (let keyIndex = 0; keyIndex < geminiKeys.length; keyIndex++) {
-    const ai = new GoogleGenAI({ apiKey: geminiKeys[keyIndex] });
-    for (const model of [PRIMARY_MODEL, FALLBACK_MODEL]) {
+  if (geminiKeys.length > 0) {
+    keyLoop:
+    for (let keyIndex = 0; keyIndex < geminiKeys.length; keyIndex++) {
+      const ai = new GoogleGenAI({ apiKey: geminiKeys[keyIndex] });
+      for (const model of [PRIMARY_MODEL, FALLBACK_MODEL]) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          response = await callModel(ai, model);
+          lastError = null;
+          break keyLoop; // Éxito: no hace falta probar más modelos ni más claves.
+        } catch (err) {
+          lastError = err;
+          // Solo se identifica la clave por su posición en la lista (nunca el valor real) en
+          // los logs, para no dejar ninguna clave completa expuesta en la consola de Vercel.
+          logGeminiError(`Error llamando a Gemini (clave #${keyIndex + 1} de ${geminiKeys.length}, modelo ${model}):`, err);
+        }
+      }
+      // Ambos modelos fallaron con ESTA clave: si el motivo es de cuota/autenticación, se rota
+      // a la siguiente automáticamente; si no, no tiene sentido seguir probando claves
+      // distintas para el mismo fallo (p. ej. una imagen que Gemini rechaza por su contenido).
+      if (!shouldRotateKey(lastError) || keyIndex === geminiKeys.length - 1) break;
+      console.warn(`Clave #${keyIndex + 1} agotada o inválida, rotando a la clave #${keyIndex + 2} de ${geminiKeys.length}...`);
+    }
+  } else {
+    lastError = new Error('MISSING_GEMINI_KEYS');
+  }
+
+  // Traduce lo que haya devuelto Gemini (si algo) a "data" ya parseado, o deja "lastError"
+  // puesto para que el Nivel 2 (Groq) se active exactamente igual que ante una excepción — un
+  // "sin texto legible" o un JSON roto merecen el mismo respaldo que un 429, porque el objetivo
+  // final es el mismo: sacar algo aprovechable de esta foto antes de rendirse del todo.
+  let data = null;
+  if (!lastError) {
+    const text = response?.text;
+    if (text) {
       try {
-        // eslint-disable-next-line no-await-in-loop
-        response = await callModel(ai, model);
-        lastError = null;
-        break keyLoop; // Éxito: no hace falta probar más modelos ni más claves.
+        data = parseGeminiJson(text);
       } catch (err) {
-        lastError = err;
-        // Solo se identifica la clave por su posición en la lista (nunca el valor real) en los
-        // logs, para no dejar ninguna clave completa expuesta en la consola de Vercel.
-        logGeminiError(`Error llamando a Gemini (clave #${keyIndex + 1} de ${geminiKeys.length}, modelo ${model}):`, err);
+        console.error('Respuesta de Gemini no es JSON válido:', text.slice(0, 2000), err);
+        lastError = new Error('INVALID_JSON_RESPONSE');
+      }
+    } else {
+      // "finishReason" (SAFETY, MAX_TOKENS, RECITATION...), si Gemini lo trae, es el motivo
+      // técnico exacto de por qué no hay texto.
+      const finishReason = response?.candidates?.[0]?.finishReason;
+      console.error('Gemini respondió sin texto utilizable. finishReason:', finishReason, 'Respuesta completa:', JSON.stringify(response)?.slice(0, 2000));
+      lastError = new Error(finishReason ? `EMPTY_RESPONSE_${finishReason}` : 'EMPTY_RESPONSE');
+    }
+  }
+
+  // --- Nivel 2: Groq Vision multiclave (solo si Gemini no dejó nada aprovechable) ---
+  if (!data && groqKeys.length > 0) {
+    console.warn(`Gemini no pudo procesar la imagen (${lastError?.message || 'motivo desconocido'}), activando respaldo Groq Vision (${groqKeys.length} clave${groqKeys.length === 1 ? '' : 's'})...`);
+    groqLoop:
+    for (let groqIndex = 0; groqIndex < groqKeys.length; groqIndex++) {
+      for (const groqModel of GROQ_MODELS) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          data = await callGroqVision(groqKeys[groqIndex], groqModel, promptText, mimeType, imageBase64);
+          lastError = null;
+          break groqLoop; // Éxito: no hace falta probar más modelos ni más claves de Groq.
+        } catch (err) {
+          lastError = err;
+          console.error(`Error llamando a Groq (clave #${groqIndex + 1} de ${groqKeys.length}, modelo ${groqModel}):`, err.message);
+        }
       }
     }
-    // Ambos modelos fallaron con ESTA clave: si el motivo es de cuota/autenticación, se rota a
-    // la siguiente automáticamente; si no, no tiene sentido seguir probando claves distintas
-    // para el mismo fallo (p. ej. una imagen que Gemini rechaza por su propio contenido).
-    if (!shouldRotateKey(lastError) || keyIndex === geminiKeys.length - 1) break;
-    console.warn(`Clave #${keyIndex + 1} agotada o inválida, rotando a la clave #${keyIndex + 2} de ${geminiKeys.length}...`);
   }
 
-  if (lastError) {
-    // Diagnóstico transparente: se propaga el código técnico EXACTO que devolvió Google
-    // (RESOURCE_EXHAUSTED, API_KEY_INVALID, PERMISSION_DENIED, UNAVAILABLE...) en vez de
-    // enmascararlo detrás de un "service_error" genérico — así el frontend puede mostrar el
-    // motivo real bajo cada foto fallida en lugar de un simple "no leída" sin explicación.
-    // "rateLimited: true" sigue siendo la señal explícita (independiente del texto del código)
-    // que usa scanPlayerCard para decidir si reintentar la MISMA foto: cuota excedida
-    // (RESOURCE_EXHAUSTED/429) o modelo saturado (UNAVAILABLE/503) en AMBOS modelos. El código
-    // HTTP real (429/503) se propaga también, nunca un 502 genérico — sin esto, cualquier lote
-    // que rozara los 15 RPM de esta clave veía cómo el reintento nunca llegaba a dispararse y
-    // el lote entero acababa marcado "No leída" de principio a fin.
-    const technicalCode = extractTechnicalCode(lastError);
-    const upstreamStatus = lastError?.status ?? lastError?.statusCode ?? lastError?.response?.status;
-    const isRateLimited = technicalCode === 'RESOURCE_EXHAUSTED' || technicalCode === 'UNAVAILABLE'
-      || upstreamStatus === 429 || upstreamStatus === 503
-      || /429|503|quota|resource_exhausted|rate limit|too many requests/i.test(String(lastError?.message || ''));
-    const httpStatus = isRateLimited ? (upstreamStatus === 503 || technicalCode === 'UNAVAILABLE' ? 503 : 429) : 502;
-    res.status(httpStatus).json({
-      success: false,
-      rateLimited: isRateLimited,
-      error: technicalCode,
-      details: lastError.message || String(lastError),
-    });
+  if (data) {
+    res.status(200).json({ success: true, data });
     return;
   }
 
-  const text = response?.text;
-  if (!text) {
-    // "unreadable" a propósito con HTTP 200: esto significa que Gemini SÍ respondió pero no
-    // encontró nada legible en la imagen (foto borrosa, mal encuadrada, pantalla que no es una
-    // tarjeta de jugador...) — un fallo del propio contenido de la foto, no del servicio, así
-    // que nunca dispara el reintento (reservado para 429/503 reales) y la cola del frontend
-    // simplemente anota esta foto y sigue con la siguiente. "finishReason" (SAFETY, MAX_TOKENS,
-    // RECITATION...), si Gemini lo trae, es el motivo técnico exacto de por qué no hay texto.
-    const finishReason = response?.candidates?.[0]?.finishReason;
-    console.error('Gemini respondió sin texto utilizable. finishReason:', finishReason, 'Respuesta completa:', JSON.stringify(response)?.slice(0, 2000));
-    res.status(200).json({ success: false, error: finishReason ? `EMPTY_RESPONSE_${finishReason}` : 'EMPTY_RESPONSE', details: 'Gemini no devolvió texto aprovechable para esta imagen.' });
-    return;
-  }
-
-  let data;
-  try {
-    data = parseGeminiJson(text);
-  } catch (err) {
-    // Mismo contrato "unreadable" + 200 que arriba: la respuesta de Gemini llegó pero no se
-    // pudo parsear como JSON limpio (texto sobrante, valla de código sin cerrar...) — de nuevo
-    // un problema de esta imagen concreta, no del servicio en sí.
-    console.error('Respuesta de Gemini no es JSON válido:', text.slice(0, 2000), err);
-    res.status(200).json({ success: false, error: 'INVALID_JSON_RESPONSE', details: err.message });
-    return;
-  }
-
-  res.status(200).json({ success: true, data });
+  // Ni Gemini ni Groq (si estaba disponible) pudieron sacar nada de esta foto. Diagnóstico
+  // transparente: se propaga el código técnico EXACTO del último intento (de cualquiera de los
+  // dos proveedores) en vez de enmascararlo detrás de un "service_error" genérico — así el
+  // frontend puede mostrar el motivo real bajo cada foto fallida. "rateLimited: true" sigue
+  // siendo la señal explícita que usa scanPlayerCard para decidir si reintentar la MISMA foto
+  // (cuota excedida o servicio saturado); "EMPTY_RESPONSE*"/"INVALID_JSON_RESPONSE" (imagen de
+  // verdad ilegible, no un problema de cuota) se quedan en HTTP 200 y nunca disparan reintento.
+  const technicalCode = extractTechnicalCode(lastError);
+  const upstreamStatus = lastError?.status ?? lastError?.statusCode ?? lastError?.response?.status;
+  const isUnreadable = technicalCode.startsWith('EMPTY_RESPONSE') || technicalCode === 'INVALID_JSON_RESPONSE' || technicalCode === 'GROQ_EMPTY_RESPONSE';
+  const isRateLimited = !isUnreadable && (
+    technicalCode === 'RESOURCE_EXHAUSTED' || technicalCode === 'UNAVAILABLE'
+    || upstreamStatus === 429 || upstreamStatus === 503
+    || /429|503|quota|resource_exhausted|rate limit|too many requests/i.test(String(lastError?.message || ''))
+  );
+  const httpStatus = isUnreadable ? 200 : (isRateLimited ? (upstreamStatus === 503 || technicalCode === 'UNAVAILABLE' ? 503 : 429) : 502);
+  res.status(httpStatus).json({
+    success: false,
+    rateLimited: isRateLimited,
+    error: technicalCode,
+    details: `${groqKeys.length > 0 ? 'Gemini y Groq' : 'Gemini'} no pudieron procesar esta imagen.`,
+  });
 }
