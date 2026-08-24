@@ -42,14 +42,6 @@ const FOOT_OPTIONS = [
   { value: 'Ambas', label: 'Ambas', icon: <FootIndicator variant="Ambas" size={10} />, closedIcon: <FootIndicator variant="Ambas" /> },
 ];
 
-// Duración de la cesión: compartida por la cesión ENTRANTE (jugador tipo "Cedido" que llega a
-// nuestro club) y la SALIENTE (outboundLoan, jugador propio cedido fuera).
-const LOAN_DURATION_OPTIONS = [
-  { value: '6 Meses', label: '6 Meses' },
-  { value: '1 Temporada', label: '1 Temporada' },
-  { value: '2 Temporadas', label: '2 Temporadas' },
-];
-
 // Relevancia (antes "Rol Pactado"): expectativa de peso en la plantilla acordada al fichar/
 // traer cedido al jugador (no aplica a Cantera, que todavía no tiene un rol competitivo
 // definido).
@@ -770,15 +762,18 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                     </div>
                   )}
 
+                  {/* Mismo orden de columnas que "Cedido a Otro Club" (Club primero, Duración
+                      después): unificado a propósito para que ambas direcciones de cesión se
+                      vean y se rellenen exactamente igual. */}
                   {form.type === 'Cedido' && (
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1 relative">
-                        <label className="text-[9px] font-black text-fg-muted ml-1">Duración Cesión</label>
-                        <input type="text" placeholder="Ej: 11 Meses" onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.loanDuration} onChange={(e) => set({ loanDuration: e.target.value })} />
-                      </div>
-                      <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">Club de Origen *</label>
                         <input type="text" required placeholder="Ej: Real Madrid" onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} />
+                      </div>
+                      <div className="space-y-1 relative">
+                        <label className="text-[9px] font-black text-fg-muted ml-1">Duración Cesión</label>
+                        <input type="text" placeholder="Ej: 11 Meses" onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.loanDuration} onChange={(e) => set({ loanDuration: e.target.value })} />
                       </div>
                     </div>
                   )}
@@ -793,7 +788,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                         <input type="text" inputMode="numeric" required placeholder="Ej: 80.000.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.marketValue} onChange={formatMoneyField('marketValue')} />
                       </div>
                       <div className="space-y-1 relative">
-                        <label className="text-[9px] font-black text-fg-muted ml-1">{form.type === 'Cedido' ? 'Sueldo Semanal Total (€) *' : 'Sueldo Semanal (€) *'}</label>
+                        <label className="text-[9px] font-black text-fg-muted ml-1">{form.type === 'Cedido' || form.transferStatus === 'CedidoFuera' ? 'Sueldo Semanal Total (€) *' : 'Sueldo Semanal (€) *'}</label>
                         <input type="text" inputMode="numeric" required placeholder="Ej: 500.000" onKeyDown={blockEnterKey} className={FIELD_CLASS} value={form.wage} onChange={formatMoneyField('wage')} />
                       </div>
                     </div>
@@ -1016,43 +1011,24 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                             <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={scanPurchasePriceMissing ? FIELD_CLASS_ERROR : `${FIELD_CLASS} h-11`} value={form.value} onChange={formatMoneyField('value')} />
                           </ReviewRow>
                         )}
-                        <div ref={wageRowRef}>
-                          <ReviewRow label="Sueldo Semanal (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
-                            <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
-                          </ReviewRow>
-                        </div>
+                        {/* Sueldo: para "En Propiedad" vive aquí igual que siempre; para
+                            "Cedido a Otro Club" (transferStatus CedidoFuera) se muestra más
+                            abajo, dentro del bloque "Cesión" — junto a Club/Duración/%Salario/
+                            Opción de Compra, exactamente en el mismo sitio y orden que ya usa
+                            "Cedido en Nuestro Club" (ver justo debajo del cierre de este div). */}
+                        {form.transferStatus !== 'CedidoFuera' && (
+                          <div ref={wageRowRef}>
+                            <ReviewRow label="Sueldo Semanal (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
+                              <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
+                            </ReviewRow>
+                          </div>
+                        )}
                         <ReviewRow label="Años Contrato" active={editField === 'contractYears'} onOpen={() => setEditField('contractYears')} display={form.contractYears ? `${form.contractYears} Años` : 'Sin definir'}>
                           <Dropdown value={form.contractYears} options={contractYearOptions} onChange={(v) => { set({ contractYears: v }); setEditField(null); }} placeholder="Seleccionar" />
                         </ReviewRow>
                         <ReviewRow label="Cláusula de Rescisión (€)" active={editField === 'releaseClause'} onOpen={() => setEditField('releaseClause')} display={`${form.releaseClause || '0'} €`}>
                           <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.releaseClause} onChange={formatMoneyField('releaseClause')} />
                         </ReviewRow>
-                        {/* Reparto de salario y opción de compra de la cesión SALIENTE (ver el
-                            mismo bloque del Paso 3): "Comprado" cubre tanto un jugador en
-                            propiedad normal como uno cedido a otro club (transferStatus
-                            CedidoFuera), que sí necesita estos dos campos aunque siga siendo
-                            nuestro. */}
-                        {form.transferStatus === 'CedidoFuera' && (
-                          <>
-                            <ReviewRow label="% Salario Pagado por Nuestro Club" active={editField === 'wagePercentage'} onOpen={() => setEditField('wagePercentage')} display={`${form.wagePercentage || 0}%`}>
-                              <div className="flex items-center gap-3">
-                                <input type="range" min="0" max="100" step="5" className="flex-1 accent-green-500" value={form.wagePercentage || 0} onChange={(e) => set({ wagePercentage: e.target.value })} />
-                                <span className="w-12 text-center font-black text-fg bg-well-strong rounded-lg py-1.5 text-xs shrink-0">{form.wagePercentage || 0}%</span>
-                              </div>
-                              <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
-                            </ReviewRow>
-                            <ReviewRow label="¿Opción de Compra?" active={editField === 'buyOption'} onOpen={() => setEditField('buyOption')} display={form.hasBuyOption ? `Sí · ${form.buyOption || '0'} €` : 'No'}>
-                              <div className="flex gap-2 mb-2">
-                                <button type="button" onClick={() => set({ hasBuyOption: true })} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${form.hasBuyOption ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>Sí</button>
-                                <button type="button" onClick={() => set({ hasBuyOption: false, buyOption: '' })} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${!form.hasBuyOption ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>No</button>
-                              </div>
-                              {form.hasBuyOption && (
-                                <input autoFocus type="text" inputMode="numeric" placeholder="Ej: 40.000.000" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.buyOption} onChange={formatMoneyField('buyOption')} />
-                              )}
-                              {!form.hasBuyOption && <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>}
-                            </ReviewRow>
-                          </>
-                        )}
                       </>
                     )}
 
@@ -1093,11 +1069,14 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                   </>
                   )}
 
-                  {/* Aparece tanto al editar un jugador ya cedido a otro club (transferStatus
-                      'CedidoFuera', ajusta la duración sin ir a la Plantilla) como al crear uno
-                      con "Cedido a Otro Club" en initialSquadTypes (aquí es donde se completa
-                      el Club de Destino antes de confirmar). Al final de la ficha, como pide
-                      el diseño. */}
+                  {/* Cesión SALIENTE ("Cedido a Otro Club"): bloque UNIFICADO al 100% con el de
+                      "Cedido en Nuestro Club" de más arriba — mismo orden de campos (Club,
+                      Duración, Sueldo Semanal Total, % Salario Pagado, Opción de Compra), mismo
+                      tipo de input en cada uno (texto libre para Duración, no un desplegable de
+                      3 categorías fijas: la IA extrae el tiempo EXACTO restante de una cesión ya
+                      en curso, ver api/scan-player.js) y mismo texto de cálculo dinámico debajo
+                      del slider. Aparece tanto al editar un jugador ya cedido a otro club como
+                      al crear uno con "Cedido a Otro Club" en initialSquadTypes. */}
                   {form.transferStatus === 'CedidoFuera' && (
                     <>
                       <SectionHeader emoji="🔄" title="Cesión" />
@@ -1105,8 +1084,30 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                         <ReviewRow label="Club de Destino" active={editField === 'outboundClub'} onOpen={() => setEditField('outboundClub')} display={form.outboundLoan?.destinationClub || 'Sin definir'}>
                           <input autoFocus type="text" placeholder="Ej: Almería" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.outboundLoan?.destinationClub || ''} onChange={(e) => setOutboundDestinationClub(e.target.value)} />
                         </ReviewRow>
-                        <ReviewRow label="Duración de la Cesión" active={editField === 'outboundDuration'} onOpen={() => setEditField('outboundDuration')} display={form.outboundLoan?.duration || 'Sin definir'}>
-                          <Dropdown value={form.outboundLoan?.duration} options={LOAN_DURATION_OPTIONS} onChange={(v) => { setOutboundDuration(v); setEditField(null); }} placeholder="Seleccionar" />
+                        <ReviewRow label="Duración Cesión" active={editField === 'outboundDuration'} onOpen={() => setEditField('outboundDuration')} display={form.outboundLoan?.duration || 'Sin definir'}>
+                          <input autoFocus type="text" placeholder="Ej: 11 Meses" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.outboundLoan?.duration || ''} onChange={(e) => setOutboundDuration(e.target.value)} />
+                        </ReviewRow>
+                        <div ref={wageRowRef}>
+                          <ReviewRow label="Sueldo Semanal Total (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
+                            <input autoFocus type="text" inputMode="numeric" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.wage} onChange={formatMoneyField('wage')} />
+                          </ReviewRow>
+                        </div>
+                        <ReviewRow label="% Salario Pagado" active={editField === 'wagePercentage'} onOpen={() => setEditField('wagePercentage')} display={`${form.wagePercentage || 0}%`}>
+                          <div className="flex items-center gap-3">
+                            <input type="range" min="0" max="100" step="5" className="flex-1 accent-green-500" value={form.wagePercentage || 0} onChange={(e) => set({ wagePercentage: e.target.value })} />
+                            <span className="w-12 text-center font-black text-fg bg-well-strong rounded-lg py-1.5 text-xs shrink-0">{form.wagePercentage || 0}%</span>
+                          </div>
+                          <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
+                        </ReviewRow>
+                        <ReviewRow label="¿Opción de Compra?" active={editField === 'buyOption'} onOpen={() => setEditField('buyOption')} display={form.hasBuyOption ? `Sí · ${form.buyOption || '0'} €` : 'No'}>
+                          <div className="flex gap-2 mb-2">
+                            <button type="button" onClick={() => set({ hasBuyOption: true })} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${form.hasBuyOption ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>Sí</button>
+                            <button type="button" onClick={() => set({ hasBuyOption: false, buyOption: '' })} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${!form.hasBuyOption ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>No</button>
+                          </div>
+                          {form.hasBuyOption && (
+                            <input autoFocus type="text" inputMode="numeric" placeholder="Ej: 40.000.000" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={`${FIELD_CLASS} h-11`} value={form.buyOption} onChange={formatMoneyField('buyOption')} />
+                          )}
+                          {!form.hasBuyOption && <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>}
                         </ReviewRow>
                       </div>
                     </>

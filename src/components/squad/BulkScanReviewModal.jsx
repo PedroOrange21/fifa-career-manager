@@ -283,7 +283,7 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, restrictTo
               {r.reviewType === 'CedidoFuera' && (
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-0.5">
-                    <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Club Destino {errors.outboundClub && <span className="text-red-400">· Requerido</span>}</label>
+                    <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Club de Destino {errors.outboundClub && <span className="text-red-400">· Requerido</span>}</label>
                     <input type="text" className={errors.outboundClub ? FIELD_CLASS_ERROR : FIELD_CLASS} value={r.outboundClub} onChange={(e) => onUpdate(r.id, { outboundClub: e.target.value })} placeholder="Ej: Almería" />
                   </div>
                   <div className="space-y-0.5">
