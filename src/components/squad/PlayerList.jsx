@@ -611,10 +611,15 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
   // móvil: se despliegan en una píldora con texto explicativo y se repliegan al tocar fuera.
   const [statusBadgeExpanded, setStatusBadgeExpanded] = useState(false);
   const [canteraBadgeExpanded, setCanteraBadgeExpanded] = useState(false);
+  // Badge de situación de mercado (Cedible/Transferible, ver marketStatus más abajo): mismo
+  // patrón exacto tap-para-desplegar (móvil) que el resto de badges circulares de esta fila.
+  const [marketBadgeExpanded, setMarketBadgeExpanded] = useState(false);
   const statusBadgeRef = useRef(null);
   const canteraBadgeRef = useRef(null);
+  const marketBadgeRef = useRef(null);
   useOnClickOutside(statusBadgeRef, () => setStatusBadgeExpanded(false), statusBadgeExpanded);
   useOnClickOutside(canteraBadgeRef, () => setCanteraBadgeExpanded(false), canteraBadgeExpanded);
+  useOnClickOutside(marketBadgeRef, () => setMarketBadgeExpanded(false), marketBadgeExpanded);
 
   useEffect(() => {
     if (!showMore) return;
@@ -645,6 +650,9 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
   // igualmente mas deshabilitadas (para dejar claro que no aplican), precedidas por
   // "Finalizar Cesión", que sí es una acción válida y propia de este tipo de jugador.
   const isIncomingLoan = p.type === 'Cedido';
+  // Un cedido entrante nunca es cedible/transferible por nuestro club (no es de nuestra
+  // propiedad), igual que ya reflejan MARKET_ACTIONS deshabilitando esas dos opciones para él.
+  const marketStatus = !isIncomingLoan && (p.transferStatus === 'Cedible' || p.transferStatus === 'Transferible') ? p.transferStatus : null;
   const isCalledUp = Object.values(lineup).includes(p.id) || Object.values(bench).includes(p.id);
   // Un canterano que todavía no ha subido al primer equipo no participa del mercado: no puede
   // marcarse transferible/cedible ni venderse/cederse hasta que esté promocionado (convocado
@@ -785,11 +793,24 @@ function PlayerRow({ p, lineup, bench, onEdit, onDelete, onMarkTransferible, onM
             </div>
           </div>
 
-          {/* La tarjeta roja de "Venta"/Transferible se elimina por completo (móvil y
-              escritorio); solo queda la etiqueta de Cedible. */}
-          {p.type !== 'Cedido' && p.transferStatus === 'Cedible' && (
+          {/* Badge de situación de mercado (Cedible/Transferible): MISMO diseño e interacción
+              que los badges circulares de Titular/Banquillo/Cantera — icono solo en reposo,
+              se despliega en píldora con el texto al tocar (móvil, con useOnClickOutside para
+              replegar) o al pasar el cursor (escritorio, group-hover puro), nunca un toggle en
+              sí mismo (cambiar el estado sigue siendo cosa del menú "..." → Añadir a Cedibles/
+              Transferibles, igual que Titular/Banquillo se cambian desde Táctica, no desde
+              aquí). Cedible en ámbar (mismo tono ya usado en el resto de la app para cesiones)
+              y Transferible en rojo, ambos con el mismo icono de intercambio. */}
+          {marketStatus && (
             <div className="flex flex-col items-end gap-2 shrink-0">
-              <span className="text-[8px] md:text-[9px] flex items-center justify-center gap-1.5 min-w-[104px] text-center bg-yellow-500/20 text-yellow-400 px-2 md:px-3 py-1 rounded-lg uppercase font-black tracking-widest border border-yellow-500/20"><ArrowRightLeft size={12} className="shrink-0" /> Cedible</span>
+              <button type="button" ref={marketBadgeRef} onClick={(e) => { e.stopPropagation(); setMarketBadgeExpanded((v) => !v); }} title={marketStatus === 'Cedible' ? 'Cedible' : 'Transferible'} className={`md:hidden flex items-center h-6 pl-1.5 pr-1.5 rounded-full border transition-all duration-300 ease-in-out touch-manipulation ${marketStatus === 'Cedible' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>
+                <ArrowRightLeft size={12} className="shrink-0" />
+                <span className={`overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out ${marketBadgeExpanded ? 'max-w-[120px] ml-1.5' : 'max-w-0 ml-0'}`}>{marketStatus === 'Cedible' ? 'Cedible' : 'Transferible'}</span>
+              </button>
+              <button type="button" title={marketStatus === 'Cedible' ? 'Cedible' : 'Transferible'} className={`group/badge hidden md:flex items-center h-6 pl-1.5 pr-1.5 rounded-full border transition-all duration-300 ease-in-out ${marketStatus === 'Cedible' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>
+                <ArrowRightLeft size={12} className="shrink-0" />
+                <span className="overflow-hidden whitespace-nowrap text-[9px] font-black uppercase tracking-wide transition-all duration-300 ease-in-out max-w-0 ml-0 group-hover/badge:max-w-[120px] group-hover/badge:ml-1.5">{marketStatus === 'Cedible' ? 'Cedible' : 'Transferible'}</span>
+              </button>
             </div>
           )}
         </div>

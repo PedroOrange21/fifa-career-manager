@@ -42,6 +42,24 @@ const FOOT_OPTIONS = [
   { value: 'Ambas', label: 'Ambas', icon: <FootIndicator variant="Ambas" size={10} />, closedIcon: <FootIndicator variant="Ambas" /> },
 ];
 
+// Selector superior de "Nuevo Fichaje" (Plantilla > Fichar Jugador > Primer Equipo): mismos
+// valores internos 'Comprado'/'Cedido' de siempre (el resto del formulario y buildPlayerPayload
+// dependen de ese texto exacto), solo con una etiqueta más explícita para dejar clara la
+// diferencia entre un traspaso real y una cesión desde el primer vistazo del selector.
+const TYPE_LABELS = { Comprado: '💳 Traspaso', Cedido: '🔄 Cesión', Cantera: 'Cantera' };
+
+// Duración de la cesión ENTRANTE en un "Nuevo Fichaje" real (negociado ahora mismo, durante la
+// partida en curso): selector de duraciones estándar, igual que ya ofrece "Ceder Jugador"
+// (LoanOutModal) para la cesión saliente — aquí SÍ tiene sentido una categoría fija porque es
+// una negociación nueva, no una cesión ya en marcha con un tiempo restante exacto que preservar
+// (ver el campo de texto libre que sigue usando initialSquadTypes, la Plantilla Inicial del
+// asistente de bienvenida, para no perder la precisión que trae un escaneo con IA).
+const LOAN_DURATION_OPTIONS = [
+  { value: '6 Meses', label: '6 Meses' },
+  { value: '1 Temporada', label: '1 Temporada' },
+  { value: '2 Temporadas', label: '2 Temporadas' },
+];
+
 // Relevancia (antes "Rol Pactado"): expectativa de peso en la plantilla acordada al fichar/
 // traer cedido al jugador (no aplica a Cantera, que todavía no tiene un rol competitivo
 // definido).
@@ -715,7 +733,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                         )) : (restrictTypes || ['Cantera', 'Cedido', 'Comprado']).map((t) => {
                           const activeClass = t === 'Cantera' ? 'bg-emerald-600 text-white' : t === 'Cedido' ? 'bg-yellow-600 text-white' : 'bg-blue-600 text-white';
                           return (
-                            <button key={t} type="button" onClick={() => selectAcquisitionType(t)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === t ? activeClass : 'bg-well text-fg-muted hover:bg-well-strong'}`}>{t}</button>
+                            <button key={t} type="button" onClick={() => selectAcquisitionType(t)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all touch-manipulation ${form.type === t ? activeClass : 'bg-well text-fg-muted hover:bg-well-strong'}`}>{TYPE_LABELS[t] || t}</button>
                           );
                         })}
                       </div>
@@ -773,7 +791,15 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                       </div>
                       <div className="space-y-1 relative">
                         <label className="text-[9px] font-black text-fg-muted ml-1">Duración Cesión</label>
-                        <input type="text" placeholder="Ej: 11 Meses" onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.loanDuration} onChange={(e) => set({ loanDuration: e.target.value })} />
+                        {/* Nuevo Fichaje (negociado ahora): selector de duraciones estándar,
+                            igual que "Ceder Jugador". Plantilla Inicial (initialSquadTypes):
+                            texto libre para no perder el tiempo EXACTO restante que ya trae un
+                            escaneo con IA de una cesión ya en curso. */}
+                        {initialSquadTypes ? (
+                          <input type="text" placeholder="Ej: 11 Meses" onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.loanDuration} onChange={(e) => set({ loanDuration: e.target.value })} />
+                        ) : (
+                          <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => set({ loanDuration: v })} labelClassName="text-xs" />
+                        )}
                       </div>
                     </div>
                   )}
@@ -971,12 +997,12 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                   <SectionHeader emoji="💰" title="Economía" />
                   <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
                     {!lockedType && (
-                      <ReviewRow label={initialSquadTypes ? 'Situación en el Club' : 'Adquisición'} active={editField === 'type'} onOpen={() => setEditField('type')} display={initialSquadTypes ? (INITIAL_ACQUISITION_OPTIONS.find((o) => o.key === acquisitionKind)?.label || acquisitionKind) : form.type}>
+                      <ReviewRow label={initialSquadTypes ? 'Situación en el Club' : 'Adquisición'} active={editField === 'type'} onOpen={() => setEditField('type')} display={initialSquadTypes ? (INITIAL_ACQUISITION_OPTIONS.find((o) => o.key === acquisitionKind)?.label || acquisitionKind) : (TYPE_LABELS[form.type] || form.type)}>
                         <div className="flex gap-2">
                           {initialSquadTypes ? INITIAL_ACQUISITION_OPTIONS.map((opt) => (
                             <button key={opt.key} type="button" onClick={() => selectInitialAcquisition(opt.key)} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${acquisitionKind === opt.key ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>{opt.label}</button>
                           )) : (restrictTypes || ['Cantera', 'Cedido', 'Comprado']).map((t) => (
-                            <button key={t} type="button" onClick={() => selectAcquisitionType(t)} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${form.type === t ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>{t}</button>
+                            <button key={t} type="button" onClick={() => selectAcquisitionType(t)} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase touch-manipulation ${form.type === t ? 'bg-green-500 text-black' : 'bg-well-strong text-fg-muted'}`}>{TYPE_LABELS[t] || t}</button>
                           ))}
                         </div>
                         <button type="button" onClick={() => setEditField(null)} className={REVIEW_DONE_CLASS}>Listo</button>
@@ -1038,7 +1064,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                           <input autoFocus type="text" placeholder="Ej: Real Madrid" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={scanOriginClubMissing ? REVIEW_INPUT_ERROR_CLASS : REVIEW_INPUT_CLASS} value={form.originClub} onChange={(e) => set({ originClub: e.target.value })} />
                         </ReviewRow>
                         <ReviewRow label="Duración Cesión" active={editField === 'loanDuration'} onOpen={() => setEditField('loanDuration')} display={form.loanDuration}>
-                          <input autoFocus type="text" placeholder="Ej: 11 Meses" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.loanDuration} onChange={(e) => set({ loanDuration: e.target.value })} />
+                          {initialSquadTypes ? (
+                            <input autoFocus type="text" placeholder="Ej: 11 Meses" onKeyDown={blockEnterKey} onBlur={() => setEditField(null)} className={REVIEW_INPUT_CLASS} value={form.loanDuration} onChange={(e) => set({ loanDuration: e.target.value })} />
+                          ) : (
+                            <Dropdown value={form.loanDuration} options={LOAN_DURATION_OPTIONS} onChange={(v) => { set({ loanDuration: v }); setEditField(null); }} placeholder="Seleccionar" />
+                          )}
                         </ReviewRow>
                         <div ref={wageRowRef}>
                           <ReviewRow label="Sueldo Semanal Total (€)" active={editField === 'wage'} onOpen={() => setEditField('wage')} display={`${form.wage || '0'} €`}>
