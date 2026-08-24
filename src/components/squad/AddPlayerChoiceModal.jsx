@@ -32,12 +32,12 @@ export default function AddPlayerChoiceModal({ onManual, onScan, onBulk, onClose
         </div>
         <div className="space-y-2.5">
           <button type="button" onClick={onScan} className="btn-ai-glow w-full flex items-center gap-4 p-4 rounded-2xl text-left touch-manipulation">
-            <div className="w-12 h-12 rounded-xl bg-white/10 text-white flex items-center justify-center shrink-0"><ScanLine size={22} className="ai-sparkle" /></div>
+            <div className="w-12 h-12 rounded-xl bg-fg/10 text-fg flex items-center justify-center shrink-0"><ScanLine size={22} className="ai-sparkle" /></div>
             <div className="flex-1 min-w-0">
-              <div className="font-black uppercase italic text-sm text-white">✨ Escanear Foto de {scanNoun === 'canterano' ? 'Canterano' : 'Jugador'}</div>
-              <div className="text-[10px] font-bold text-white/70 mt-0.5">Haz una foto a la tarjeta y rellenamos el formulario solos.</div>
+              <div className="font-black uppercase italic text-sm text-fg">✨ Escanear Foto de {scanNoun === 'canterano' ? 'Canterano' : 'Jugador'}</div>
+              <div className="text-[10px] font-bold text-fg-secondary mt-0.5">Haz una foto a la tarjeta y rellenamos el formulario solos.</div>
             </div>
-            <ChevronRight size={18} className="text-white/60 shrink-0" />
+            <ChevronRight size={18} className="text-fg-muted shrink-0" />
           </button>
           <button type="button" onClick={onManual} className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border-subtle bg-well hover:border-green-500 hover:bg-well-strong transition-all text-left touch-manipulation">
             <div className="w-12 h-12 rounded-xl bg-green-500/10 text-green-500 flex items-center justify-center shrink-0"><PenLine size={22} /></div>

@@ -193,14 +193,18 @@ textarea::placeholder {
   0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
   50% { opacity: 0.55; transform: scale(1.2) rotate(12deg); }
 }
+/* Modo Claro (por defecto): fondo blanco/gris ultra claro, borde en degradado nítido de tonos
+   vivos (índigo -> morado -> azul eléctrico) y sombra sutil con tinte de color suave — nunca el
+   mismo fondo obsidiana del modo oscuro, que ahí sí hace falta para que el degradado neón
+   resalte, pero aquí solo restaría contraste y legibilidad al texto oscuro. */
 .btn-ai-glow {
   --ai-angle: 0deg;
   position: relative;
   isolation: isolate;
-  background: linear-gradient(160deg, #150a24, #0a0a14 55%, #0a1424);
-  color: #fff;
-  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.25), 0 4px 22px -6px rgba(139, 92, 246, 0.55), 0 4px 26px -8px rgba(34, 211, 238, 0.4);
-  transition: transform 0.2s ease, box-shadow 0.25s ease;
+  background: linear-gradient(160deg, #ffffff, #f8fafc 55%, #eef2ff);
+  color: #0f172a;
+  box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.18), 0 4px 18px -6px rgba(79, 70, 229, 0.18), 0 4px 20px -8px rgba(37, 99, 235, 0.14);
+  transition: transform 0.2s ease, box-shadow 0.25s ease, background 0.2s ease, color 0.2s ease;
 }
 .btn-ai-glow::before {
   content: '';
@@ -209,7 +213,7 @@ textarea::placeholder {
   z-index: -1;
   border-radius: inherit;
   padding: 1.5px;
-  background: conic-gradient(from var(--ai-angle), #8b5cf6, #22d3ee, #ec4899, #3b82f6, #8b5cf6);
+  background: conic-gradient(from var(--ai-angle), #4f46e5, #7c3aed, #2563eb, #4f46e5);
   -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -218,10 +222,24 @@ textarea::placeholder {
 }
 .btn-ai-glow:hover, .btn-ai-glow:focus-visible {
   transform: scale(1.03);
-  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.4), 0 6px 30px -4px rgba(139, 92, 246, 0.7), 0 6px 32px -6px rgba(34, 211, 238, 0.55);
+  box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.32), 0 6px 22px -4px rgba(79, 70, 229, 0.28), 0 6px 24px -6px rgba(37, 99, 235, 0.22);
 }
 .btn-ai-glow:active {
   transform: scale(1.01);
+}
+/* Modo Oscuro: fondo obsidiana y degradado neón violeta/cian/magenta con halo luminoso — el
+   diseño original, ahora explícitamente scopeado a .dark en vez de ser el único aspecto posible
+   del botón. */
+.dark .btn-ai-glow {
+  background: linear-gradient(160deg, #150a24, #0a0a14 55%, #0a1424);
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.25), 0 4px 22px -6px rgba(139, 92, 246, 0.55), 0 4px 26px -8px rgba(34, 211, 238, 0.4);
+}
+.dark .btn-ai-glow::before {
+  background: conic-gradient(from var(--ai-angle), #8b5cf6, #22d3ee, #ec4899, #3b82f6, #8b5cf6);
+}
+.dark .btn-ai-glow:hover, .dark .btn-ai-glow:focus-visible {
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.4), 0 6px 30px -4px rgba(139, 92, 246, 0.7), 0 6px 32px -6px rgba(34, 211, 238, 0.55);
 }
 .btn-ai-glow:disabled {
   transform: none;

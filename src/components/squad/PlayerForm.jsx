@@ -430,7 +430,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
       if (!form.primaryPosition) return { message: 'Selecciona la posición principal.', field: 'position' };
       if (!form.rating || isNaN(form.rating) || form.rating < 1 || form.rating > 99) return { message: 'Media entre 1 y 99.', field: 'rating' };
       if (!form.age || isNaN(form.age) || form.age < 15 || form.age > 50) return { message: 'Edad entre 15 y 50.', field: 'age' };
-      if (form.type === 'Cantera' && form.potential && !isValidPotentialInput(form.potential)) return { message: 'Potencial entre 1 y 99, o un rango como 64-88.', field: 'potential' };
+      if (form.type === 'Cantera' && !form.potential.trim()) return { message: 'El potencial es obligatorio para un canterano.', field: 'potential' };
+      if (form.type === 'Cantera' && !isValidPotentialInput(form.potential)) return { message: 'Potencial entre 1 y 99, o un rango como 64-88.', field: 'potential' };
     }
     if (s === 3) {
       if (form.type !== 'Cantera' && (!form.marketValue || parseValue(form.marketValue) <= 0)) return { message: 'Valor de mercado obligatorio.', field: 'marketValue' };
@@ -459,6 +460,10 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
   const scanSourceClubMissing = postScanReview && form.type !== 'Cantera' && !hideSourceClub && !form.sourceClub.trim();
   const scanPurchasePriceMissing = postScanReview && form.type === 'Comprado' && !hidePurchasePrice && (!form.value || parseValue(form.value) <= 0);
   const scanOriginClubMissing = postScanReview && form.type === 'Cedido' && !form.originClub.trim();
+  // Potencial obligatorio para cualquier canterano (no solo tras un escaneo con IA, a
+  // diferencia de los "missing" de arriba): se resalta en rojo en la propia Revisión Final
+  // igual que esos otros campos, pero el bloqueo real de guardado vive en validateStep(2).
+  const potentialMissing = form.type === 'Cantera' && !form.potential.trim();
   const hasScanMissingFields = scanSourceClubMissing || scanPurchasePriceMissing || scanOriginClubMissing;
 
   // --- Navegación: exclusivamente por los botones Anterior/Siguiente del pie. ---
@@ -710,8 +715,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                       Cedido) no tiene rango de potencial. */}
                   {form.type === 'Cantera' && (
                     <div className="space-y-1 relative">
-                      <label className="text-[9px] font-black text-fg-muted ml-1">Potencial (opcional, 1-99 o rango, ej: 64-88)</label>
-                      <input type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={onPotentialKeyDown} onBlur={onPotentialBlur} className={FIELD_CLASS} value={form.potential} onChange={onPotentialChange} />
+                      <label className="text-[9px] font-black text-fg-muted ml-1">Potencial * (1-99 o rango, ej: 64-88)</label>
+                      <input type="text" inputMode="numeric" required placeholder="Ej: 88 o 64-88" onKeyDown={onPotentialKeyDown} onBlur={onPotentialBlur} className={`${FIELD_CLASS} ${form.type === 'Cantera' && !form.potential.trim() ? 'border-red-500 focus:border-red-500' : ''}`} value={form.potential} onChange={onPotentialChange} />
                     </div>
                   )}
                 </>
@@ -984,8 +989,8 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                     {/* Potencial: perfil deportivo, no económico — igual que en el Paso 2,
                         exclusivo de la Cantera. */}
                     {form.type === 'Cantera' && (
-                    <ReviewRow label="Potencial" active={editField === 'potential'} onOpen={() => setEditField('potential')} display={form.potential || 'Sin definir'}>
-                      <input autoFocus type="text" inputMode="numeric" placeholder="Ej: 88 o 64-88" onKeyDown={onPotentialKeyDown} onBlur={(e) => { onPotentialBlur(e); setEditField(null); }} className={`${FIELD_CLASS} h-11`} value={form.potential} onChange={onPotentialChange} />
+                    <ReviewRow label="Potencial *" active={editField === 'potential'} onOpen={() => setEditField('potential')} display={form.potential || 'Sin definir'} missing={potentialMissing}>
+                      <input autoFocus type="text" inputMode="numeric" required placeholder="Ej: 88 o 64-88" onKeyDown={onPotentialKeyDown} onBlur={(e) => { onPotentialBlur(e); setEditField(null); }} className={potentialMissing ? FIELD_CLASS_ERROR : `${FIELD_CLASS} h-11`} value={form.potential} onChange={onPotentialChange} />
                     </ReviewRow>
                     )}
                   </div>

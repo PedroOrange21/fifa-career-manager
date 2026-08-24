@@ -128,6 +128,7 @@ const getRowErrors = (r) => {
   }
   if (r.reviewType === 'Cedido' && !r.originClub.trim()) errors.originClub = true;
   if (r.reviewType === 'CedidoFuera' && !r.outboundClub.trim()) errors.outboundClub = true;
+  if (r.reviewType === 'Cantera' && !r.potential.trim()) errors.potential = true;
   return errors;
 };
 
@@ -222,8 +223,8 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, restrictTo
           {r.reviewType === 'Cantera' ? (
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-0.5">
-                <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Potencial</label>
-                <input type="text" className={FIELD_CLASS} value={r.potential} onChange={(e) => onUpdate(r.id, { potential: e.target.value })} placeholder="Ej: 75-94" />
+                <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Potencial * {errors.potential && <span className="text-red-400">· Requerido</span>}</label>
+                <input type="text" className={errors.potential ? FIELD_CLASS_ERROR : FIELD_CLASS} value={r.potential} onChange={(e) => onUpdate(r.id, { potential: e.target.value })} placeholder="Ej: 75-94" />
               </div>
               <div className="space-y-0.5">
                 <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Valor Mercado (€)</label>
