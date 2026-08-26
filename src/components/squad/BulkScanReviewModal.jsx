@@ -1,27 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Check, ShieldAlert, RefreshCcw, GraduationCap, CopyX, Trash2, Pencil, ChevronDown, AlertTriangle, ScanLine, Info, ImageOff, Camera, PenLine } from 'lucide-react';
+import { X, Check, ShieldAlert, RefreshCcw, GraduationCap, CopyX, Trash2, Pencil, AlertTriangle, ScanLine, Info, ImageOff, Camera, PenLine } from 'lucide-react';
 import { useClubData } from '../../context/ClubDataContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import { getCardStyle } from '../../utils/cardStyle';
 import { buildPlayerPayload } from '../../utils/playerPayload';
 import { findDuplicatePlayer } from '../../utils/duplicatePlayer';
-import { formatValueInput, formatMoneyLiveWithCursor, parseValue } from '../../utils/format';
-import { ALL_POSITIONS } from '../../constants/positions';
-import Dropdown from '../common/Dropdown';
+import { formatValueInput, parseValue } from '../../utils/format';
 import ScanPlayerCardModal from './ScanPlayerCardModal';
+import PlayerForm from './PlayerForm';
 
-const POSITION_OPTIONS = ALL_POSITIONS.map((p) => ({ value: p, label: p }));
-// Mismas 5 etiquetas que api/scan-player.js extrae de la tarjeta (relevancia) y que PlayerForm
-// ofrece manualmente (AGREED_ROLE_OPTIONS) — duplicado aquí en vez de importado para no acoplar
-// este archivo al de PlayerForm por una constante tan pequeña y estable.
-const AGREED_ROLE_OPTIONS = [
-  { value: 'Crucial', label: 'Crucial' },
-  { value: 'Importante', label: 'Importante' },
-  { value: 'Rotación', label: 'Rotación' },
-  { value: 'Esporádico', label: 'Esporádico' },
-  { value: 'Promesa', label: 'Promesa' },
-];
 const TYPE_OPTIONS = [
   { value: 'Inicial', label: 'Ya en el Club' },
   { value: 'Comprado', label: 'Comprado' },
@@ -42,9 +30,6 @@ const INITIAL_TYPE_OPTIONS = TYPE_OPTIONS.filter((t) => t.value !== 'Comprado').
       : t.value === 'CedidoFuera' ? { ...t, label: 'Cedido a Otro Club' }
         : t
 ));
-
-const FIELD_CLASS = 'w-full bg-well-strong p-2 rounded-lg outline-none border border-border-subtle focus:border-green-500 font-bold text-[11px] text-fg placeholder:text-fg-faint';
-const FIELD_CLASS_ERROR = 'w-full bg-well-strong p-2 rounded-lg outline-none border border-red-500 focus:border-red-500 font-bold text-[11px] text-fg placeholder:text-fg-faint';
 
 let rowIdCounter = 0;
 const nextRowId = () => `row-${Date.now()}-${rowIdCounter++}`;
@@ -102,11 +87,6 @@ function buildRow(prefill, { status = 'ok', fileName = '', propertyDefault = 'Co
     // de la cesión ENTRANTE) para no mezclar ambas direcciones en la misma fila.
     outboundClub: prefill.outboundLoan?.destinationClub || '',
     outboundDuration: prefill.outboundLoan?.duration || '1 Temporada',
-    // Las 'failed' arrancan colapsadas: viven como tarjeta compacta en "Fotos No Reconocidas"
-    // (ver FailedPhotoCard) hasta que "Rellenar a Mano" las promueve a la lista principal ya
-    // desplegadas — no tiene sentido mostrar de entrada un formulario vacío por cada foto que
-    // falló, solo abruma la pantalla.
-    expanded: status === 'partial',
   };
 }
 
@@ -115,6 +95,69 @@ const buildRowsFromResults = (results, mode, propertyDefault) => {
   const bad = (results?.failed || []).map((f) => buildRow({ type: mode === 'academia' ? 'Cantera' : 'Comprado', positions: [] }, { status: 'failed', fileName: f.fileName, propertyDefault, file: f.file || null, error: f.error || '' }));
   return [...ok, ...bad];
 };
+
+// Conversión fila <-> "jugador" para abrir la fila en el formulario completo de PlayerForm (ver
+// onEdit en ReviewTableRow): rowToPlayerLike arma un objeto que toFormState (PlayerForm.jsx)
+// pueda leer igual que un jugador real; playerLikeToRowPatch hace el camino inverso con el
+// payload que entrega onLocalSave al pulsar "Guardar Cambios", para fusionarlo de vuelta en la
+// fila provisional (todavía sin guardar en Firestore). Los 3 estados de situación de
+// PlayerForm (initialSquadTypes: En Propiedad/Cedido en Nuestro Club/Cedido a Otro Club) cubren
+// exactamente los mismos 4 "reviewType" de esta tabla (Inicial/Comprado comparten el mismo
+// "En Propiedad", distinguidos solo por isInitialSquad, que PlayerForm conserva tal cual durante
+// toda la edición).
+function rowToPlayerLike(r) {
+  const isCantera = r.reviewType === 'Cantera';
+  const isCedido = r.reviewType === 'Cedido';
+  const isCedidoFuera = r.reviewType === 'CedidoFuera';
+  const isInitial = r.reviewType === 'Inicial';
+  return {
+    name: r.name,
+    positions: r.positions,
+    rating: r.rating,
+    age: r.age,
+    nationality: r.nationality,
+    preferredFoot: r.preferredFoot,
+    type: isCantera ? 'Cantera' : isCedido ? 'Cedido' : 'Comprado',
+    marketValue: r.marketValue,
+    value: r.reviewType === 'Comprado' ? r.value : '',
+    loanDuration: isCedido ? r.loanDuration : '1 Temporada',
+    originClub: isCedido ? r.originClub : '',
+    sourceClub: r.reviewType === 'Comprado' ? r.sourceClub : '',
+    agreedRole: r.agreedRole,
+    wage: r.wage,
+    potential: r.potential,
+    transferStatus: isCedidoFuera ? 'CedidoFuera' : 'Activo',
+    outboundLoan: isCedidoFuera ? { destinationClub: r.outboundClub, duration: r.outboundDuration } : null,
+    isInitialSquad: isInitial,
+  };
+}
+
+function playerLikeToRowPatch(payload) {
+  const isCantera = payload.type === 'Cantera';
+  const isCedido = payload.type === 'Cedido';
+  const isCedidoFuera = payload.transferStatus === 'CedidoFuera';
+  const isInitial = !isCantera && !isCedido && !isCedidoFuera && !!payload.isInitialSquad;
+  const reviewType = isCantera ? 'Cantera' : isCedido ? 'Cedido' : isCedidoFuera ? 'CedidoFuera' : isInitial ? 'Inicial' : 'Comprado';
+  return {
+    name: payload.name || '',
+    rating: payload.rating != null ? String(payload.rating) : '',
+    positions: payload.positions || [],
+    age: payload.age != null ? String(payload.age) : '',
+    nationality: payload.nationality || '',
+    preferredFoot: payload.preferredFoot || 'Diestro',
+    potential: payload.potential || '',
+    marketValue: formatValueInput(String(payload.marketValue || '')),
+    wage: formatValueInput(String(payload.wage || '')),
+    reviewType,
+    agreedRole: payload.agreedRole || '',
+    sourceClub: payload.sourceClub || '',
+    value: formatValueInput(String(payload.value || '')),
+    originClub: payload.originClub || '',
+    loanDuration: payload.loanDuration || '1 Temporada',
+    outboundClub: payload.outboundLoan?.destinationClub || '',
+    outboundDuration: payload.outboundLoan?.duration || '1 Temporada',
+  };
+}
 
 // Campos obligatorios por tipo de fila, usados tanto para el resaltado en rojo como para
 // bloquear "Confirmar y Guardar Todo" hasta que se completen — Cantera y "Ya en el Club" nunca
@@ -133,11 +176,15 @@ const getRowErrors = (r) => {
 };
 
 // Fila completa de la tabla de revisión: vista compacta (badge + nombre + estado) siempre
-// visible, con un panel de edición desplegable (lápiz) para corregir cualquier dato leído por
-// la IA, completar una lectura parcial/fallida a mano, o cambiar el tipo de operación con sus
-// campos correspondientes. Definida fuera del componente principal (identidad estable entre
-// renders) para no perder el foco de los inputs en cada pulsación de tecla.
-function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, restrictToInitialTypes, onToggleExclude, onToggleExpand, onUpdate, onRemove, onRetry }) {
+// visible; tocar el nombre o el lápiz abre el formulario COMPLETO de edición del jugador
+// (PlayerForm, el mismo que "Fichar Jugador"/"Editar Jugador" en el resto de la app, ver onEdit
+// en el componente padre) en vez de desplegar los campos aquí mismo — "Guardar Cambios" fusiona
+// el resultado en esta fila provisional, "Cancelar"/la X la dejan intacta. Solo quedan visibles
+// siempre (sin necesidad de abrir nada) el aviso de duplicado y el bloque de reintento de foto,
+// que no son "datos del jugador" sino contexto propio de esta revisión. Definida fuera del
+// componente principal (identidad estable entre renders) para no perder el foco de los demás
+// controles en cada pulsación de tecla.
+function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, restrictToInitialTypes, onToggleExclude, onEdit, onRemove, onRetry }) {
   const errors = getRowErrors(r);
   const hasErrors = Object.keys(errors).length > 0;
   const primaryPosition = r.positions?.[0] || '';
@@ -152,7 +199,7 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, restrictTo
         <div className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center font-black leading-none shrink-0 ${getCardStyle(parseInt(r.rating) || 0)}`}>
           <span className="text-[6px] opacity-70 font-bold">{primaryPosition || '—'}</span><span className="text-[11px]">{r.rating || '—'}</span>
         </div>
-        <button type="button" onClick={() => onToggleExpand(r.id)} className="min-w-0 flex-1 text-left touch-manipulation">
+        <button type="button" onClick={() => onEdit(r.id)} className="min-w-0 flex-1 text-left touch-manipulation">
           <div className="text-xs font-black text-fg truncate">{r.name || 'Sin nombre — toca para completar'}</div>
           {isDuplicate ? (
             <div className="text-[9px] font-bold text-yellow-500 uppercase tracking-wide truncate">Jugador ya registrado / omitido por duplicado</div>
@@ -168,7 +215,7 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, restrictTo
             </div>
           )}
         </button>
-        <button type="button" onClick={() => onToggleExpand(r.id)} title="Editar fila" className={`shrink-0 p-1.5 rounded-lg transition-colors touch-manipulation ${hasErrors ? 'text-red-400' : 'text-fg-faint hover:text-fg'}`}>
+        <button type="button" onClick={() => onEdit(r.id)} title="Editar jugador" className={`shrink-0 p-1.5 rounded-lg transition-colors touch-manipulation ${hasErrors ? 'text-red-400' : 'text-fg-faint hover:text-fg'}`}>
           {hasErrors ? <AlertTriangle size={14} /> : <Pencil size={14} />}
         </button>
         <button type="button" onClick={() => onRemove(r.id)} title="Eliminar fila" className="shrink-0 p-1.5 rounded-lg text-fg-faint hover:text-red-400 hover:bg-red-500/10 transition-colors touch-manipulation">
@@ -176,8 +223,8 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, restrictTo
         </button>
       </div>
 
-      {r.expanded && (
-        <div className="px-3 pb-3 space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
+      {(isDuplicate || r.scanStatus === 'failed') && (
+        <div className="px-3 pb-3 space-y-2">
           {isDuplicate && (
             <div className="bg-yellow-500/10 border border-yellow-500/30 p-2 rounded-lg flex gap-1.5 text-yellow-500 text-[9px] font-bold items-start">
               <CopyX size={12} className="shrink-0 mt-0.5" /><span>Coincide con «{existingMatch.name}», ya en tu plantilla ({existingMatch.positions?.[0] || '—'}{existingMatch.age ? `, ${existingMatch.age} años` : ''}). Se dejará sin marcar salvo que la incluyas a propósito.</span>
@@ -199,105 +246,6 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, restrictTo
               {r.error && <p className="text-[8px] font-bold text-fg-faint ml-1">{r.error}</p>}
             </div>
           )}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-0.5">
-              <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Nombre</label>
-              <input type="text" className={errors.name ? FIELD_CLASS_ERROR : FIELD_CLASS} value={r.name} onChange={(e) => onUpdate(r.id, { name: e.target.value })} placeholder="Nombre del jugador" />
-            </div>
-            <div className="space-y-0.5">
-              <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Posición</label>
-              <Dropdown value={primaryPosition} options={POSITION_OPTIONS} onChange={(v) => onUpdate(r.id, { positions: [v, ...r.positions.slice(1).filter((p) => p !== v)] })} labelClassName="text-[10px]" placeholder="Posición" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-0.5">
-              <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Media (OVR)</label>
-              <input type="number" inputMode="numeric" min="1" max="99" className={FIELD_CLASS} value={r.rating} onChange={(e) => onUpdate(r.id, { rating: e.target.value })} placeholder="Ej: 78" />
-            </div>
-            <div className="space-y-0.5">
-              <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Edad</label>
-              <input type="number" inputMode="numeric" min="14" max="50" className={FIELD_CLASS} value={r.age} onChange={(e) => onUpdate(r.id, { age: e.target.value })} placeholder="Ej: 23" />
-            </div>
-          </div>
-
-          {r.reviewType === 'Cantera' ? (
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-0.5">
-                <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Potencial * {errors.potential && <span className="text-red-400">· Requerido</span>}</label>
-                <input type="text" className={errors.potential ? FIELD_CLASS_ERROR : FIELD_CLASS} value={r.potential} onChange={(e) => onUpdate(r.id, { potential: e.target.value })} placeholder="Ej: 75-94" />
-              </div>
-              <div className="space-y-0.5">
-                <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Valor Mercado (€)</label>
-                <input type="text" inputMode="numeric" className={FIELD_CLASS} value={r.marketValue} onChange={(e) => formatMoneyLiveWithCursor(e.target, (v) => onUpdate(r.id, { marketValue: v }))} placeholder="Ej: 2.000.000" />
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Selector de tipo: solo para filas de Primer Equipo (Cantera nunca cambia de
-                  tipo aquí — un canterano reclasificado siempre se guarda en Academia). */}
-              <div className="space-y-0.5">
-                <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Tipo de Operación</label>
-                <div className="flex gap-1.5">
-                  {typeOptions.map((t) => (
-                    <button key={t.value} type="button" onClick={() => onUpdate(r.id, { reviewType: t.value })} className={`flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all border ${r.reviewType === t.value ? (t.value === 'Cedido' ? 'bg-yellow-600 text-white border-yellow-600' : t.value === 'Inicial' ? 'bg-zinc-500 text-white border-zinc-500' : t.value === 'CedidoFuera' ? 'bg-purple-600 text-white border-purple-600' : 'bg-blue-600 text-white border-blue-600') : 'bg-well text-fg-muted border-border-subtle'}`}>{t.label}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-0.5">
-                  <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Valor Mercado (€)</label>
-                  <input type="text" inputMode="numeric" className={FIELD_CLASS} value={r.marketValue} onChange={(e) => formatMoneyLiveWithCursor(e.target, (v) => onUpdate(r.id, { marketValue: v }))} placeholder="Ej: 20.000.000" />
-                </div>
-                <div className="space-y-0.5">
-                  <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Sueldo Semanal (€)</label>
-                  <input type="text" inputMode="numeric" className={FIELD_CLASS} value={r.wage} onChange={(e) => formatMoneyLiveWithCursor(e.target, (v) => onUpdate(r.id, { wage: v }))} placeholder="Ej: 100.000" />
-                </div>
-              </div>
-              <div className="space-y-0.5">
-                <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Relevancia</label>
-                <Dropdown value={r.agreedRole} options={AGREED_ROLE_OPTIONS} onChange={(v) => onUpdate(r.id, { agreedRole: v })} labelClassName="text-[10px]" placeholder="Sin definir" />
-              </div>
-              {r.reviewType === 'Comprado' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-0.5">
-                    <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Club de Procedencia {errors.sourceClub && <span className="text-red-400">· Requerido</span>}</label>
-                    <input type="text" className={errors.sourceClub ? FIELD_CLASS_ERROR : FIELD_CLASS} value={r.sourceClub} onChange={(e) => onUpdate(r.id, { sourceClub: e.target.value })} placeholder="Ej: Sporting Gijón" />
-                  </div>
-                  <div className="space-y-0.5">
-                    <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Precio Traspaso (€) {errors.value && <span className="text-red-400">· Requerido</span>}</label>
-                    <input type="text" inputMode="numeric" className={errors.value ? FIELD_CLASS_ERROR : FIELD_CLASS} value={r.value} onChange={(e) => formatMoneyLiveWithCursor(e.target, (v) => onUpdate(r.id, { value: v }))} placeholder="Ej: 5.000.000" />
-                  </div>
-                </div>
-              )}
-              {r.reviewType === 'Cedido' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-0.5">
-                    <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Club de Origen {errors.originClub && <span className="text-red-400">· Requerido</span>}</label>
-                    <input type="text" className={errors.originClub ? FIELD_CLASS_ERROR : FIELD_CLASS} value={r.originClub} onChange={(e) => onUpdate(r.id, { originClub: e.target.value })} placeholder="Ej: Real Madrid" />
-                  </div>
-                  <div className="space-y-0.5">
-                    <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Duración Cesión</label>
-                    <input type="text" className={FIELD_CLASS} value={r.loanDuration} onChange={(e) => onUpdate(r.id, { loanDuration: e.target.value })} placeholder="Ej: 11 Meses" />
-                  </div>
-                </div>
-              )}
-              {r.reviewType === 'CedidoFuera' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-0.5">
-                    <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Club de Destino {errors.outboundClub && <span className="text-red-400">· Requerido</span>}</label>
-                    <input type="text" className={errors.outboundClub ? FIELD_CLASS_ERROR : FIELD_CLASS} value={r.outboundClub} onChange={(e) => onUpdate(r.id, { outboundClub: e.target.value })} placeholder="Ej: Almería" />
-                  </div>
-                  <div className="space-y-0.5">
-                    <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Duración Cesión</label>
-                    <input type="text" className={FIELD_CLASS} value={r.outboundDuration} onChange={(e) => onUpdate(r.id, { outboundDuration: e.target.value })} placeholder="Ej: 11 Meses" />
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-          <button type="button" onClick={() => onToggleExpand(r.id)} className="w-full flex items-center justify-center gap-1 py-1.5 text-[8px] font-black uppercase tracking-widest text-fg-faint hover:text-fg-secondary transition-colors touch-manipulation">
-            Listo <ChevronDown size={11} className="rotate-180" />
-          </button>
         </div>
       )}
     </div>
@@ -306,7 +254,7 @@ function ReviewTableRow({ r, mode, isOut, isDuplicate, existingMatch, restrictTo
 
 // Grupo de filas con cabecera opcional (usado para separar Primer Equipo / Academia cuando un
 // lote sale mixto — ver requisito de "organiza la revisión por secciones").
-function ReviewSection({ title, icon: Icon, rows, mode, duplicateOf, existingMatches, excluded, restrictToInitialTypes, onToggleExclude, onToggleExpand, onUpdate, onRemove, onRetry }) {
+function ReviewSection({ title, icon: Icon, rows, mode, duplicateOf, existingMatches, excluded, restrictToInitialTypes, onToggleExclude, onEdit, onRemove, onRetry }) {
   if (rows.length === 0) return null;
   return (
     <div className="space-y-2">
@@ -326,8 +274,7 @@ function ReviewSection({ title, icon: Icon, rows, mode, duplicateOf, existingMat
             existingMatch={existingMatches[r.id]}
             restrictToInitialTypes={restrictToInitialTypes}
             onToggleExclude={onToggleExclude}
-            onToggleExpand={onToggleExpand}
-            onUpdate={onUpdate}
+            onEdit={onEdit}
             onRemove={onRemove}
             onRetry={onRetry}
           />
@@ -418,6 +365,9 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
   });
   const [rows, setRows] = useState(initial.rows);
   const [excluded, setExcluded] = useState(initial.excluded);
+  // Fila abierta actualmente en el formulario completo de edición (PlayerForm), o null — ver
+  // rowToPlayerLike/playerLikeToRowPatch y el render de <PlayerForm> más abajo.
+  const [editingRowId, setEditingRowId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveProgress, setSaveProgress] = useState({ done: 0, total: 0 });
   const [saveError, setSaveError] = useState('');
@@ -437,7 +387,6 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
   }, []);
 
   const updateRow = (id, patch) => setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  const toggleExpand = (id) => setRows((prev) => prev.map((r) => (r.id === id ? { ...r, expanded: !r.expanded } : r)));
   const toggleExclude = (id) => setExcluded((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const removeRow = (id) => {
     setRows((prev) => {
@@ -456,11 +405,13 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
       return prev.filter((r) => !ids.includes(r.id));
     });
   };
-  // "Rellenar a Mano" (ver FailedPhotoCard): promueve la fila fallida a la lista principal, ya
-  // desplegada para escribir directamente — sigue siendo scanStatus 'failed' (para conservar el
-  // aviso "completa a mano" dentro de su propio panel), pero manualFill:true la saca de la
-  // sección de fotos no reconocidas y la deja participar en el guardado como cualquier otra.
-  const handleManualFill = (id) => updateRow(id, { manualFill: true, expanded: true });
+  // "Rellenar a Mano" (ver FailedPhotoCard): promueve la fila fallida a la lista principal —
+  // sigue siendo scanStatus 'failed' (para conservar el aviso "completa a mano" y la miniatura
+  // de la foto), pero manualFill:true la saca de la sección de fotos no reconocidas y la deja
+  // participar en el guardado como cualquier otra. Abre directamente el formulario completo de
+  // edición para rellenarla del tirón, en vez de dejar una fila vacía a la espera.
+  const handleManualFill = (id) => { updateRow(id, { manualFill: true }); setEditingRowId(id); };
+  const handleRowLocalSave = (payload) => { if (editingRowId) updateRow(editingRowId, playerLikeToRowPatch(payload)); };
 
   // "Añadir más fotos/jugadores": anexa las filas del nuevo escaneo a las ya existentes (nunca
   // las sustituye) para poder seguir cargando capturas antes de confirmar todo junto. Los
@@ -522,6 +473,7 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
   // parcial en handleSaveAll).
   const unresolvedFailedRows = rows.filter((r) => r.scanStatus === 'failed' && !r.manualFill);
   const mainRows = rows.filter((r) => !(r.scanStatus === 'failed' && !r.manualFill));
+  const editingRow = rows.find((r) => r.id === editingRowId) || null;
 
   const primerEquipoRows = mainRows.filter((r) => r.reviewType !== 'Cantera');
   const academiaRows = mainRows.filter((r) => r.reviewType === 'Cantera');
@@ -652,11 +604,11 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
               {mainRows.length > 0 && (
                 isMixedBatch ? (
                   <>
-                    <ReviewSection title="Primer Equipo" rows={primerEquipoRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} restrictToInitialTypes={restrictToInitialTypes} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
-                    <ReviewSection title="Academia" icon={GraduationCap} rows={academiaRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} restrictToInitialTypes={restrictToInitialTypes} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
+                    <ReviewSection title="Primer Equipo" rows={primerEquipoRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} restrictToInitialTypes={restrictToInitialTypes} onToggleExclude={toggleExclude} onEdit={setEditingRowId} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
+                    <ReviewSection title="Academia" icon={GraduationCap} rows={academiaRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} restrictToInitialTypes={restrictToInitialTypes} onToggleExclude={toggleExclude} onEdit={setEditingRowId} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
                   </>
                 ) : (
-                  <ReviewSection rows={mainRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} restrictToInitialTypes={restrictToInitialTypes} onToggleExclude={toggleExclude} onToggleExpand={toggleExpand} onUpdate={updateRow} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
+                  <ReviewSection rows={mainRows} mode={mode} duplicateOf={duplicateOf} existingMatches={existingMatches} excluded={excluded} restrictToInitialTypes={restrictToInitialTypes} onToggleExclude={toggleExclude} onEdit={setEditingRowId} onRemove={removeRow} onRetry={(id) => setRescanTarget({ retryRowId: id })} />
                 )
               )}
 
@@ -698,6 +650,25 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
         onClose={() => setRescanTarget(null)}
         onBatchExtracted={rescanTarget === 'addMore' ? handleAddMoreExtracted : (batchResults) => handleRetryExtracted(rescanTarget.retryRowId, batchResults)}
       />
+    )}
+
+    {/* Formulario completo de edición (ver ReviewTableRow/onEdit): envuelto en un contenedor
+        posicionado con z-index superior al propio modal de revisión (z-[150]) para que, aunque
+        PlayerForm monte su fondo a z-50, quede por encima como un stacking context aparte —
+        mismo patrón "3 estados de situación" que ya usa OnboardingWizard para editar un jugador
+        del Resumen, pero con onLocalSave en vez de guardado directo porque esta fila todavía no
+        existe en Firestore. */}
+    {editingRow && (
+      <div className="relative z-[250]">
+        <PlayerForm
+          editingPlayer={rowToPlayerLike(editingRow)}
+          initialStep={4}
+          lockedType={editingRow.reviewType === 'Cantera' ? 'Cantera' : null}
+          initialSquadTypes={editingRow.reviewType !== 'Cantera'}
+          onLocalSave={handleRowLocalSave}
+          onClose={() => setEditingRowId(null)}
+        />
+      </div>
     )}
 
     {/* Guardado parcial: los jugadores leídos ya se guardaron en Firebase antes de llegar aquí

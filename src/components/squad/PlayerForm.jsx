@@ -223,7 +223,13 @@ function SectionHeader({ emoji, title }) {
 // opción "Comprado" como transferencia real queda deliberadamente fuera de este selector:
 // registrar aquí una "compra" alteraría el historial de traspasos de una partida que, en
 // realidad, ya estaba en marcha antes de escanear/rellenar la plantilla.
-export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onClose, initialStep = 1, initialEditField = null, lockedType = null, restrictTypes = null, hidePurchasePrice = false, hideSourceClub = false, skipInitialTransaction = false, postScanReview = false, initialSquadTypes = false }) {
+// onLocalSave: usado por revisiones de escaneo masivo (BulkScanReviewModal) donde "editingPlayer"
+// es una fila TODAVÍA NO GUARDADA en Firestore (un jugador detectado por IA, pendiente de
+// confirmar en lote) — en vez de persistir directamente vía addOrUpdatePlayer, entrega el mismo
+// payload ya construido a quien abrió el formulario, para que lo fusione en su propia lista
+// provisional. "Cancelar"/la X siguen sin tocar nada (nunca llaman a onLocalSave), igual que el
+// resto del formulario.
+export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onClose, onLocalSave, initialStep = 1, initialEditField = null, lockedType = null, restrictTypes = null, hidePurchasePrice = false, hideSourceClub = false, skipInitialTransaction = false, postScanReview = false, initialSquadTypes = false }) {
   const { addOrUpdatePlayer, deleteTarget } = useClubData();
   useAutoHideChrome();
 
@@ -499,7 +505,7 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
     setIsSubmitting(true);
     try {
       const fullName = `${form.firstName.trim()}${form.lastName.trim() ? ` ${form.lastName.trim()}` : ''}`;
-      await addOrUpdatePlayer({
+      const payload = {
         name: fullName,
         positions: [form.primaryPosition, ...form.secondaryPositions],
         rating: parseInt(form.rating), age: parseInt(form.age),
@@ -561,7 +567,13 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
           seasonStartRating: parseInt(form.rating) || 0,
           seasonStartMarketValue: form.type === 'Cantera' ? 0 : parseValue(form.marketValue),
         }),
-      }, editingPlayer?.id, { skipFinancialEffects: skipInitialTransaction });
+      };
+      if (onLocalSave) {
+        onLocalSave(payload);
+        onClose();
+        return;
+      }
+      await addOrUpdatePlayer(payload, editingPlayer?.id, { skipFinancialEffects: skipInitialTransaction });
       if (!editingPlayer && sourceTargetId) {
         try { await deleteTarget(sourceTargetId); } catch (err) { console.error(err); }
       }

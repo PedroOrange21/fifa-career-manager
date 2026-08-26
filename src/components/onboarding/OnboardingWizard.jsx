@@ -454,7 +454,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                         ))}
                       </div>
                       <div className="p-3 rounded-2xl bg-well border border-border-subtle">
-                        <p className="text-[10px] font-bold text-fg-muted leading-relaxed">Ve en tu juego a <span className="text-fg font-black">Academia &gt; Plantilla de la cantera</span>, y haz una foto a la información que aparece a la derecha de la pantalla para cada canterano.</p>
+                        <p className="text-[10px] font-bold text-fg-muted leading-relaxed">Ve en tu juego a <span className="text-fg font-black">Academia &gt; Plantilla de academia</span>, y haz una foto a la información que aparece a la derecha de la pantalla para cada canterano.</p>
                       </div>
                       <AIGlowButton onClick={() => setBulkScanMode('academy')}>
                         Escanear Academia con IA
