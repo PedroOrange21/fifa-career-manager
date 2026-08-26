@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, ChevronLeft, ChevronRight, ChevronDown, Plus, Wallet, Shield, Camera, ShieldAlert, Trash2, Pencil, Sparkles, User, CalendarDays, Coins, Star, GraduationCap, BarChart3, MapPin, Target, Crop, Users } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ChevronDown, Plus, Wallet, Shield, Camera, ShieldAlert, Trash2, Pencil, Sparkles, User, CalendarDays, Coins, GraduationCap, Crop, Users } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { formatCurrency, formatValueInput, parseValue, weeklyWageBudgetFromTransfer } from '../../utils/format';
@@ -27,25 +27,6 @@ const CURRENCY_OPTIONS = [
   { value: 'EUR', label: '€ Euros' },
   { value: 'GBP', label: '£ Libras' },
   { value: 'USD', label: '$ Dólares' },
-];
-
-// Filosofía/ADN del club: define la identidad de la carrera, puramente informativa por ahora
-// (se guarda en el club y se muestra en el Resumen) — no condiciona todavía ninguna otra
-// pantalla de la app, es la base sobre la que construir más adelante recomendaciones de
-// fichajes/objetivos ajustadas al estilo elegido.
-const PHILOSOPHY_OPTIONS = [
-  { value: 'galactico', icon: Star, emoji: '🌟', title: 'Galáctico / Élite', desc: 'Fichajes estelares y presupuesto grande: ganarlo todo ya.' },
-  { value: 'cantera', icon: GraduationCap, emoji: '🎓', title: 'Rey de la Cantera', desc: 'Apuesta por la Academia y el talento joven propio.' },
-  { value: 'moneyball', icon: BarChart3, emoji: '📊', title: 'Moneyball / Realista', desc: 'Gestión eficiente del presupuesto, valor por encima de nombre.' },
-  { value: 'local', icon: MapPin, emoji: '🛡️', title: 'Identidad Local', desc: 'Prioriza jugadores del país y una plantilla con raíces propias.' },
-];
-
-const SEASON_OBJECTIVE_OPTIONS = [
-  'Pelear por el Título',
-  'Clasificar a Competición Europea',
-  'Consolidación en la Categoría',
-  'Evitar el Descenso',
-  'Reconstrucción a Largo Plazo',
 ];
 
 // Puerta de entrada: decide si corresponde mostrar el asistente (sin montar sus hooks de
@@ -85,7 +66,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
 
   const STEP_SEQUENCE = clubExists
     ? ['squad', 'stats', 'summary']
-    : ['identity', 'philosophy', 'budget', 'squad', 'stats', 'summary'];
+    : ['identity', 'budget', 'squad', 'stats', 'summary'];
 
   const [step, setStep] = useState(0);
   const currentStepId = STEP_SEQUENCE[step];
@@ -100,11 +81,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const [currency, setCurrency] = useState('EUR');
   const fileInputRef = useRef(null);
 
-  // --- Paso 2: Filosofía y ADN del Club (solo clubExists=false) ---
-  const [philosophy, setPhilosophy] = useState(null);
-  const [seasonObjective, setSeasonObjective] = useState(null);
-
-  // --- Paso 3: Fondos y Presupuesto Inicial (solo clubExists=false) ---
+  // --- Paso 2: Fondos y Presupuesto Inicial (solo clubExists=false) ---
   const [transferBudgetInput, setTransferBudgetInput] = useState('');
   const [createdClubId, setCreatedClubId] = useState(null);
   // Presupuesto Semanal de Salarios: se sugiere automáticamente (Presup. Traspasos / 52, igual
@@ -195,7 +172,6 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
 
   const canGoNext = () => {
     if (currentStepId === 'identity') return name.trim().length > 0 && managerName.trim().length > 0;
-    if (currentStepId === 'philosophy') return !!philosophy;
     if (currentStepId === 'budget') return budgetAmount > 0;
     return true;
   };
@@ -204,7 +180,6 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
     setError('');
     if (!canGoNext()) {
       if (currentStepId === 'identity') setError('El nombre del club y del mánager son obligatorios.');
-      else if (currentStepId === 'philosophy') setError('Elige un estilo de gestión para tu club.');
       else if (currentStepId === 'budget') setError('Introduce una cantidad mayor que cero.');
       return;
     }
@@ -217,8 +192,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
       // duplicado recién creado y la plantilla ya escaneada (que seguía colgando del primer
       // club, ahora huérfano) "desaparecía" de la vista — el síntoma real detrás del reporte de
       // "los jugadores escaneados desaparecen al navegar". Con el club ya creado, simplemente se
-      // avanza de paso; los datos de Identidad/Filosofía/Fondos ya quedaron guardados la
-      // primera vez.
+      // avanza de paso; los datos de Identidad/Fondos ya quedaron guardados la primera vez.
       if (createdClubId) {
         setStep((s) => s + 1);
         return;
@@ -226,7 +200,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
       setIsSaving(true);
       try {
         const result = await createClub(name, logo, budgetAmount, parseValue(weeklyWageInput) || null, {
-          managerName, seasonLabel, currency, philosophy, seasonObjective,
+          managerName, seasonLabel, currency,
         });
         setCreatedClubId(result?.clubId || null);
         setIsSaving(false);
@@ -309,7 +283,6 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
 
   const STEP_LABELS = {
     identity: 'Identidad',
-    philosophy: 'Filosofía',
     budget: 'Fondos Iniciales',
     squad: 'Plantilla Actual',
     stats: 'Estadísticas',
@@ -321,8 +294,6 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const displayBudget = clubExists ? (activeClub?.transferBudget || 0) : budgetAmount;
   const displayManagerName = clubExists ? (activeClub?.managerName || '') : managerName;
   const displaySeasonLabel = clubExists ? (activeClub?.seasonLabel || '') : seasonLabel;
-  const displayPhilosophy = clubExists ? activeClub?.philosophy : philosophy;
-  const philosophyMeta = PHILOSOPHY_OPTIONS.find((p) => p.value === displayPhilosophy);
 
   return (
     <>
@@ -390,35 +361,6 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                           <button key={c.value} type="button" onClick={() => setCurrency(c.value)} className={`flex-1 h-[52px] rounded-xl text-[10px] font-black transition-all touch-manipulation ${currency === c.value ? 'bg-green-500 text-black' : 'bg-well text-fg-muted border border-border-subtle hover:bg-well-strong'}`}>{c.label.split(' ')[0]}</button>
                         ))}
                       </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {currentStepId === 'philosophy' && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <p className="text-xs font-bold text-fg-muted">¿Cuál es el ADN de tu club?</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {PHILOSOPHY_OPTIONS.map((opt) => {
-                        const Icon = opt.icon;
-                        const active = philosophy === opt.value;
-                        return (
-                          <button key={opt.value} type="button" onClick={() => setPhilosophy(opt.value)} className={`p-3.5 rounded-2xl border text-left transition-all touch-manipulation ${active ? 'bg-green-500/10 border-green-500 text-green-500' : 'bg-well border-border-subtle text-fg-muted hover:bg-well-strong'}`}>
-                            <Icon size={18} className="mb-1.5" />
-                            <div className="font-black uppercase text-[11px] leading-tight">{opt.emoji} {opt.title}</div>
-                            <div className="text-[9px] font-bold mt-1 opacity-70 leading-snug">{opt.desc}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div className="space-y-2 pt-2 border-t border-border-subtle">
-                    <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1 flex items-center gap-1.5"><Target size={11} className="shrink-0" /> Objetivo de la Temporada</label>
-                    <div className="space-y-1.5">
-                      {SEASON_OBJECTIVE_OPTIONS.map((obj) => (
-                        <button key={obj} type="button" onClick={() => setSeasonObjective(obj)} className={`w-full py-2.5 px-3 rounded-xl text-left text-[10px] font-black uppercase transition-all touch-manipulation ${seasonObjective === obj ? 'bg-green-500 text-black' : 'bg-well text-fg-muted hover:bg-well-strong'}`}>{obj}</button>
-                      ))}
                     </div>
                   </div>
                 </div>
@@ -549,13 +491,6 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                       <div className="flex items-center gap-1.5 text-green-500 font-black text-xs mt-0.5"><Wallet size={12} /> {formatCurrency(displayBudget)}</div>
                     </div>
                   </div>
-
-                  {philosophyMeta && (
-                    <div className="flex items-center gap-2 p-3 rounded-2xl bg-well border border-border-subtle">
-                      <philosophyMeta.icon size={16} className="text-green-500 shrink-0" />
-                      <span className="text-xs font-black text-fg">{philosophyMeta.emoji} {philosophyMeta.title}</span>
-                    </div>
-                  )}
 
                   <div className="grid grid-cols-2 gap-3">
                     <button type="button" onClick={() => setExpandedGroup((g) => (g === 'active' ? null : 'active'))} className={`p-3 rounded-xl border text-center transition-all touch-manipulation ${expandedGroup === 'active' ? 'bg-green-500/10 border-green-500/40' : 'bg-well border-border-subtle hover:bg-well-strong'}`}>
