@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Trophy, Plus, TrendingUp, TrendingDown, ArrowDownToLine, Undo2, RefreshCcw, Check, AlertTriangle } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
@@ -17,15 +17,18 @@ const STEP_LABELS = {
   confirm: 'Confirmar',
 };
 
+let customTitleIdCounter = 0;
+const nextCustomTitleId = () => `custom-title-${Date.now()}-${customTitleIdCounter++}`;
+
 // Asistente de 4 pasos para "Terminar Temporada" (Temporadas), sustituye al antiguo
-// ConfirmModal genérico: Balance y Palmarés (títulos/posición/premios, informativos salvo el
-// premio económico que sí suma al presupuesto) -> Escaneo Final de Rendimiento y Comparador
-// (reutiliza el mismo escaneo masivo de Estadísticas que Onboarding/PlayerStatsTab, luego
-// muestra el crecimiento OVR/valor de cada jugador ya actualizado) -> Resolución de Cesiones y
-// Contratos (comprar/devolver cesiones entrantes, recuperar cesiones salientes, renovar
-// contratos a punto de finalizar) -> Confirmar, que ejecuta endSeason() con los datos del Paso
-// 1 (el snapshot de careerHistory/edad/contrato/reseteo de stats ya lo hace endSeason por sí
-// solo, ver ClubDataContext).
+// ConfirmModal genérico: Balance y Palmarés (títulos dinámicos según las competiciones ya
+// detectadas en las estadísticas de la plantilla, cada uno con su propio premio económico, más
+// "Otro Título" para cualquier competición que la IA no haya visto todavía) -> Escaneo Final de
+// Rendimiento y Comparador (reutiliza el mismo escaneo masivo de Estadísticas que Onboarding/
+// PlayerStatsTab, obligatorio antes de avanzar) -> Resolución de Cesiones y Contratos (comprar/
+// devolver cesiones entrantes, recuperar cesiones salientes, renovar contratos a punto de
+// finalizar) -> Confirmar, que ejecuta endSeason() (el snapshot de careerHistory/edad/contrato/
+// reseteo de stats ya lo hace endSeason por sí solo, ver ClubDataContext).
 export default function EndSeasonWizard({ onClose }) {
   useAutoHideChrome();
   useBodyScrollLock();
@@ -35,21 +38,40 @@ export default function EndSeasonWizard({ onClose }) {
   const [step, setStep] = useState(0);
   const currentStepId = STEP_SEQUENCE[step];
 
-  const [titles, setTitles] = useState([]);
-  const [titleInput, setTitleInput] = useState('');
+  // Competiciones ya detectadas en las estadísticas de la plantilla (ver competitionBreakdown en
+  // seasonStats, poblado por el escaneo individual/masivo de Estadísticas durante la temporada):
+  // cada una se ofrece como un título marcable con su propio premio económico, en vez de un
+  // campo de texto libre. "customTitles" cubre cualquier competición que la IA no haya visto
+  // todavía (p. ej. si nunca se escaneó un desglose por competición).
+  const availableCompetitions = useMemo(() => {
+    const set = new Set();
+    players.forEach((p) => (p.seasonStats?.competitionBreakdown || []).forEach((c) => { if (c.competition) set.add(c.competition); }));
+    return Array.from(set);
+  }, [players]);
+
+  const [titleSelections, setTitleSelections] = useState({}); // { [competicion]: { checked, prize } }
+  const [customTitles, setCustomTitles] = useState([]); // [{ id, name, prize }]
   const [leaguePosition, setLeaguePosition] = useState('');
-  const [prizeMoneyInput, setPrizeMoneyInput] = useState('');
 
-  const addTitle = () => {
-    const t = titleInput.trim();
-    if (!t) return;
-    setTitles((prev) => [...prev, t]);
-    setTitleInput('');
-  };
-  const removeTitle = (i) => setTitles((prev) => prev.filter((_, idx) => idx !== i));
+  const toggleTitle = (name) => setTitleSelections((prev) => ({ ...prev, [name]: { checked: !prev[name]?.checked, prize: prev[name]?.prize || '' } }));
+  const setTitlePrize = (name, raw) => setTitleSelections((prev) => ({ ...prev, [name]: { checked: true, prize: formatValueInput(raw) } }));
+  const addCustomTitle = () => setCustomTitles((prev) => [...prev, { id: nextCustomTitleId(), name: '', prize: '' }]);
+  const updateCustomTitle = (id, patch) => setCustomTitles((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  const removeCustomTitle = (id) => setCustomTitles((prev) => prev.filter((t) => t.id !== id));
 
+  const selectedTitleNames = [
+    ...Object.entries(titleSelections).filter(([, v]) => v.checked).map(([name]) => name),
+    ...customTitles.map((t) => t.name.trim()).filter(Boolean),
+  ];
+  const totalPrizeMoney = Object.values(titleSelections).filter((v) => v.checked).reduce((sum, v) => sum + parseValue(v.prize), 0)
+    + customTitles.reduce((sum, t) => sum + parseValue(t.prize), 0);
+
+  // Escaneo Final de Rendimiento: obligatorio antes de poder avanzar a Cesiones/Contratos — se
+  // marca en cuanto se aplica al menos una revisión de estadísticas dentro de ESTE asistente
+  // (ver onDone de StatsImportReviewModal más abajo), nunca antes.
   const [statsScanMode, setStatsScanMode] = useState(false);
   const [statsReview, setStatsReview] = useState(null);
+  const [hasScannedFinal, setHasScannedFinal] = useState(false);
 
   const incomingLoans = players.filter((p) => p.type === 'Cedido');
   const outgoingLoans = players.filter((p) => p.transferStatus === 'CedidoFuera' && p.outboundLoan);
@@ -57,7 +79,8 @@ export default function EndSeasonWizard({ onClose }) {
 
   const [isEnding, setIsEnding] = useState(false);
 
-  const goNext = () => setStep((s) => Math.min(STEP_SEQUENCE.length - 1, s + 1));
+  const canAdvance = currentStepId !== 'scan' || hasScannedFinal;
+  const goNext = () => { if (canAdvance) setStep((s) => Math.min(STEP_SEQUENCE.length - 1, s + 1)); };
   const goPrev = () => setStep((s) => Math.max(0, s - 1));
 
   const handleConfirm = async () => {
@@ -65,9 +88,9 @@ export default function EndSeasonWizard({ onClose }) {
     setIsEnding(true);
     try {
       await endSeason({
-        titles,
+        titles: selectedTitleNames,
         leaguePosition: leaguePosition ? parseInt(leaguePosition, 10) : null,
-        prizeMoney: parseValue(prizeMoneyInput),
+        prizeMoney: totalPrizeMoney,
       });
       onClose?.();
     } catch (err) {
@@ -108,25 +131,41 @@ export default function EndSeasonWizard({ onClose }) {
               <div className="space-y-4">
                 <div>
                   <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Títulos Conseguidos</label>
-                  <div className="flex gap-2 mt-1">
-                    <input
-                      type="text"
-                      value={titleInput}
-                      onChange={(e) => setTitleInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTitle(); } }}
-                      placeholder="Ej: Liga, Copa..."
-                      className="flex-1 bg-well-strong p-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold text-xs text-fg placeholder:text-fg-faint"
-                    />
-                    <button type="button" onClick={addTitle} className="shrink-0 w-11 h-11 rounded-xl bg-green-500 text-black flex items-center justify-center touch-manipulation"><Plus size={18} /></button>
+                  <div className="space-y-2 mt-1">
+                    {availableCompetitions.length === 0 && customTitles.length === 0 && (
+                      <p className="text-[10px] font-bold text-fg-faint px-1">No se detectaron competiciones en las estadísticas de la plantilla todavía. Añade un título con "Otro Título".</p>
+                    )}
+                    {availableCompetitions.map((comp) => {
+                      const sel = titleSelections[comp] || { checked: false, prize: '' };
+                      return (
+                        <div key={comp} className="p-2.5 rounded-xl bg-well border border-border-subtle space-y-2">
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => toggleTitle(comp)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors touch-manipulation ${sel.checked ? 'border-green-500 bg-green-500' : 'border-border-subtle'}`}>
+                              {sel.checked && <Check size={12} className="text-black" />}
+                            </button>
+                            <span className="flex-1 text-xs font-black text-fg truncate">{comp}</span>
+                          </div>
+                          {sel.checked && (
+                            <input type="text" inputMode="numeric" value={sel.prize} onChange={(e) => setTitlePrize(comp, e.target.value)} placeholder="Premio económico (€)" className="w-full bg-well-strong p-2.5 rounded-lg outline-none border border-border-subtle focus:border-green-500 font-bold text-xs text-fg placeholder:text-fg-faint" />
+                          )}
+                        </div>
+                      );
+                    })}
+                    {customTitles.map((t) => (
+                      <div key={t.id} className="p-2.5 rounded-xl bg-well border border-border-subtle space-y-2">
+                        <div className="flex items-center gap-2">
+                          <input type="text" value={t.name} onChange={(e) => updateCustomTitle(t.id, { name: e.target.value })} placeholder="Nombre del título" className="flex-1 bg-well-strong p-2.5 rounded-lg outline-none border border-border-subtle focus:border-green-500 font-bold text-xs text-fg placeholder:text-fg-faint" />
+                          <button type="button" onClick={() => removeCustomTitle(t.id)} className="shrink-0 p-2 text-fg-faint hover:text-red-400 transition-colors touch-manipulation"><X size={14} /></button>
+                        </div>
+                        <input type="text" inputMode="numeric" value={t.prize} onChange={(e) => updateCustomTitle(t.id, { prize: formatValueInput(e.target.value) })} placeholder="Premio económico (€)" className="w-full bg-well-strong p-2.5 rounded-lg outline-none border border-border-subtle focus:border-green-500 font-bold text-xs text-fg placeholder:text-fg-faint" />
+                      </div>
+                    ))}
+                    <button type="button" onClick={addCustomTitle} className="w-full py-2.5 rounded-xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest touch-manipulation">
+                      <Plus size={13} /> Otro Título
+                    </button>
                   </div>
-                  {titles.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {titles.map((t, i) => (
-                        <span key={i} className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wide bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 px-2.5 py-1 rounded-full">
-                          🏆 {t} <button type="button" onClick={() => removeTitle(i)} className="touch-manipulation"><X size={11} /></button>
-                        </span>
-                      ))}
-                    </div>
+                  {totalPrizeMoney > 0 && (
+                    <p className="text-[9px] font-bold text-green-500 mt-2 ml-1">Total en premios: {formatCurrency(totalPrizeMoney)} (se sumará al Presupuesto de Traspasos)</p>
                   )}
                 </div>
                 <div>
@@ -140,18 +179,6 @@ export default function EndSeasonWizard({ onClose }) {
                     className="w-full mt-1 bg-well-strong p-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold text-xs text-fg placeholder:text-fg-faint"
                   />
                 </div>
-                <div>
-                  <label className="text-[10px] font-black text-fg-muted uppercase tracking-wider ml-1">Premios Económicos (€)</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={prizeMoneyInput}
-                    onChange={(e) => setPrizeMoneyInput(formatValueInput(e.target.value))}
-                    placeholder="0"
-                    className="w-full mt-1 bg-well-strong p-3 rounded-xl outline-none border border-border-subtle focus:border-green-500 font-bold text-xs text-fg placeholder:text-fg-faint"
-                  />
-                  <p className="text-[9px] font-bold text-fg-faint mt-1 ml-1">Se sumará directamente al Presupuesto de Traspasos.</p>
-                </div>
               </div>
             )}
 
@@ -160,6 +187,11 @@ export default function EndSeasonWizard({ onClose }) {
                 <div className="p-4 rounded-2xl bg-well border border-border-subtle">
                   <p className="text-xs font-bold text-fg-muted leading-relaxed">Escanea la pantalla final de <span className="text-fg font-black">Centro de Plantilla &gt; Estadísticas</span> de cada jugador para actualizar su rendimiento y ver el crecimiento de la temporada.</p>
                 </div>
+                {!hasScannedFinal && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 rounded-xl flex gap-2 text-yellow-500 text-[10px] font-bold items-center">
+                    <AlertTriangle size={14} className="shrink-0" /><span>Es obligatorio escanear y aplicar las estadísticas finales antes de continuar.</span>
+                  </div>
+                )}
                 <AIGlowButton onClick={() => setStatsScanMode(true)}>
                   Escanear Rendimiento Final
                 </AIGlowButton>
@@ -255,8 +287,8 @@ export default function EndSeasonWizard({ onClose }) {
               <div className="space-y-4">
                 <div className="p-4 rounded-2xl bg-well border border-border-subtle space-y-2">
                   <div className="flex items-center gap-2 text-green-500 font-black text-[10px] uppercase tracking-widest"><Trophy size={13} /> Resumen de la Temporada {activeClub?.currentSeasonNumber ?? 1}</div>
-                  <p className="text-[10px] font-bold text-fg-muted">{titles.length > 0 ? `Títulos: ${titles.join(', ')}` : 'Sin títulos registrados'}{leaguePosition ? ` · Posición ${leaguePosition}` : ''}</p>
-                  {parseValue(prizeMoneyInput) > 0 && <p className="text-[10px] font-bold text-green-500">+{formatCurrency(parseValue(prizeMoneyInput))} en premios</p>}
+                  <p className="text-[10px] font-bold text-fg-muted">{selectedTitleNames.length > 0 ? `Títulos: ${selectedTitleNames.join(', ')}` : 'Sin títulos registrados'}{leaguePosition ? ` · Posición ${leaguePosition}` : ''}</p>
+                  {totalPrizeMoney > 0 && <p className="text-[10px] font-bold text-green-500">+{formatCurrency(totalPrizeMoney)} en premios</p>}
                 </div>
                 <div className="p-4 rounded-2xl bg-yellow-500/5 border border-yellow-500/20">
                   <p className="text-[10px] font-bold text-fg-muted leading-relaxed">Al confirmar: toda la plantilla envejece un año, los contratos restantes se reducen en un año, las estadísticas de esta temporada se archivan en el historial de carrera de cada jugador y se reinician a 0 para la nueva temporada.</p>
@@ -274,7 +306,7 @@ export default function EndSeasonWizard({ onClose }) {
             </button>
           )}
           {currentStepId !== 'confirm' ? (
-            <button type="button" onClick={goNext} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all">
+            <button type="button" onClick={goNext} disabled={!canAdvance} className="flex-1 py-4 rounded-xl bg-green-500 text-black font-black uppercase text-xs flex items-center justify-center gap-1.5 hover:bg-green-400 transition-all disabled:opacity-50 disabled:hover:bg-green-500">
               Siguiente <ChevronRight size={16} />
             </button>
           ) : (
@@ -297,7 +329,7 @@ export default function EndSeasonWizard({ onClose }) {
         <StatsImportReviewModal
           results={statsReview}
           onClose={() => setStatsReview(null)}
-          onDone={() => setStatsReview(null)}
+          onDone={() => { setStatsReview(null); setHasScannedFinal(true); }}
         />
       )}
     </div>

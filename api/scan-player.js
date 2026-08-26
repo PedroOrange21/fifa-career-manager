@@ -175,7 +175,7 @@ const RESPONSE_SCHEMA = {
     nacionalidad: { type: Type.STRING, nullable: true },
     edad: { type: Type.INTEGER, nullable: true },
     piernaBuena: { type: Type.STRING, enum: ['Diestro', 'Zurdo'], nullable: true },
-    relevancia: { type: Type.STRING, enum: ['Crucial', 'Importante', 'Rotación', 'Esporádico', 'Promesa'], nullable: true, description: 'Rol/relevancia en la plantilla (busca una etiqueta o icono tipo "Crucial", "Importante", "Rotación", "Esporádico" o "Promesa" junto al nombre o la posición del jugador; casi siempre está presente en la tarjeta de Finanzas, no la dejes en null salvo que de verdad no aparezca ningún indicio).' },
+    relevancia: { type: Type.STRING, nullable: true, description: 'Rol/relevancia en la plantilla: transcribe LITERALMENTE la palabra exacta que muestra la etiqueta o icono junto al nombre o la posición del jugador (ej. "Clave", "Crucial", "Importante", "Rotación", "Ocasional", "Esporádico", "Promesa", o cualquier otra que use el juego) — nunca la sustituyas por una de otra lista ni la normalices a un sinónimo. Casi siempre está presente en la tarjeta de Finanzas, no la dejes en null salvo que de verdad no aparezca ningún indicio.' },
     sueldoSemanal: { type: Type.INTEGER, nullable: true, description: 'Sueldo SEMANAL en euros, solo el número (sin puntos, comas ni símbolo de moneda).' },
     valorMercado: { type: Type.INTEGER, nullable: true, description: 'Valor de mercado en euros, solo el número.' },
     duracionContrato: { type: Type.STRING, nullable: true, description: 'Duración de contrato tal como aparece (años restantes o fecha de finalización). Solo aplica si NO es una cesión.' },
@@ -213,11 +213,13 @@ Analiza la imagen adjunta y extrae ÚNICAMENTE los datos que aparezcan visibles 
 - edad
 - pierna buena (Diestro o Zurdo)
 - relevancia o rol en la plantilla: busca con atención una etiqueta o icono junto al nombre o la
-  posición del jugador con uno de estos textos EXACTOS — "Crucial", "Importante", "Rotación",
-  "Esporádico" o "Promesa". Esta etiqueta casi siempre está presente en la tarjeta de Finanzas de
-  EA Sports FC (columna de rol junto a la posición): trátala como un dato tan importante como la
-  media o la posición, no la dejes en null por defecto — solo devuelve null si de verdad no hay
-  ningún texto ni icono de rol visible en la imagen.
+  posición del jugador y transcribe LITERALMENTE la palabra exacta que veas (ej. "Clave",
+  "Crucial", "Importante", "Rotación", "Ocasional", "Esporádico", "Promesa" u otra) — nunca la
+  sustituyas por un sinónimo ni la fuerces a encajar en una lista cerrada, el texto tal cual
+  aparece en la tarjeta es el dato correcto. Esta etiqueta casi siempre está presente en la
+  tarjeta de Finanzas de EA Sports FC (columna de rol junto a la posición): trátala como un dato
+  tan importante como la media o la posición, no la dejes en null por defecto — solo devuelve
+  null si de verdad no hay ningún texto ni icono de rol visible en la imagen.
 - sueldo SEMANAL en euros (el que EA Sports FC llama "Sueldo sem." — si solo ves un sueldo mensual o anual, conviértelo tú mismo a semanal antes de responder)
 - valor de mercado en euros
 
@@ -346,6 +348,9 @@ const STATS_RESPONSE_SCHEMA = {
           partidosJugados: { type: Type.INTEGER, nullable: true },
           goles: { type: Type.INTEGER, nullable: true },
           asistencias: { type: Type.INTEGER, nullable: true },
+          porteriasImbatidas: { type: Type.INTEGER, nullable: true },
+          tarjetasAmarillas: { type: Type.INTEGER, nullable: true },
+          tarjetasRojas: { type: Type.INTEGER, nullable: true },
           notaMedia: { type: Type.NUMBER, nullable: true },
         },
       },
@@ -362,7 +367,7 @@ Analiza la imagen adjunta y extrae ÚNICAMENTE los datos que aparezcan visibles,
 - pierna buena (Diestro o Zurdo), si se muestra
 - crecimiento de media respecto al inicio de temporada (ej. "+2" o "-1", puede ser negativo) y media final actual (OVR)
 - tabla de estadísticas de la temporada: partidos jugados (PJ), goles (G), asistencias (A), porterías imbatidas (PI, solo relevante en porteros/defensas), tarjetas amarillas (TA), tarjetas rojas (TR) y nota media (MED, número decimal tipo 6.91)
-- si la pantalla desglosa esas mismas estadísticas por competición (Liga, Champions, Copa, Amistosos...), inclúyelas también en desglosePorCompeticion; si solo hay un total general, deja ese campo en null
+- si la pantalla desglosa esas mismas estadísticas (PJ, G, A, PI, TA, TR y MED, las 7 columnas completas) por competición (Liga, Champions, Copa, Amistosos...), inclúyelas también en desglosePorCompeticion con esas mismas 7 columnas por fila; si solo hay un total general, deja ese campo en null
 
 Reglas importantes:
 - El crecimiento de media es un número CON SIGNO tal como lo muestra la pantalla: si pone "+2" devuelve 2, si pone "-1" devuelve -1.

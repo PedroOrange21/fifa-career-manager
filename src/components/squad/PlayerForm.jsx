@@ -308,6 +308,11 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
   // en cada cambio — nunca se editan por separado, para no dejar una combinación imposible
   // (p. ej. type Cedido con transferStatus CedidoFuera a la vez).
   const acquisitionKind = form.type === 'Cedido' ? 'loan_in' : form.transferStatus === 'CedidoFuera' ? 'loan_out' : 'owned';
+  // Club de Procedencia (genérico) solo aporta información nueva en un "Comprado" real: un
+  // Cedido ya tiene "Club de Origen" y un Cedido a Otro Club ya tiene "Club de Destino", ambos
+  // más abajo — mostrar también Club de Procedencia ahí sería el mismo dato duplicado bajo dos
+  // etiquetas distintas.
+  const showSourceClubField = !hideSourceClub && acquisitionKind === 'owned';
   const INITIAL_ACQUISITION_OPTIONS = [
     { key: 'owned', label: 'En Propiedad', activeClass: 'bg-blue-600 text-white' },
     { key: 'loan_in', label: 'Cedido en Nuestro Club', activeClass: 'bg-yellow-600 text-white' },
@@ -765,13 +770,15 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
                       </div>
                     </div>
                   )}
-                  {/* Club de Procedencia y Relevancia: aplican a cualquier incorporación al
-                      primer equipo (Comprado o Cedido), nunca a Cantera. Club de Procedencia
-                      se oculta por completo si hideSourceClub (partida "Empieza desde Cero"):
+                  {/* Club de Procedencia y Relevancia: Club de Procedencia solo tiene sentido
+                      para un "Comprado" real (traspaso) — un Cedido ya tiene su propio "Club de
+                      Origen" más abajo, y un Cedido a Otro Club su propio "Club de Destino"; no
+                      duplicar el mismo dato dos veces bajo dos nombres distintos en la misma
+                      ficha. Se oculta también si hideSourceClub (partida "Empieza desde Cero").
                       Relevancia ocupa entonces la fila completa, sin dejar hueco vacío. */}
                   {form.type !== 'Cantera' && (
-                    <div className={hideSourceClub ? '' : 'grid grid-cols-2 gap-3'}>
-                      {!hideSourceClub && (
+                    <div className={showSourceClubField ? 'grid grid-cols-2 gap-3' : ''}>
+                      {showSourceClubField && (
                         <div className="space-y-1 relative">
                           <label className="text-[9px] font-black text-fg-muted ml-1">Club de Procedencia</label>
                           <input type="text" placeholder="Ej: Sporting Gijón" onKeyDown={blockEnterKey} className={FIELD_BASE} value={form.sourceClub} onChange={(e) => set({ sourceClub: e.target.value })} />

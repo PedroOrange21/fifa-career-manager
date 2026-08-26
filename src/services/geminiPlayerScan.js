@@ -261,6 +261,9 @@ export function mapStatsScanResultToUpdate(extracted) {
       matchesPlayed: c.partidosJugados ?? 0,
       goals: c.goles ?? 0,
       assists: c.asistencias ?? 0,
+      cleanSheets: c.porteriasImbatidas ?? 0,
+      yellowCards: c.tarjetasAmarillas ?? 0,
+      redCards: c.tarjetasRojas ?? 0,
       averageRating: c.notaMedia ?? 0,
     }));
   return {

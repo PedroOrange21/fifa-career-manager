@@ -14,6 +14,7 @@ import SellPlayerModal from '../economy/SellPlayerModal';
 import LoanOutModal from '../economy/LoanOutModal';
 import PlayerStatsScanModal from './PlayerStatsScanModal';
 import AIGlowButton from '../common/AIGlowButton';
+import PerformanceTable from '../common/PerformanceTable';
 
 const ACTION_STYLES = {
   blue: 'bg-blue-500/10 text-blue-500 border-blue-500/20 hover:bg-blue-500/20 shadow-lg shadow-blue-500/10',
@@ -60,19 +61,10 @@ function WageDetailRow({ label, weekly }) {
   );
 }
 
-// Media/goles/asistencias/porterías imbatidas/tarjetas: mismos nombres de campo que ya usa
-// seasonStats en toda la app (ver ClubDataContext), así que un jugador recién creado (sin
-// ningún partido ni escaneo todavía) simplemente no tiene el campo — de ahí el "?? 0" en cada
-// lectura, para no mostrar "undefined" en la tabla.
-const SEASON_STAT_FIELDS = [
-  ['matchesPlayed', 'PJ'], ['goals', 'G'], ['assists', 'A'],
-  ['cleanSheets', 'PI'], ['yellowCards', 'TA'], ['redCards', 'TR'],
-];
-
-// Pestaña "Rendimiento y Estadísticas": tarjeta de la temporada en curso (con desglose por
-// competición si el escaneo lo trajo), botón de actualización individual por IA y, debajo, el
-// historial de carrera acumulado por endSeason() al cerrar cada temporada — acordeón simple,
-// una temporada a la vez, con el crecimiento de OVR resaltado en verde/rojo.
+// Pestaña "Rendimiento": tabla detallada de la temporada en curso (por competición + Totales),
+// botón de actualización individual por IA y, debajo, el historial de carrera acumulado por
+// endSeason() al cerrar cada temporada — acordeón simple, una temporada a la vez, con el
+// crecimiento de OVR resaltado en verde/rojo y su propia tabla por competición si se conservó.
 function PlayerStatsTab({ player, onStatsUpdated }) {
   const [showScan, setShowScan] = useState(false);
   const [expandedSeason, setExpandedSeason] = useState(null);
@@ -82,38 +74,11 @@ function PlayerStatsTab({ player, onStatsUpdated }) {
   return (
     <div className="space-y-1">
       <SectionHeader emoji="📊" title="Temporada Actual" />
-      <div className="w-full bg-well rounded-2xl border border-border-subtle p-4 space-y-3">
-        <div className="grid grid-cols-3 gap-2">
-          {SEASON_STAT_FIELDS.map(([key, label]) => (
-            <div key={key} className="text-center bg-well-strong rounded-xl py-2.5">
-              <div className="text-base font-black text-fg">{stats[key] ?? 0}</div>
-              <div className="text-[8px] font-black uppercase tracking-widest text-fg-faint">{label}</div>
-            </div>
-          ))}
-        </div>
-        <div className="flex items-center justify-between pt-2 border-t border-border-subtle">
-          <span className="text-[9px] font-black uppercase tracking-widest text-fg-muted">Nota Media</span>
-          <span className="text-sm font-black text-green-500">{stats.averageRating || '—'}</span>
-        </div>
-      </div>
-
-      {stats.competitionBreakdown?.length > 0 && (
-        <>
-          <SectionHeader emoji="🏆" title="Por Competición" />
-          <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
-            {stats.competitionBreakdown.map((c, i) => (
-              <div key={i} className="px-4 py-2.5 flex items-center justify-between gap-2">
-                <span className="text-[10px] font-black text-fg truncate">{c.competition}</span>
-                <span className="text-[9px] font-bold text-fg-faint uppercase tracking-wide shrink-0">PJ {c.matchesPlayed} · G {c.goals} · A {c.assists}{c.averageRating ? ` · ${c.averageRating}` : ''}</span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+      <PerformanceTable rows={stats.competitionBreakdown || []} totals={stats} />
 
       <div className="pt-3">
         <AIGlowButton onClick={() => setShowScan(true)}>
-          Escanear Estadísticas de Este Jugador
+          Actualizar estadísticas
         </AIGlowButton>
       </div>
 
@@ -122,22 +87,21 @@ function PlayerStatsTab({ player, onStatsUpdated }) {
           <SectionHeader emoji="📈" title="Historial de Carrera" />
           <div className="w-full bg-well rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
             {[...career].reverse().map((c) => (
-              <button key={c.seasonId} type="button" onClick={() => setExpandedSeason((s) => (s === c.seasonId ? null : c.seasonId))} className="w-full px-4 py-2.5 text-left touch-manipulation">
-                <div className="flex items-center justify-between gap-2">
+              <div key={c.seasonId}>
+                <button type="button" onClick={() => setExpandedSeason((s) => (s === c.seasonId ? null : c.seasonId))} className="w-full px-4 py-2.5 text-left touch-manipulation flex items-center justify-between gap-2">
                   <span className="text-[10px] font-black text-fg uppercase">Temporada {c.seasonNumber}</span>
                   <span className={`flex items-center gap-1 text-[10px] font-black shrink-0 ${c.ovrGrowth > 0 ? 'text-green-500' : c.ovrGrowth < 0 ? 'text-red-400' : 'text-fg-faint'}`}>
                     {c.initialOvr} → {c.finalOvr}
                     {c.ovrGrowth !== 0 && (c.ovrGrowth > 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />)}
                   </span>
-                </div>
+                </button>
                 {expandedSeason === c.seasonId && (
-                  <div className="mt-2 grid grid-cols-2 gap-1.5 text-[9px] font-bold text-fg-faint uppercase tracking-wide animate-in fade-in duration-150">
-                    <span>PJ {c.matchesPlayed}</span><span>Goles {c.goals}</span>
-                    <span>Asistencias {c.assists}</span><span>Nota {c.averageRating || '—'}</span>
-                    <span className="col-span-2">Valor al Cierre: {abbreviateValue(c.marketValueEnd)}</span>
+                  <div className="px-4 pb-3 space-y-2 animate-in fade-in duration-150">
+                    <PerformanceTable rows={c.competitionBreakdown || []} totals={c} />
+                    <div className="text-[9px] font-bold text-fg-faint uppercase tracking-wide">Valor al Cierre: {abbreviateValue(c.marketValueEnd)}</div>
                   </div>
                 )}
-              </button>
+              </div>
             ))}
           </div>
         </>
@@ -351,14 +315,14 @@ export default function PlayerInfoModal({ player, infoSlot, onClose, onEdit, onR
               onClick={() => setActiveTab('perfil')}
               className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'perfil' ? 'bg-well-strong text-fg shadow' : 'text-fg-faint hover:text-fg-muted'}`}
             >
-              📋 Perfil y Contrato
+              Perfil y Contrato
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('stats')}
               className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'stats' ? 'bg-well-strong text-fg shadow' : 'text-fg-faint hover:text-fg-muted'}`}
             >
-              📊 Rendimiento
+              Rendimiento
             </button>
           </div>
         )}

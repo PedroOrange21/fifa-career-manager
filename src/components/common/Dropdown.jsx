@@ -10,7 +10,7 @@ import { createPortal } from 'react-dom';
 // define, el botón cerrado reutiliza el mismo "icon". labelClassName permite ajustar el
 // tamaño de fuente del texto visible en el botón cerrado sin afectar a las opciones del
 // menú desplegable, que mantienen siempre su propio tamaño fijo.
-export default function Dropdown({ value, options, onChange, placeholder = 'Seleccionar', labelClassName = 'text-[8px]' }) {
+export default function Dropdown({ value, options, onChange, placeholder = 'Seleccionar', labelClassName = 'text-[8px]', compact = false }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState(null);
   const btnRef = useRef(null);
@@ -52,12 +52,17 @@ export default function Dropdown({ value, options, onChange, placeholder = 'Sele
   };
 
   const selected = options.find((o) => o.value === value);
+  // Si el valor actual no coincide con ninguna opción del preset (p. ej. un rol leído
+  // literalmente por IA como "Clave" u "Ocasional", fuera de las 5 etiquetas históricas), se
+  // muestra tal cual en vez de caer al placeholder — nunca ocultar un dato real solo porque no
+  // encaja en una lista cerrada de opciones.
+  const displayLabel = selected?.label ?? (value || placeholder);
 
   return (
     <div ref={wrapRef} className="relative">
-      <button ref={btnRef} type="button" onClick={toggle} className="w-full h-[52px] bg-well p-2 rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center gap-0.5 font-black text-fg touch-manipulation">
+      <button ref={btnRef} type="button" onClick={toggle} className={`w-full bg-well rounded-xl outline-none border border-border-subtle flex flex-col items-center justify-center font-black text-fg touch-manipulation ${compact ? 'h-9 px-2 py-1 gap-0' : 'h-[52px] p-2 gap-0.5'}`}>
         {selected?.closedIcon ?? selected?.icon}
-        <span className={`${labelClassName} uppercase tracking-wide truncate max-w-full px-1`}>{selected?.label ?? placeholder}</span>
+        <span className={`${labelClassName} uppercase tracking-wide truncate max-w-full px-1`}>{displayLabel}</span>
       </button>
       {open && rect && createPortal(
         <div

@@ -344,12 +344,35 @@ export function ClubDataProvider({ children }) {
 
     if (prizeMoney) adjustBudget(prizeMoney);
 
+    // squadSnapshot lleva el desglose de rendimiento COMPLETO de cada jugador incrustado (no
+    // solo playerId/name/rating): así el Historial de Temporadas sigue siendo consultable tal
+    // cual aunque el jugador se venda/elimine más adelante y su careerHistory en vivo desaparezca
+    // con él — el detalle de una temporada archivada nunca depende de datos que puedan dejar de
+    // existir. lineupSnapshot congela la alineación titular tal como estaba en el momento de
+    // cerrar la temporada, para poder reconstruir el "Once Ideal" en el detalle histórico.
+    const squadSnapshot = players.map((p) => {
+      const stats = p.seasonStats || {};
+      return {
+        playerId: p.id, name: p.name, rating: p.rating, position: p.positions?.[0] || null,
+        initialOvr: p.seasonStartRating ?? p.rating,
+        matchesPlayed: stats.matchesPlayed || 0,
+        goals: stats.goals || 0,
+        assists: stats.assists || 0,
+        cleanSheets: stats.cleanSheets || 0,
+        yellowCards: stats.yellowCards || 0,
+        redCards: stats.redCards || 0,
+        averageRating: stats.averageRating || 0,
+        competitionBreakdown: stats.competitionBreakdown || null,
+      };
+    });
+
     await addDoc(seasonsCol(user.uid, activeClubId), {
       seasonNumber,
       startedAt: previousSeason?.endedAt || activeClub.createdAt || null,
       endedAt: Date.now(),
       budgetEnd: (activeClub.transferBudget || 0) + (prizeMoney || 0),
-      squadSnapshot: players.map((p) => ({ playerId: p.id, name: p.name, rating: p.rating, position: p.positions?.[0] || null })),
+      squadSnapshot,
+      lineupSnapshot: { formation, lineup },
       topScorers,
       matchesPlayed: seasonMatches.length,
       wins, draws, losses, goalsFor, goalsAgainst,
@@ -367,7 +390,11 @@ export function ClubDataProvider({ children }) {
         matchesPlayed: stats.matchesPlayed || 0,
         goals: stats.goals || 0,
         assists: stats.assists || 0,
+        cleanSheets: stats.cleanSheets || 0,
+        yellowCards: stats.yellowCards || 0,
+        redCards: stats.redCards || 0,
         averageRating: stats.averageRating || 0,
+        competitionBreakdown: stats.competitionBreakdown || null,
         marketValueEnd: p.marketValue || 0,
       };
       return updateDoc(playerDoc(user.uid, activeClubId, p.id), {

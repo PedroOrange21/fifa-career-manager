@@ -81,6 +81,12 @@ function buildRow(prefill, { status = 'ok', fileName = '', propertyDefault = 'Co
     agreedRole: prefill.agreedRole || '',
     sourceClub: prefill.sourceClub || '',
     value: formatValueInput(String(prefill.value || '')),
+    // Contrato y Cláusula (ver duracionContrato/clausulaRescision en api/scan-player.js): igual
+    // que Relevancia, se leían del escaneo pero se perdían en el guardado en lote — solo
+    // aplicables al final si el tipo acaba siendo "Comprado" real (buildPlayerPayload ya los
+    // fuerza a null para Cedido/Cantera, así que pasarlos siempre aquí es seguro).
+    contractYears: prefill.contractYears != null ? String(prefill.contractYears) : '',
+    releaseClause: formatValueInput(String(prefill.releaseClause || '')),
     originClub: prefill.originClub || '',
     loanDuration: prefill.loanDuration || '1 Temporada',
     // Cesión saliente: club de destino y duración, separados de originClub/loanDuration (que son
@@ -126,6 +132,10 @@ function rowToPlayerLike(r) {
     agreedRole: r.agreedRole,
     wage: r.wage,
     potential: r.potential,
+    // Contrato y Cláusula: aplican a cualquier situación que acabe siendo "type: Comprado" en
+    // PlayerForm (Inicial/Comprado/CedidoFuera), nunca a Cedido (no propietario) ni Cantera.
+    contractYears: (!isCantera && !isCedido) ? r.contractYears : '',
+    releaseClause: (!isCantera && !isCedido) ? r.releaseClause : '',
     transferStatus: isCedidoFuera ? 'CedidoFuera' : 'Activo',
     outboundLoan: isCedidoFuera ? { destinationClub: r.outboundClub, duration: r.outboundDuration } : null,
     isInitialSquad: isInitial,
@@ -152,6 +162,8 @@ function playerLikeToRowPatch(payload) {
     agreedRole: payload.agreedRole || '',
     sourceClub: payload.sourceClub || '',
     value: formatValueInput(String(payload.value || '')),
+    contractYears: payload.contractYears != null ? String(payload.contractYears) : '',
+    releaseClause: formatValueInput(String(payload.releaseClause || '')),
     originClub: payload.originClub || '',
     loanDuration: payload.loanDuration || '1 Temporada',
     outboundClub: payload.outboundLoan?.destinationClub || '',
@@ -516,6 +528,11 @@ export default function BulkScanReviewModal({ mode = 'primerEquipo', results, pr
           value: r.reviewType === 'Comprado' ? r.value : '',
           originClub: r.reviewType === 'Cedido' ? r.originClub : '',
           loanDuration: r.reviewType === 'Cedido' ? r.loanDuration : '',
+          // buildPlayerPayload ya fuerza estos dos a null salvo que el tipo final sea
+          // "Comprado" (Inicial/Comprado/CedidoFuera aquí), así que reenviarlos siempre es
+          // seguro — nunca se cuelan en un Cedido o Cantera por error.
+          contractYears: r.contractYears,
+          releaseClause: r.releaseClause,
           isInitialSquad: isInitial,
           transferStatus: isCedidoFuera ? 'CedidoFuera' : undefined,
           outboundLoan: isCedidoFuera ? { destinationClub: r.outboundClub.trim(), duration: r.outboundDuration || '1 Temporada' } : undefined,

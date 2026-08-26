@@ -87,31 +87,25 @@ export default function StatsImportReviewModal({ results, onClose, onDone }) {
                 const e = r.extracted;
                 const growth = e.ratingGrowth;
                 return (
-                  <div key={r.id} className={`p-3 space-y-2 transition-opacity ${r.included ? '' : 'opacity-40'}`}>
-                    <div className="flex items-center gap-2.5">
-                      <button type="button" onClick={() => updateRow(r.id, { included: !r.included })} disabled={!r.matchedPlayerId} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors touch-manipulation disabled:opacity-30 ${r.included ? 'border-green-500 bg-green-500' : 'border-border-subtle'}`}>
-                        {r.included && <Check size={12} className="text-black" />}
+                  <div key={r.id} className={`p-2 space-y-1.5 transition-opacity ${r.included ? '' : 'opacity-40'}`}>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => updateRow(r.id, { included: !r.included })} disabled={!r.matchedPlayerId} className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors touch-manipulation disabled:opacity-30 ${r.included ? 'border-green-500 bg-green-500' : 'border-border-subtle'}`}>
+                        {r.included && <Check size={10} className="text-black" />}
                       </button>
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-black text-fg truncate">{e.name || 'Nombre no detectado'}</div>
-                        <div className="text-[9px] font-bold text-fg-faint uppercase tracking-wide truncate flex items-center gap-1.5">
-                          {e.rating ? <span>Media {e.rating}</span> : null}
+                        <div className="text-[11px] font-black text-fg truncate">{e.name || 'Nombre no detectado'}</div>
+                        <div className="text-[8px] font-bold text-fg-faint uppercase tracking-wide truncate flex items-center gap-1">
+                          <span>PJ {e.matchesPlayed ?? 0} · G {e.goals ?? 0} · A {e.assists ?? 0}</span>
+                          {e.rating ? <span>· Media {e.rating}</span> : null}
                           {growth != null && growth !== 0 && (
                             <span className={`flex items-center gap-0.5 ${growth > 0 ? 'text-green-500' : 'text-red-400'}`}>
-                              {growth > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />} {growth > 0 ? `+${growth}` : growth}
+                              {growth > 0 ? <TrendingUp size={9} /> : <TrendingDown size={9} />} {growth > 0 ? `+${growth}` : growth}
                             </span>
                           )}
                         </div>
                       </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-0.5">
-                        <label className="text-[8px] font-black text-fg-muted ml-1 uppercase">Emparejar con</label>
-                        <Dropdown value={r.matchedPlayerId} options={playerOptions} onChange={(v) => updateRow(r.id, { matchedPlayerId: v, included: !!v })} labelClassName="text-[10px]" placeholder="Sin emparejar" />
-                      </div>
-                      <div className="flex items-end gap-2 text-[9px] font-bold text-fg-faint uppercase tracking-wide pb-2.5">
-                        <span>PJ {e.matchesPlayed ?? 0}</span><span>G {e.goals ?? 0}</span><span>A {e.assists ?? 0}</span>
-                        {e.averageRating ? <span>MED {e.averageRating}</span> : null}
+                      <div className="w-28 shrink-0">
+                        <Dropdown compact value={r.matchedPlayerId} options={playerOptions} onChange={(v) => updateRow(r.id, { matchedPlayerId: v, included: !!v })} labelClassName="text-[9px]" placeholder="Sin emparejar" />
                       </div>
                     </div>
                   </div>

@@ -1,16 +1,18 @@
 import { useState } from 'react';
-import { CalendarClock, Trophy, GitCompareArrows } from 'lucide-react';
+import { CalendarClock, Trophy, GitCompareArrows, Info } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { abbreviateValue } from '../../utils/format';
 import EndSeasonWizard from './EndSeasonWizard';
 import SeasonCompare from './SeasonCompare';
+import SeasonDetailModal from './SeasonDetailModal';
 
 export default function SeasonsTab() {
   const { activeClub } = useClubs();
   const { seasons } = useClubData();
   const [showWizard, setShowWizard] = useState(false);
   const [compareIds, setCompareIds] = useState([]);
+  const [detailSeason, setDetailSeason] = useState(null);
 
   const toggleCompare = (id) => {
     setCompareIds((prev) => {
@@ -44,22 +46,28 @@ export default function SeasonsTab() {
             const avgRating = s.squadSnapshot?.length ? Math.round(s.squadSnapshot.reduce((sum, p) => sum + p.rating, 0) / s.squadSnapshot.length) : null;
             const selected = compareIds.includes(s.id);
             return (
-              <button key={s.id} onClick={() => toggleCompare(s.id)} className={`w-full text-left p-4 flex items-center justify-between gap-4 transition-all ${selected ? 'bg-green-500/10' : 'hover:bg-well'}`}>
-                <div>
-                  <div className="font-black uppercase italic text-sm text-fg">Temporada {s.seasonNumber}</div>
-                  <div className="text-[9px] text-fg-faint font-black uppercase tracking-widest mt-0.5">{s.wins}V {s.draws}E {s.losses}D · {s.goalsFor}-{s.goalsAgainst} goles</div>
-                </div>
-                <div className="text-right shrink-0">
-                  {avgRating && <div className="text-[9px] text-fg-muted font-black uppercase tracking-widest">Media {avgRating}</div>}
-                  <div className="text-[9px] text-green-500 font-black uppercase tracking-widest">{abbreviateValue(s.budgetEnd)}</div>
-                </div>
-              </button>
+              <div key={s.id} className={`w-full flex items-center gap-2 transition-all ${selected ? 'bg-green-500/10' : ''}`}>
+                <button type="button" onClick={() => toggleCompare(s.id)} className={`flex-1 min-w-0 text-left p-4 flex items-center justify-between gap-4 transition-all ${selected ? '' : 'hover:bg-well'}`}>
+                  <div>
+                    <div className="font-black uppercase italic text-sm text-fg">Temporada {s.seasonNumber}</div>
+                    <div className="text-[9px] text-fg-faint font-black uppercase tracking-widest mt-0.5">{s.wins}V {s.draws}E {s.losses}D · {s.goalsFor}-{s.goalsAgainst} goles</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    {avgRating && <div className="text-[9px] text-fg-muted font-black uppercase tracking-widest">Media {avgRating}</div>}
+                    <div className="text-[9px] text-green-500 font-black uppercase tracking-widest">{abbreviateValue(s.budgetEnd)}</div>
+                  </div>
+                </button>
+                <button type="button" onClick={() => setDetailSeason(s)} title="Ver ficha completa" className="shrink-0 mr-3 p-2 rounded-full text-fg-faint hover:text-green-500 hover:bg-well transition-colors touch-manipulation">
+                  <Info size={16} />
+                </button>
+              </div>
             );
           })}
         </div>
       </div>
 
       {showWizard && <EndSeasonWizard onClose={() => setShowWizard(false)} />}
+      {detailSeason && <SeasonDetailModal season={detailSeason} onClose={() => setDetailSeason(null)} />}
     </div>
   );
 }

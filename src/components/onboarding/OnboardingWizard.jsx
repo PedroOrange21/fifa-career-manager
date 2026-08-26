@@ -172,7 +172,8 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
 
   const canGoNext = () => {
     if (currentStepId === 'identity') return name.trim().length > 0 && managerName.trim().length > 0;
-    if (currentStepId === 'budget') return budgetAmount > 0;
+    if (currentStepId === 'budget') return budgetAmount > 0 && parseValue(weeklyWageInput) > 0;
+    if (currentStepId === 'squad') return activeRosterPlayers.length > 0;
     return true;
   };
 
@@ -180,7 +181,8 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
     setError('');
     if (!canGoNext()) {
       if (currentStepId === 'identity') setError('El nombre del club y del mánager son obligatorios.');
-      else if (currentStepId === 'budget') setError('Introduce una cantidad mayor que cero.');
+      else if (currentStepId === 'budget') setError('Introduce el Presupuesto de Traspasos y el Presupuesto Semanal de Salarios.');
+      else if (currentStepId === 'squad') setError('Añade al menos 1 jugador al Primer Equipo para continuar.');
       return;
     }
     if (currentStepId === 'budget') {
@@ -473,7 +475,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                     <p className="text-xs font-bold text-fg-muted leading-relaxed">¿Tu Modo Carrera ya está en curso? Puedes importar ahora las estadísticas actuales de tus jugadores (partidos, goles, asistencias, nota media...) o empezar a registrarlas desde 0 a partir de hoy.</p>
                   </div>
                   <AIGlowButton onClick={() => setStatsScanMode(true)}>
-                    Escanear Estadísticas de la Plantilla
+                    Escanear Estadísticas
                   </AIGlowButton>
                   <button type="button" onClick={goNext} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest">
                     Empezar con Estadísticas a 0
