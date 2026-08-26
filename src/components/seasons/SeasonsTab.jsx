@@ -1,22 +1,16 @@
 import { useState } from 'react';
-import { CalendarClock, Trophy, ShieldAlert, GitCompareArrows } from 'lucide-react';
+import { CalendarClock, Trophy, GitCompareArrows } from 'lucide-react';
 import { useClubs } from '../../context/ClubsContext';
 import { useClubData } from '../../context/ClubDataContext';
 import { abbreviateValue } from '../../utils/format';
-import ConfirmModal from '../common/ConfirmModal';
+import EndSeasonWizard from './EndSeasonWizard';
 import SeasonCompare from './SeasonCompare';
 
 export default function SeasonsTab() {
   const { activeClub } = useClubs();
-  const { seasons, endSeason } = useClubData();
-  const [confirmingEnd, setConfirmingEnd] = useState(false);
-  const [ending, setEnding] = useState(false);
+  const { seasons } = useClubData();
+  const [showWizard, setShowWizard] = useState(false);
   const [compareIds, setCompareIds] = useState([]);
-
-  const handleEndSeason = async () => {
-    setEnding(true);
-    try { await endSeason(); } finally { setEnding(false); setConfirmingEnd(false); }
-  };
 
   const toggleCompare = (id) => {
     setCompareIds((prev) => {
@@ -34,7 +28,7 @@ export default function SeasonsTab() {
         <CalendarClock className="mx-auto mb-2 text-green-500" size={28} />
         <h2 className="text-lg font-black uppercase italic tracking-tighter text-fg">Temporada {activeClub?.currentSeasonNumber ?? 1}</h2>
         <p className="text-[10px] text-fg-muted font-bold uppercase tracking-widest mt-1">En curso</p>
-        <button onClick={() => setConfirmingEnd(true)} className="w-full mt-4 bg-green-500 text-black p-4 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all hover:bg-green-400">Terminar Temporada</button>
+        <button onClick={() => setShowWizard(true)} className="w-full mt-4 bg-green-500 text-black p-4 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-[0.98] transition-all hover:bg-green-400">Terminar Temporada</button>
       </div>
 
       {compareSeasons.length === 2 && <SeasonCompare seasons={compareSeasons} />}
@@ -65,18 +59,7 @@ export default function SeasonsTab() {
         </div>
       </div>
 
-      {confirmingEnd && (
-        <ConfirmModal
-          icon={ShieldAlert}
-          iconClassName="text-green-500"
-          title="¿Terminar Temporada?"
-          message="Se archivarán las estadísticas actuales y se reiniciarán los contadores de goles, asistencias y tarjetas de la plantilla."
-          confirmLabel={ending ? 'Guardando...' : 'Sí, Terminar'}
-          confirmClassName="bg-green-500 text-black shadow-green-500/20 hover:bg-green-400"
-          onCancel={() => setConfirmingEnd(false)}
-          onConfirm={handleEndSeason}
-        />
-      )}
+      {showWizard && <EndSeasonWizard onClose={() => setShowWizard(false)} />}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { useAutoHideChrome } from '../../hooks/useAutoHideChrome';
 import PlayerForm from '../squad/PlayerForm';
 import ScanPlayerCardModal from '../squad/ScanPlayerCardModal';
 import BulkScanReviewModal from '../squad/BulkScanReviewModal';
+import StatsImportReviewModal from '../squad/StatsImportReviewModal';
 import ConfirmModal from '../common/ConfirmModal';
 import AIGlowButton from '../common/AIGlowButton';
 import ImageCropperModal from '../common/ImageCropperModal';
@@ -83,8 +84,8 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   const { players, playerToDelete, setPlayerToDelete, confirmDeletePlayer } = useClubData();
 
   const STEP_SEQUENCE = clubExists
-    ? ['squad', 'summary']
-    : ['identity', 'philosophy', 'budget', 'squad', 'summary'];
+    ? ['squad', 'stats', 'summary']
+    : ['identity', 'philosophy', 'budget', 'squad', 'stats', 'summary'];
 
   const [step, setStep] = useState(0);
   const currentStepId = STEP_SEQUENCE[step];
@@ -133,7 +134,14 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
   // decidir seguir sin canteranos.
   const [showAcademyWarning, setShowAcademyWarning] = useState(false);
 
-  // --- Paso 5: Confirmación y Resumen — desglose desplegable de las dos listas ("Jugadores"/
+  // --- Paso 5 (nuevo, opcional): ¿Modo Carrera ya en curso? — ofrece importar de golpe las
+  // estadísticas de temporada actuales de la plantilla ya registrada (vía el mismo escaneo
+  // masivo por IA que Estadísticas individuales, mode='estadisticas'), o saltarlo y empezar a
+  // acumularlas desde 0 a partir de ahora. Nunca bloquea el avance. ---
+  const [statsScanMode, setStatsScanMode] = useState(false);
+  const [statsReview, setStatsReview] = useState(null);
+
+  // --- Paso 6: Confirmación y Resumen — desglose desplegable de las dos listas ("Jugadores"/
   // "Canteranos", esta última solo si la IA reclasificó alguno), con edición en línea (reutiliza
   // PlayerForm en modo edición) y borrado (reutiliza playerToDelete/confirmDeletePlayer de
   // ClubDataContext, mismo flujo con "Deshacer" que el resto de la app) ---
@@ -304,6 +312,7 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
     philosophy: 'Filosofía',
     budget: 'Fondos Iniciales',
     squad: 'Plantilla Actual',
+    stats: 'Estadísticas',
     summary: 'Resumen',
   };
 
@@ -516,6 +525,20 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
                 </div>
               )}
 
+              {currentStepId === 'stats' && (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-2xl bg-well border border-border-subtle">
+                    <p className="text-xs font-bold text-fg-muted leading-relaxed">¿Tu Modo Carrera ya está en curso? Puedes importar ahora las estadísticas actuales de tus jugadores (partidos, goles, asistencias, nota media...) o empezar a registrarlas desde 0 a partir de hoy.</p>
+                  </div>
+                  <AIGlowButton onClick={() => setStatsScanMode(true)}>
+                    Escanear Estadísticas de la Plantilla
+                  </AIGlowButton>
+                  <button type="button" onClick={goNext} className="w-full py-3 rounded-2xl border border-dashed border-border-subtle text-fg-muted hover:text-green-500 hover:border-green-500/40 transition-all flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest">
+                    Empezar con Estadísticas a 0
+                  </button>
+                </div>
+              )}
+
               {currentStepId === 'summary' && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 p-4 rounded-2xl bg-well border border-border-subtle">
@@ -645,6 +668,21 @@ export function OnboardingWizardModal({ clubExists = true, onDismiss, onFirstClu
           academyStepHint="podrás revisarlo en el Resumen"
           confirmLabel="Confirmar y Guardar Plantilla"
           onClose={() => setBulkReview(null)}
+        />
+      )}
+      {statsScanMode && (
+        <ScanPlayerCardModal
+          mode="estadisticas"
+          forceBatch
+          onClose={() => setStatsScanMode(false)}
+          onBatchExtracted={(results) => { setStatsReview(results); setStatsScanMode(false); }}
+        />
+      )}
+      {statsReview && (
+        <StatsImportReviewModal
+          results={statsReview}
+          onClose={() => setStatsReview(null)}
+          onDone={() => { setStatsReview(null); goNext(); }}
         />
       )}
 

@@ -313,6 +313,64 @@ Reglas importantes:
 - Si un dato no aparece visible en la imagen o no puedes leerlo con confianza, devuelve null en ese campo — no inventes ni adivines valores.
 - Responde exclusivamente con el JSON que cumpla el esquema indicado, sin texto adicional.`;
 
+// Esquema y prompt para la pantalla "Centro de Plantilla > Estadísticas" de EA Sports FC: a
+// diferencia de la tarjeta de Finanzas (RESPONSE_SCHEMA), aquí no hay datos económicos — solo
+// identidad básica, crecimiento de media y la tabla de estadísticas de la temporada (totales y,
+// si la pantalla los muestra, desglosados por competición).
+const STATS_RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    nombre: { type: Type.STRING, nullable: true, description: 'Nombre completo del jugador tal como aparece en la pantalla de estadísticas.' },
+    posicionPrincipal: { type: Type.STRING, nullable: true, description: 'Abreviatura de la posición principal (ej. DC, MC, LD, POR).' },
+    edad: { type: Type.INTEGER, nullable: true },
+    altura: { type: Type.INTEGER, nullable: true, description: 'Altura en centímetros, solo el número.' },
+    peso: { type: Type.INTEGER, nullable: true, description: 'Peso en kilogramos, solo el número.' },
+    piernaBuena: { type: Type.STRING, enum: ['Diestro', 'Zurdo'], nullable: true },
+    crecimientoMedia: { type: Type.INTEGER, nullable: true, description: 'Crecimiento de la media respecto al inicio de temporada, tal como lo muestra la pantalla (ej. "+2" -> 2, "-1" -> -1). Puede ser negativo. null si no se muestra.' },
+    mediaFinal: { type: Type.INTEGER, nullable: true, description: 'Media/valoración general (OVR) actual del jugador, número entre 1 y 99.' },
+    partidosJugados: { type: Type.INTEGER, nullable: true, description: 'PJ: partidos jugados totales en la temporada.' },
+    goles: { type: Type.INTEGER, nullable: true },
+    asistencias: { type: Type.INTEGER, nullable: true },
+    porteriasImbatidas: { type: Type.INTEGER, nullable: true, description: 'PI: solo relevante para porteros/defensas, null si no aplica o no se muestra.' },
+    tarjetasAmarillas: { type: Type.INTEGER, nullable: true },
+    tarjetasRojas: { type: Type.INTEGER, nullable: true },
+    notaMedia: { type: Type.NUMBER, nullable: true, description: 'Nota media/valoración media de los partidos jugados, número decimal tal como aparece (ej. 6.91). null si no se muestra.' },
+    desglosePorCompeticion: {
+      type: Type.ARRAY,
+      nullable: true,
+      description: 'Solo si la pantalla muestra una tabla separada por competición (Liga, Champions, Copa, Amistosos...); null o vacío si solo hay un total general.',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          competicion: { type: Type.STRING, nullable: true },
+          partidosJugados: { type: Type.INTEGER, nullable: true },
+          goles: { type: Type.INTEGER, nullable: true },
+          asistencias: { type: Type.INTEGER, nullable: true },
+          notaMedia: { type: Type.NUMBER, nullable: true },
+        },
+      },
+    },
+  },
+};
+
+const STATS_PROMPT = `Eres un asistente experto en leer la pantalla "Centro de Plantilla > Estadísticas" del videojuego EA Sports FC (Modo Carrera), donde se muestra el rendimiento de un jugador durante la temporada.
+
+Analiza la imagen adjunta y extrae ÚNICAMENTE los datos que aparezcan visibles, con la máxima precisión posible:
+- nombre completo del jugador
+- posición principal (abreviatura, ej. DC, MC, LD, POR)
+- edad, altura (cm) y peso (kg), si se muestran
+- pierna buena (Diestro o Zurdo), si se muestra
+- crecimiento de media respecto al inicio de temporada (ej. "+2" o "-1", puede ser negativo) y media final actual (OVR)
+- tabla de estadísticas de la temporada: partidos jugados (PJ), goles (G), asistencias (A), porterías imbatidas (PI, solo relevante en porteros/defensas), tarjetas amarillas (TA), tarjetas rojas (TR) y nota media (MED, número decimal tipo 6.91)
+- si la pantalla desglosa esas mismas estadísticas por competición (Liga, Champions, Copa, Amistosos...), inclúyelas también en desglosePorCompeticion; si solo hay un total general, deja ese campo en null
+
+Reglas importantes:
+- El crecimiento de media es un número CON SIGNO tal como lo muestra la pantalla: si pone "+2" devuelve 2, si pone "-1" devuelve -1.
+- La nota media es un número decimal (ej. 6.91), nunca lo redondees a entero.
+- Si un dato no aparece visible en la imagen o no puedes leerlo con confianza, devuelve null en ese campo — no inventes ni adivines valores.
+- No incluyas en la respuesta ningún dato económico (sueldo, valor de mercado, contrato): esta pantalla no los muestra y no forman parte de este esquema.
+- Responde exclusivamente con el JSON que cumpla el esquema indicado, sin texto adicional.`;
+
 // Nota: el límite de tamaño de petición de las funciones Serverless de Vercel (~4.5 MB por
 // defecto) es un límite de plataforma, no configurable aquí — una foto de móvil ya comprimida
 // en JPEG/base64 entra sobradamente dentro de ese margen.
@@ -334,11 +392,13 @@ export default async function handler(req, res) {
   }
   const imageBase64 = sanitizeBase64(rawImageBase64);
   const mimeType = sanitizeMimeType(rawMimeType);
-  // "academia" activa el esquema/prompt de canteranos (ver ACADEMY_RESPONSE_SCHEMA/PROMPT);
-  // cualquier otro valor (incluido ausente) usa el de primer equipo, el comportamiento previo.
+  // "academia" activa el esquema/prompt de canteranos, "estadisticas" el de la pantalla de
+  // Estadísticas (ver STATS_RESPONSE_SCHEMA/PROMPT); cualquier otro valor (incluido ausente)
+  // usa el de primer equipo, el comportamiento previo.
   const isAcademy = rawMode === 'academia';
-  const promptText = isAcademy ? ACADEMY_PROMPT : PROMPT;
-  const schema = isAcademy ? ACADEMY_RESPONSE_SCHEMA : RESPONSE_SCHEMA;
+  const isStats = rawMode === 'estadisticas';
+  const promptText = isStats ? STATS_PROMPT : isAcademy ? ACADEMY_PROMPT : PROMPT;
+  const schema = isStats ? STATS_RESPONSE_SCHEMA : isAcademy ? ACADEMY_RESPONSE_SCHEMA : RESPONSE_SCHEMA;
 
   const callModel = (ai, model) => ai.models.generateContent({
     model,

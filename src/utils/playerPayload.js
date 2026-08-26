@@ -40,5 +40,18 @@ export function buildPlayerPayload(data) {
     // Igual que en PlayerForm: se guarda como texto (no parseInt) para conservar rangos como
     // "64-88" tal cual; parsePotentialRange() lo normaliza donde haga falta un número.
     potential: isCantera && data.potential ? String(data.potential).trim() : null,
+    // Estadísticas de Rendimiento (temporada en curso) y crecimiento de temporada: solo se
+    // inicializan aquí porque esta función es EXCLUSIVA de altas nuevas (nunca edición, ver
+    // comentario de arriba) — matchesPlayed/goals/assists/yellowCards/redCards ya existían de
+    // antes (los incrementa saveMatch al jugar partidos, ver ClubDataContext); cleanSheets,
+    // averageRating y competitionBreakdown son de este turno, pensados para llegar por escaneo
+    // con IA de la pantalla de Estadísticas del propio juego, no por partidos jugados dentro de
+    // la app. seasonStartRating/seasonStartMarketValue son la foto de "cómo empezó la
+    // temporada" que endSeason() usa para calcular el crecimiento (OVR y valor) en el
+    // comparador del Asistente de Fin de Temporada.
+    seasonStats: { matchesPlayed: 0, goals: 0, assists: 0, cleanSheets: 0, yellowCards: 0, redCards: 0, averageRating: 0, competitionBreakdown: null },
+    careerHistory: [],
+    seasonStartRating: parseInt(data.rating, 10) || 0,
+    seasonStartMarketValue: isCantera ? 0 : parseValue(String(data.marketValue || '')),
   };
 }

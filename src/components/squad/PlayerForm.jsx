@@ -550,6 +550,17 @@ export default function PlayerForm({ editingPlayer, prefill, sourceTargetId, onC
         // parsePotentialRange() normaliza este campo donde haga falta un número (listas,
         // filtros, barra de progreso).
         potential: form.type === 'Cantera' && form.potential ? form.potential.trim() : null,
+        // Solo al CREAR (ver buildPlayerPayload en playerPayload.js, mismo criterio): al editar
+        // un jugador ya existente estos campos ni se incluyen en el payload, así que Firestore
+        // (merge:true) conserva intactos su historial de carrera y sus estadísticas ya
+        // acumuladas — sobrescribirlos aquí borraría en silencio los goles/asistencias/etc. de
+        // la temporada en curso cada vez que se edita cualquier otro dato del jugador.
+        ...(editingPlayer ? {} : {
+          seasonStats: { matchesPlayed: 0, goals: 0, assists: 0, cleanSheets: 0, yellowCards: 0, redCards: 0, averageRating: 0, competitionBreakdown: null },
+          careerHistory: [],
+          seasonStartRating: parseInt(form.rating) || 0,
+          seasonStartMarketValue: form.type === 'Cantera' ? 0 : parseValue(form.marketValue),
+        }),
       }, editingPlayer?.id, { skipFinancialEffects: skipInitialTransaction });
       if (!editingPlayer && sourceTargetId) {
         try { await deleteTarget(sourceTargetId); } catch (err) { console.error(err); }

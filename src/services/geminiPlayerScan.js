@@ -245,6 +245,40 @@ export function mapAcademyScanResultToPrefill(extracted) {
   };
 }
 
+// Traduce el JSON de la pantalla "Centro de Plantilla > Estadísticas" (ver
+// STATS_RESPONSE_SCHEMA en api/scan-player.js) a un objeto con dos partes: identidad para
+// mostrar/emparejar (name, rating, ratingGrowth) y el propio patch de estadísticas, con
+// EXACTAMENTE los mismos nombres de campo que ya usa seasonStats en toda la app
+// (matchesPlayed/goals/assists/...), para que updatePlayerStats (ClubDataContext) lo aplique
+// tal cual sin traducir nada más. competitionBreakdown usa nombres en inglés (a diferencia del
+// resto del esquema en español) porque así queda ya guardado en Firestore, listo para leerse
+// sin pasar por ningún mapeo intermedio en la UI.
+export function mapStatsScanResultToUpdate(extracted) {
+  const competitionBreakdown = (extracted.desglosePorCompeticion || [])
+    .filter((c) => c && c.competicion)
+    .map((c) => ({
+      competition: c.competicion,
+      matchesPlayed: c.partidosJugados ?? 0,
+      goals: c.goles ?? 0,
+      assists: c.asistencias ?? 0,
+      averageRating: c.notaMedia ?? 0,
+    }));
+  return {
+    name: extracted.nombre || '',
+    positions: [extracted.posicionPrincipal].filter(Boolean),
+    rating: extracted.mediaFinal || null,
+    ratingGrowth: extracted.crecimientoMedia ?? null,
+    matchesPlayed: extracted.partidosJugados ?? 0,
+    goals: extracted.goles ?? 0,
+    assists: extracted.asistencias ?? 0,
+    cleanSheets: extracted.porteriasImbatidas ?? 0,
+    yellowCards: extracted.tarjetasAmarillas ?? 0,
+    redCards: extracted.tarjetasRojas ?? 0,
+    averageRating: extracted.notaMedia ?? 0,
+    competitionBreakdown: competitionBreakdown.length ? competitionBreakdown : null,
+  };
+}
+
 // Escanea varias fotos EN SECUENCIA (nunca en paralelo, concurrency = 1: Gemini aplica límites
 // de peticiones por minuto, y una cola secuencial da además un progreso real y predecible) —
 // usado tanto por la carga masiva con IA de PlayerList/AcademyTab como por los dos bloques de
@@ -276,7 +310,9 @@ export function mapAcademyScanResultToPrefill(extracted) {
 // conservado para que la revisión pueda mostrar la miniatura de la foto que no se pudo leer.
 const DELAY_BETWEEN_CALLS_MS = 1300;
 export async function scanPlayerCardsQueue(files, mode, onProgress) {
-  const mapper = mode === 'academia' ? mapAcademyScanResultToPrefill : mapScanResultToPrefill;
+  const mapper = mode === 'academia' ? mapAcademyScanResultToPrefill
+    : mode === 'estadisticas' ? mapStatsScanResultToUpdate
+      : mapScanResultToPrefill;
   const succeeded = [];
   const failed = [];
 

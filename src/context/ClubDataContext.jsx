@@ -264,7 +264,61 @@ export function ClubDataProvider({ children }) {
     }));
   };
 
-  const endSeason = async () => {
+  // Sobrescribe (nunca suma) las estadísticas de temporada indicadas: a diferencia de saveMatch
+  // (que va SUMANDO goles/asistencias partido a partido según se juegan dentro de la app), un
+  // escaneo de la pantalla "Centro de Plantilla > Estadísticas" del propio juego ya trae los
+  // TOTALES reales de la temporada — reemplazarlos es lo correcto, acumularlos duplicaría todo
+  // lo que ya se hubiera registrado a mano vía el módulo de Partido. "rating" es opcional: solo
+  // se manda cuando el escaneo también trae la media/OVR final actualizada del jugador.
+  const updatePlayerStats = async (playerId, patch) => {
+    if (!user || !activeClubId || !playerId || !patch) return;
+    const player = players.find((p) => p.id === playerId);
+    if (!player) return;
+    const { rating, ...statsPatch } = patch;
+    const updates = { seasonStats: { ...(player.seasonStats || {}), ...statsPatch } };
+    if (rating != null && rating > 0) updates.rating = rating;
+    await updateDoc(playerDoc(user.uid, activeClubId, playerId), updates);
+  };
+
+  // Resolución de una cesión ENTRANTE (jugador type 'Cedido' que juega para nosotros pero es
+  // propiedad de otro club) al terminar la temporada — Paso 3 del Asistente de Fin de
+  // Temporada: 'buy' ejecuta la opción de compra pactada (o el valor de mercado si no se fijó
+  // ninguna) y el jugador pasa a ser nuestro ("Comprado" de verdad, con año de contrato por
+  // defecto si no se conocía ninguno); 'return' es exactamente "Finalizar Cesión" (ver
+  // startEndLoan más abajo), el jugador vuelve a su club de origen.
+  const resolveIncomingLoan = async (player, decision) => {
+    if (!user || !activeClubId || !player || player.type !== 'Cedido') return;
+    if (decision === 'return') { startEndLoan(player); return; }
+    const price = player.buyOption || player.marketValue || 0;
+    await updateDoc(playerDoc(user.uid, activeClubId, player.id), {
+      type: 'Comprado',
+      value: price,
+      sourceClub: player.originClub || player.sourceClub || null,
+      originClub: null,
+      loanDuration: null,
+      wagePercentage: null,
+      buyOption: null,
+      contractYears: player.contractYears || 3,
+    });
+    if (price) adjustBudget(-price);
+    logTransaction('compra', player.name, price, null, { fromLoan: true, originClub: player.originClub || null });
+  };
+
+  const renewContract = async (playerId, extraYears = 2) => {
+    if (!user || !activeClubId || !playerId) return;
+    const player = players.find((p) => p.id === playerId);
+    if (!player) return;
+    await updateDoc(playerDoc(user.uid, activeClubId, playerId), { contractYears: (player.contractYears || 0) + extraYears });
+  };
+
+  // titles/leaguePosition/prizeMoney: Balance y Palmarés del Paso 1 del Asistente de Fin de
+  // Temporada — puramente informativos en el snapshot salvo prizeMoney, que sí suma al
+  // presupuesto de traspasos real. Cada jugador se lleva además una entrada nueva en su propio
+  // careerHistory (crecimiento de OVR y valor de mercado respecto a como empezó la temporada,
+  // ver seasonStartRating/seasonStartMarketValue) y avanza un año de vida real: +1 edad, -1 año
+  // de contrato (nunca por debajo de 0), estadísticas de temporada a 0 y una nueva foto de
+  // partida (seasonStartRating/seasonStartMarketValue) para la temporada que empieza ahora.
+  const endSeason = async ({ titles = [], leaguePosition = null, prizeMoney = 0 } = {}) => {
     if (!user || !activeClubId || !activeClub) return;
     const seasonNumber = activeClub.currentSeasonNumber ?? 1;
     const seasonMatches = matches.filter((m) => m.seasonNumber === seasonNumber);
@@ -288,20 +342,43 @@ export function ClubDataProvider({ children }) {
 
     const previousSeason = seasons.find((s) => s.seasonNumber === seasonNumber - 1);
 
+    if (prizeMoney) adjustBudget(prizeMoney);
+
     await addDoc(seasonsCol(user.uid, activeClubId), {
       seasonNumber,
       startedAt: previousSeason?.endedAt || activeClub.createdAt || null,
       endedAt: Date.now(),
-      budgetEnd: activeClub.transferBudget || 0,
+      budgetEnd: (activeClub.transferBudget || 0) + (prizeMoney || 0),
       squadSnapshot: players.map((p) => ({ playerId: p.id, name: p.name, rating: p.rating, position: p.positions?.[0] || null })),
       topScorers,
       matchesPlayed: seasonMatches.length,
       wins, draws, losses, goalsFor, goalsAgainst,
+      titles, leaguePosition, prizeMoney,
     });
 
-    await Promise.all(players.map((p) => updateDoc(playerDoc(user.uid, activeClubId, p.id), {
-      seasonStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, matchesPlayed: 0 },
-    })));
+    await Promise.all(players.map((p) => {
+      const stats = p.seasonStats || {};
+      const careerEntry = {
+        seasonId: seasonNumber,
+        seasonNumber,
+        initialOvr: p.seasonStartRating ?? p.rating,
+        finalOvr: p.rating,
+        ovrGrowth: p.rating - (p.seasonStartRating ?? p.rating),
+        matchesPlayed: stats.matchesPlayed || 0,
+        goals: stats.goals || 0,
+        assists: stats.assists || 0,
+        averageRating: stats.averageRating || 0,
+        marketValueEnd: p.marketValue || 0,
+      };
+      return updateDoc(playerDoc(user.uid, activeClubId, p.id), {
+        age: (p.age || 0) + 1,
+        contractYears: p.contractYears != null ? Math.max(0, p.contractYears - 1) : null,
+        seasonStats: { matchesPlayed: 0, goals: 0, assists: 0, cleanSheets: 0, yellowCards: 0, redCards: 0, averageRating: 0, competitionBreakdown: null },
+        seasonStartRating: p.rating,
+        seasonStartMarketValue: p.marketValue || 0,
+        careerHistory: [...(p.careerHistory || []), careerEntry],
+      });
+    }));
 
     await incrementSeasonNumber();
   };
@@ -622,7 +699,7 @@ export function ClubDataProvider({ children }) {
     addOrUpdatePlayer, confirmDeletePlayer, removePlayerFromTactic, sellPlayer, cedePlayer,
     saveTactics, clearTactics, clearLineup, clearBench, handleFormationChange, executeMove, assignPlayerToSlot,
     saveCurrentFormation, updateActiveTactic, confirmDeleteFormation, renameSavedFormation, loadSavedFormation, setPlayerTransferStatus,
-    updateYouthRating, saveMatch, endSeason,
+    updateYouthRating, saveMatch, endSeason, updatePlayerStats, resolveIncomingLoan, renewContract,
     addOrUpdateTarget, confirmDeleteTarget, deleteTarget,
   };
 
