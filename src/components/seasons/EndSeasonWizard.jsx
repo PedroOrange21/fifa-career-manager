@@ -8,6 +8,7 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import AIGlowButton from '../common/AIGlowButton';
 import ScanPlayerCardModal from '../squad/ScanPlayerCardModal';
 import StatsImportReviewModal from '../squad/StatsImportReviewModal';
+import SeasonFeedbackReport from './SeasonFeedbackReport';
 
 const STEP_SEQUENCE = ['balance', 'scan', 'loans', 'confirm'];
 const STEP_LABELS = {
@@ -220,6 +221,8 @@ export default function EndSeasonWizard({ onClose }) {
                     })}
                   </div>
                 )}
+
+                {hasScannedFinal && <SeasonFeedbackReport players={players} prizeMoney={totalPrizeMoney} />}
               </div>
             )}
 

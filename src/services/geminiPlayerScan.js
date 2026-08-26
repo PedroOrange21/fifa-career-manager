@@ -245,6 +245,34 @@ export function mapAcademyScanResultToPrefill(extracted) {
   };
 }
 
+// EA Sports FC trunca el nombre de la competición en pantallas estrechas ("UEFA Champ...",
+// "LALIGA EA...") — la IA a veces transcribe ese corte tal cual en vez de completarlo, así que
+// se normaliza aquí también como red de seguridad. Orden deliberado cuando dos nombres
+// comparten el mismo prefijo (ej. "UEFA Europa League" vs "UEFA Europa Conference League"): el
+// primero de la lista que calce gana, así un truncado ambiguo cae siempre en la competición más
+// común/corta en vez de la variante menos probable.
+const KNOWN_COMPETITIONS = [
+  'UEFA Champions League', 'UEFA Europa League', 'UEFA Europa Conference League', 'UEFA Super Cup',
+  'LALIGA EA SPORTS', 'LALIGA HYPERMOTION', 'Copa del Rey', 'Supercopa de España',
+  'Premier League', 'EFL Championship', 'FA Cup', 'EFL Cup', 'FA Community Shield',
+  'Bundesliga', '2. Bundesliga', 'DFB-Pokal', 'DFL-Supercup',
+  'Serie A', 'Serie B', 'Coppa Italia', 'Supercoppa Italiana',
+  'Ligue 1', 'Ligue 2', 'Coupe de France', 'Trophée des Champions',
+  'FIFA Club World Cup', 'Amistosos',
+];
+function normalizeCompetitionName(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return value;
+  const cleaned = value.replace(/[.…]{2,}$/, '').replace(/…$/, '').trim();
+  const normalizedCleaned = cleaned.toLowerCase();
+  if (!normalizedCleaned) return value;
+  const exact = KNOWN_COMPETITIONS.find((full) => full.toLowerCase() === normalizedCleaned);
+  if (exact) return exact;
+  const byPrefix = normalizedCleaned.length >= 4 && KNOWN_COMPETITIONS.find((full) => full.toLowerCase().startsWith(normalizedCleaned));
+  if (byPrefix) return byPrefix;
+  return cleaned;
+}
+
 // Traduce el JSON de la pantalla "Centro de Plantilla > Estadísticas" (ver
 // STATS_RESPONSE_SCHEMA en api/scan-player.js) a un objeto con dos partes: identidad para
 // mostrar/emparejar (name, rating, ratingGrowth) y el propio patch de estadísticas, con
@@ -257,7 +285,7 @@ export function mapStatsScanResultToUpdate(extracted) {
   const competitionBreakdown = (extracted.desglosePorCompeticion || [])
     .filter((c) => c && c.competicion)
     .map((c) => ({
-      competition: c.competicion,
+      competition: normalizeCompetitionName(c.competicion),
       matchesPlayed: c.partidosJugados ?? 0,
       goals: c.goles ?? 0,
       assists: c.asistencias ?? 0,

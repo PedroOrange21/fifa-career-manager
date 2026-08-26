@@ -72,12 +72,12 @@ function PlayerStatsTab({ player, onStatsUpdated }) {
   const career = player.careerHistory || [];
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1 mt-4 pt-2">
       <SectionHeader emoji="📊" title="Temporada Actual" />
       <PerformanceTable rows={stats.competitionBreakdown || []} totals={stats} />
 
       <div className="pt-3">
-        <AIGlowButton onClick={() => setShowScan(true)}>
+        <AIGlowButton onClick={() => setShowScan(true)} className="!w-auto !py-1.5 !px-3 !text-xs">
           Actualizar estadísticas
         </AIGlowButton>
       </div>

@@ -367,7 +367,7 @@ Analiza la imagen adjunta y extrae ÚNICAMENTE los datos que aparezcan visibles,
 - pierna buena (Diestro o Zurdo), si se muestra
 - crecimiento de media respecto al inicio de temporada (ej. "+2" o "-1", puede ser negativo) y media final actual (OVR)
 - tabla de estadísticas de la temporada: partidos jugados (PJ), goles (G), asistencias (A), porterías imbatidas (PI, solo relevante en porteros/defensas), tarjetas amarillas (TA), tarjetas rojas (TR) y nota media (MED, número decimal tipo 6.91)
-- si la pantalla desglosa esas mismas estadísticas (PJ, G, A, PI, TA, TR y MED, las 7 columnas completas) por competición (Liga, Champions, Copa, Amistosos...), inclúyelas también en desglosePorCompeticion con esas mismas 7 columnas por fila; si solo hay un total general, deja ese campo en null
+- si la pantalla desglosa esas mismas estadísticas (PJ, G, A, PI, TA, TR y MED, las 7 columnas completas) por competición (Liga, Champions, Copa, Amistosos...), inclúyelas también en desglosePorCompeticion con esas mismas 7 columnas por fila; si solo hay un total general, deja ese campo en null. EA Sports FC suele truncar el nombre de la competición en pantallas estrechas (ej. "UEFA Champ...", "LALIGA EA..."): si reconoces con confianza a qué competición real corresponde, completa el nombre entero (ej. "UEFA Champions League", "LALIGA EA SPORTS", "Copa del Rey", "Supercopa de España", "UEFA Europa League"); si no lo reconoces, transcribe el texto tal cual lo ves.
 
 Reglas importantes:
 - El crecimiento de media es un número CON SIGNO tal como lo muestra la pantalla: si pone "+2" devuelve 2, si pone "-1" devuelve -1.
